@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
+    <link href='http://fonts.googleapis.com/css?family=Ubuntu+Mono' rel='stylesheet' type='text/css'>
+    <link href='http://fonts.googleapis.com/css?family=Gentium' rel='stylesheet' type='text/css'>
+    <link href="//fonts.googleapis.com/css?family=PT+Sans+Narrow" rel="stylesheet" type="text/css">
+    <meta charset="utf-8"/>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
+    <title>Certidude server</title>
+    <style type="text/css">
+        img {
+            max-width: 100%;
+            max-height: 100%;
+        }
+        
+        ul {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        
+        button, .button {
+            color: #000;
+            float: right;
+            border: 1pt solid #ccc;
+            background-color: #eee;
+            border-radius: 6px;
+            margin: 2px;
+            padding: 4px 8px;
+            box-sizing: border-box;
+        }
+        
+        .monospace {
+            font-family: 'Ubuntu Mono', monospace;
+            font-size: 80%;
+        }
+        
+        footer {
+            display: block;
+            color: #fff;
+            text-align: center;
+        }
+        
+        a {
+            text-decoration: none;
+            color: #44c;
+        }
+        
+        footer a {
+            color: #aaf;
+        }
+        
+        html,body {
+            margin: 0;
+            padding: 0 0 1em 0;
+        }
+        
+        body {
+            background: #222;
+            background-image: url('http://fc00.deviantart.net/fs71/i/2013/078/9/6/free_hexa_pattern_cc0_by_black_light_studio-d4ig12f.png');
+            background-position: center; 
+        }
+        
+        .comment {
+            color: #aaf;
+        }
+        
+        table th, table td {
+            border: 1px solid #ccc;
+            padding: 2px;
+        }
+        
+        h1, h2, th {
+            font-family: 'Gentium';
+        }
+        
+        h1 {
+            text-align: center;
+            font-size: 22pt;
+        }
+
+        h2 {
+            font-size: 18pt;
+        }
+        
+        h2 svg {
+            position: relative;
+            top: 16px;
+        }
+        
+        p, td, footer, li, button {
+            font-family: 'PT Sans Narrow';
+            font-size: 14pt;
+        }
+        
+        pre {
+            overflow: auto;
+            border: 1px solid #000;
+            background: #444;
+            color: #fff;
+            font-size: 12pt;
+            padding: 4px;
+            border-radius: 6px;
+            margin: 0 0;
+        }
+        
+        #container {
+
+            margin: 1em;
+            background: #fff;
+            padding: 1em;
+            border-style: solid;
+            border-width: 2px;
+            border-color: #aaa;
+            border-radius: 10px;
+        }
+        
+        li {
+            margin: 4px 0;
+            padding: 4px 0;
+            clear: both;
+            border-top: 1px dashed #ccc;
+        }
+
+        li .details {
+            opacity: 0.2; 
+        }
+        
+        li:hover .details {
+            opacity: 1.0;
+        }
+        
+    </style>
+</head>
+<body>
+<div id="container">
+
+<h1>Submit signing request</h1>
+
+{% set s = authority.certificate.subject %}
+
+<p>To submit new certificate signing request:</p>
+<pre>
+export CN=$(hostname)
+openssl genrsa -out $CN.key 4096
+openssl req -new -sha256 -key $CN.key -out $CN.csr -subj "{% if s.C %}/C={{ s.C}}{% endif %}{% if s.ST %}/ST={{ s.ST}}{% endif %}{% if s.L %}/L={{s.L}}{% endif %}{% if s.O %}/O={{ s.O}}{% endif %}{% if s.OU %}/OU={{ s.OU}}{% endif %}/CN=$CN"
+curl -H "Content-Type: application/pkcs10" -X POST -d "$(cat $CN.csr)" {{ request.url }}/request/
+</pre>
+
+<p>After signing the request</p>
+
+<pre>
+curl -f {{ request.url }}/signed/$CN > $CN.crt
+</pre>
+
+<h1>Pending requests</h1>
+
+<ul>
+    {% for j in authority.get_requests() %}
+        <li>
+            {% include 'iconmonstr-time-13-icon.svg' %}
+            <span class="monospace">{{ j.get_dn() }}</span>
+            <span class="monospace details" title="SHA-1 of public key">{{ j.get_pubkey_fingerprint().upper() }}</span>
+
+            <a class="button" href="/api/{{authority.slug}}/request/{{j.subject.CN}}/">Fetch</a>
+            <button onClick="javascript:$.ajax({url:'/api/{{authority.slug}}/request/{{j.subject.CN}}/',type:'patch'});">Sign</button>
+            <button>Delete</button>
+            <br/>
+            <span>{{ j.key_length() }}-bit {{ j.key_type() }}</span>
+
+        </li>
+	{% endfor %}
+</ul>
+
+<h1>Signed certificates</h1>
+
+<ul>
+    {% for j in authority.get_signed() | sort | reverse %}
+        <li>
+        
+        {% include 'iconmonstr-certificate-15-icon.svg' %}
+            {{ j.serial}} <span class="monospace">{{ j.get_dn() }}</span>
+            <span class="monospace details" title="SHA-1 of public key">{{ j.get_pubkey_fingerprint() }}</span>
+
+            {{ j.key_length() }}-bit {{ j.key_type() }}
+            <a class="button" href="/api/{{authority.slug}}/signed/{{j.subject.CN}}/">Fetch</a>
+            <button onClick="javascript:$.ajax({url:'/api/{{authority.slug}}/signed/{{j.subject.CN}}/',type:'delete'});">Revoke</button>
+            
+            {% for key, value in j.get_extensions() %}
+            {{key}}={{value}},
+            {% endfor %}
+        </li>
+	{% endfor %}
+</ul>
+
+<h1>Revoked certificates</h1>
+
+<ul>
+    {% for serial, reason, timestamp in authority.get_revoked() %}
+        <li>{{ serial}} {{ reason }} {{ timestamp}} </li>
+	{% endfor %}
+</ul>
+

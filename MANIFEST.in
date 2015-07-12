@@ -1,0 +1,3 @@
+include README.rst
+include certidude/templates/*.html
+include certidude/templates/*.svg
