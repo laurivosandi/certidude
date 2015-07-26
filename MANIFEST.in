@@ -1,3 +1,5 @@
 include README.rst
 include certidude/templates/*.html
 include certidude/templates/*.svg
+include certidude/templates/*.ovpn
+include certidude/templates/*.cnf

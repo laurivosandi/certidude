@@ -1,0 +1,32 @@
+[CA_{{slug}}]
+default_days = 1825
+dir = {{directory}}
+private_key = $dir/ca_key.pem
+certificate = $dir/ca_crt.pem
+new_certs_dir = $dir/requests/
+revoked_certs_dir = $dir/revoked/
+certs = $dir/signed/
+crl = $dir/ca_crl.pem
+serial = $dir/serial
+{% if crl_distribution_points %}
+crlDistributionPoints = {{crl_distribution_points}}{% endif %}
+{% if email_address %}
+emailAddress = {{email_address}}{% endif %}
+x509_extensions = {{slug}}_cert
+policy = poliy_{{slug}}
+autosign_whitelist = 127.
+inbox = {{inbox}}
+outbox = {{outbox}}
+
+[policy_{{slug}}]
+countryName = match
+stateOrProvinceName = match
+organizationName = match
+organizationalUnitName = optional
+commonName = supplied
+emailAddress = optional
+
+[{{slug}}_cert]
+basicConstraints = CA:FALSE
+keyUsage = nonRepudiation,digitalSignature,keyEncipherment
+extendedKeyUsage = clientAuth

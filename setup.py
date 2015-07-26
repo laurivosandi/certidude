@@ -17,9 +17,14 @@ setup(
     ],
     long_description=open("README.rst").read(),
     install_requires=[
+        "setproctitle",
         "click",
         "falcon",
-        "jinja2"
+        "jinja2",
+        "netifaces",
+        "pyopenssl",
+        "pycountry",
+        "humanize"
     ],
     scripts=[
         "misc/certidude"
