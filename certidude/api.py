@@ -235,7 +235,7 @@ class RequestListResource(CertificateAuthorityBase):
             url_template = os.getenv("CERTIDUDE_EVENT_SUBSCRIBE")
             if url_template:
                 # Redirect to nginx pub/sub
-                url = url_template % request.fingerprint()
+                url = url_template % dict(channel=request.fingerprint())
                 click.echo("Redirecting to: %s"  % url)
                 resp.status = falcon.HTTP_FOUND
                 resp.append_header("Location", url)

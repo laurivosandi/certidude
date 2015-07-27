@@ -28,7 +28,7 @@ def notify(func):
         assert isinstance(cert, Certificate), "notify wrapped function %s returned %s" % (func, type(cert))
         url_template = os.getenv("CERTIDUDE_EVENT_PUBLISH")
         if url_template:
-            url = url_template % csr.fingerprint()
+            url = url_template % dict(channel=csr.fingerprint())
             notification = urllib.request.Request(url, cert.dump().encode("ascii"))
             notification.add_header("User-Agent", "Certidude API")
             notification.add_header("Content-Type", "application/x-x509-user-cert")

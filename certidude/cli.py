@@ -15,6 +15,7 @@ import logging
 import signal
 import netifaces
 import urllib.request
+import subprocess
 from humanize import naturaltime
 from ipaddress import ip_network
 from time import sleep
@@ -320,11 +321,12 @@ def certidude_setup_client(quiet, **kwargs):
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
 @click.option("--directory", "-d", default="/etc/openvpn/keys", help="Directory for keys, /etc/openvpn/keys by default")
-@click.option("--key-path", "-k", default=HOSTNAME + ".key", help="Key path, %s.key relative to --directory by default" % HOSTNAME)
-@click.option("--request-path", "-r", default=HOSTNAME + ".csr", help="Request path, %s.csr relative to --directory by default" % HOSTNAME)
-@click.option("--certificate-path", "-c", default=HOSTNAME + ".crt", help="Certificate path, %s.crt relative to --directory by default" % HOSTNAME)
-@click.option("--authority-path", "-a", default="ca.crt", help="Certificate authority certificate path, ca.crt relative to --dir by default")
-def certidude_setup_openvpn_server(url, config, subnet, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, local, proto, port):
+@click.option("--key-path", "-key", default=HOSTNAME + ".key", help="Key path, %s.key relative to --directory by default" % HOSTNAME)
+@click.option("--request-path", "-csr", default=HOSTNAME + ".csr", help="Request path, %s.csr relative to --directory by default" % HOSTNAME)
+@click.option("--certificate-path", "-crt", default=HOSTNAME + ".crt", help="Certificate path, %s.crt relative to --directory by default" % HOSTNAME)
+@click.option("--dhparam-path", "-dh", default="dhparam2048.pem", help="Diffie/Hellman parameters path, dhparam2048.pem relative to --directory by default")
+@click.option("--authority-path", "-ca", default="ca.crt", help="Certificate authority certificate path, ca.crt relative to --dir by default")
+def certidude_setup_openvpn_server(url, config, subnet, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, dhparam_path, local, proto, port):
     # TODO: Intelligent way of getting last IP address in the subnet
     subnet_first = None
     subnet_last = None
@@ -345,6 +347,7 @@ def certidude_setup_openvpn_server(url, config, subnet, email_address, common_na
         certificate_path = os.path.join(directory, certificate_path)
         request_path = os.path.join(directory, request_path)
         authority_path = os.path.join(directory, authority_path)
+        dhparam_path = os.path.join(directory, dhparam_path)
 
     if not os.path.exists(certificate_path):
         click.echo("As OpenVPN server certificate needs specific key usage extensions please")
@@ -364,6 +367,10 @@ def certidude_setup_openvpn_server(url, config, subnet, email_address, common_na
         key_usage="nonRepudiation,digitalSignature,keyEncipherment",
         extended_key_usage="serverAuth",
         wait=True)
+
+    if not os.path.exists(dhparam_path):
+        cmd = "openssl", "dhparam", "-out", dhparam_path, "2048"
+        subprocess.check_call(cmd)
 
     if retval:
         return retval

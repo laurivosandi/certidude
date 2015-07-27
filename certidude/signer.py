@@ -35,8 +35,11 @@ def raw_sign(private_key, ca_cert, request, basic_constraints, lifetime, key_usa
 
         cert = crypto.X509()
 
-
+        # Set public key
         cert.set_pubkey(request.get_pubkey())
+
+        # Set issuer
+        cert.set_issuer(ca_cert.get_subject())
 
         # TODO: Assert openssl.cnf policy for subject attributes
 #        if request.get_subject().O != ca_cert.get_subject().O:

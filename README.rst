@@ -13,8 +13,8 @@ Features
 --------
 
 * Standard request, sign, revoke workflow via web interface.
-* Colored command-line interface, check out ``butterknife list``
-* OpenVPN integration, check out ``butterknife setup openvpn server`` and ``butterknife setup openvpn client``
+* Colored command-line interface, check out ``certidude list``
+* OpenVPN integration, check out ``certidude setup openvpn server`` and ``certidude setup openvpn client``
 * Privilege isolation, separate signer process is spawned per private key isolating
   private key use from the the web interface.
 * Certificate numbering obfuscation, certificate serial numbers are intentionally
@@ -42,7 +42,7 @@ To install Certidude:
 
 .. code:: bash
 
-    apt-get install python3 python3-dev build-essential
+    apt-get install python3 python3-pip python3-dev cython3 build-essential libffi-dev libssl-dev
     pip3 install certidude
     
 Create a user for ``certidude``:
@@ -96,7 +96,7 @@ Use web interface or following to sign a certificate on Certidude server:
 Production deployment
 ---------------------
 
-Unstall uWSGI:
+Install uWSGI:
 
 .. code:: bash
 
@@ -120,8 +120,8 @@ Configure uUWSGI application in ``/etc/uwsgi/apps-available/certidude.ini``:
     callable = app
     chmod-socket = 660
     chown-socket = certidude:www-data
-    env = CERTIDUDE_EVENT_PUBLISH=http://localhost/event/publish/%s
-    env = CERTIDUDE_EVENT_SUBSCRIBE=http://localhost/event/subscribe/%s
+    env = CERTIDUDE_EVENT_PUBLISH=http://localhost/event/publish/%(channel)s
+    env = CERTIDUDE_EVENT_SUBSCRIBE=http://localhost/event/subscribe/%(channel)s
 
 Also enable the application:
 
@@ -135,7 +135,7 @@ configure the site in /etc/nginx/sites-available.d/certidude:
 .. code::
 
     upstream certidude_api {
-        server unix:///run/uwsgi/app/certidude/socket;
+        server unix:///run/certidude/api/uwsgi.sock;
     }
 
     server {
@@ -175,24 +175,24 @@ Also adjust ``/etc/nginx/nginx.conf``:
     pid /run/nginx.pid;
 
     events {
-	    worker_connections 768;
-	    # multi_accept on;
+        worker_connections 768;
+        # multi_accept on;
     }
 
     http {
         push_stream_shared_memory_size 32M;
-	    sendfile on;
-	    tcp_nopush on;
-	    tcp_nodelay on;
-	    keepalive_timeout 65;
-	    types_hash_max_size 2048;
-	    include /etc/nginx/mime.types;
-	    default_type application/octet-stream;
-	    access_log /var/log/nginx/access.log;
-	    error_log /var/log/nginx/error.log;
-	    gzip on;
-	    gzip_disable "msie6";
-        include /etc/nginx/sites-enabled.d/*;
+        sendfile on;
+        tcp_nopush on;
+        tcp_nodelay on;
+        keepalive_timeout 65;
+        types_hash_max_size 2048;
+        include /etc/nginx/mime.types;
+        default_type application/octet-stream;
+        access_log /var/log/nginx/access.log;
+        error_log /var/log/nginx/error.log;
+        gzip on;
+        gzip_disable "msie6";
+        include /etc/nginx/sites-enabled/*;
     }
 
 Restart the services:
