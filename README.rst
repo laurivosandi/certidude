@@ -45,6 +45,12 @@ To install Certidude:
     apt-get install python3 python3-dev build-essential
     pip3 install certidude
     
+Create a user for ``certidude``:
+
+.. code:: bash
+
+    useradd certidude
+
 
 Setting up CA
 --------------
@@ -87,11 +93,80 @@ Use web interface or following to sign a certificate on Certidude server:
     certidude sign client-hostname-or-common-name
 
 
-Streaming push support
-----------------------
+Production deployment
+---------------------
+
+Unstall uWSGI:
+
+.. code:: bash
+
+    apt-get install uwsgi uwsgi-plugin-python3
+
+Configure uUWSGI application in ``/etc/uwsgi/apps-available/certidude.ini``:
+
+.. code:: ini
+
+    [uwsgi]
+    master = true
+    processes = 1
+    vaccum = true
+    uid = certidude
+    gid = certidude
+    plugins = python34
+    pidfile = /run/certidude/api/uwsgi.pid
+    socket = /run/certidude/api/uwsgi.sock
+    chdir = /tmp
+    module = certidude.wsgi
+    callable = app
+    chmod-socket = 660
+    chown-socket = certidude:www-data
+    env = CERTIDUDE_EVENT_PUBLISH=http://localhost/event/publish/%s
+    env = CERTIDUDE_EVENT_SUBSCRIBE=http://localhost/event/subscribe/%s
+
+Also enable the application:
+
+.. code:: bash
+
+    ln -s ../apps-available/certidude.ini /etc/uwsgi/apps-enabled/certidude.ini
 
 We support `nginx-push-stream-module <https://github.com/wandenberg/nginx-push-stream-module>`_,
-configure it as follows to enable real-time responses to events:
+configure the site in /etc/nginx/sites-available.d/certidude:
+
+.. code::
+
+    upstream certidude_api {
+        server unix:///run/uwsgi/app/certidude/socket;
+    }
+
+    server {
+        server_name localhost;
+        listen 80 default_server;
+        listen [::]:80 default_server ipv6only=on;
+
+        location ~ /event/publish/(.*) {
+            allow 127.0.0.1; # Allow publishing only from this IP address
+            push_stream_publisher admin;
+            push_stream_channels_path $1;
+        }
+
+        location ~ /event/subscribe/(.*) {
+            push_stream_channels_path $1;
+            push_stream_subscriber long-polling;
+        }
+
+        location / {
+            include uwsgi_params;
+            uwsgi_pass certidude_api;
+        }
+    }
+
+Enable the site:
+
+.. code:: bash
+
+    ln -s ../sites-available.d/certidude.ini /etc/nginx/sites-enabled.d/certidude
+
+Also adjust ``/etc/nginx/nginx.conf``:
 
 .. code::
 
@@ -100,53 +175,29 @@ configure it as follows to enable real-time responses to events:
     pid /run/nginx.pid;
 
     events {
-        worker_connections 768;
-        # multi_accept on;
+	    worker_connections 768;
+	    # multi_accept on;
     }
 
     http {
         push_stream_shared_memory_size 32M;
-        sendfile on;
-        tcp_nopush on;
-        tcp_nodelay on;
-        keepalive_timeout 65;
-        types_hash_max_size 2048;
-        include /etc/nginx/mime.types;
-        default_type application/octet-stream;
-        access_log /var/log/nginx/access.log;
-        error_log /var/log/nginx/error.log;
-        gzip on;
-        gzip_disable "msie6";
-
-        server {
-            listen 80 default_server;
-            listen [::]:80 default_server ipv6only=on;
-            server_name localhost;
-
-            location ~ /event/publish/(.*) {
-                allow 127.0.0.1; # Allow publishing only from this IP address
-                push_stream_publisher admin;
-                push_stream_channels_path $1;
-            }
-
-            location ~ /event/subscribe/(.*) {
-                push_stream_channels_path $1;
-                push_stream_subscriber long-polling;
-            }
-
-            location /api/ {
-                proxy_pass       http://127.0.0.1:9090/api/;
-                proxy_set_header Host      $host;
-                proxy_set_header X-Real-IP $remote_addr;
-            }
-        }
+	    sendfile on;
+	    tcp_nopush on;
+	    tcp_nodelay on;
+	    keepalive_timeout 65;
+	    types_hash_max_size 2048;
+	    include /etc/nginx/mime.types;
+	    default_type application/octet-stream;
+	    access_log /var/log/nginx/access.log;
+	    error_log /var/log/nginx/error.log;
+	    gzip on;
+	    gzip_disable "msie6";
+        include /etc/nginx/sites-enabled.d/*;
     }
 
-
-For ``butterknife serve`` export environment variables:
+Restart the services:
 
 .. code:: bash
 
-    export CERTIDUDE_EVENT_PUBLISH = "http://localhost/event/publish/%s"
-    export CERTIDUDE_EVENT_SUBSCRIBE = "http://localhost/event/subscribe/%s"
-    certidude server -p 9090
+    service uwsgi restart
+    service nginx restart

@@ -755,6 +755,7 @@ def certidude_serve(user, port, listen, enable_signature):
 
     class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
         pass
+
     click.echo("Listening on %s:%d" % (listen, port))
 
     app = falcon.API()
