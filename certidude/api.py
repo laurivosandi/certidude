@@ -217,7 +217,7 @@ class RequestListResource(CertificateAuthorityBase):
         if ca.autosign_allowed(req.env["REMOTE_ADDR"]) and req.get_param("autosign"):
             try:
                 resp.append_header("Content-Type", "application/x-x509-user-cert")
-                resp.body = ca.sign(req).dump()
+                resp.body = ca.sign(csr).dump()
                 return
             except FileExistsError: # Certificate already exists, try to save the request
                 pass
