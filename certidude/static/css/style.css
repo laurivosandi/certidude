@@ -1,0 +1,121 @@
+svg {
+    position: relative;
+    top: 0.5em;
+}
+
+img {
+    max-width: 100%;
+    max-height: 100%;
+}
+
+ul {
+    list-style: none;
+    margin: 1em 0;
+    padding: 0;
+}
+
+button, .button {
+    color: #000;
+    float: right;
+    border: 1pt solid #ccc;
+    background-color: #eee;
+    border-radius: 6px;
+    margin: 2px;
+    padding: 4px 8px;
+    box-sizing: border-box;
+}
+
+button:disabled, .button:disabled {
+    color: #888;
+}
+
+.monospace {
+    font-family: 'Ubuntu Mono', courier, monospace;
+}
+
+footer {
+    display: block;
+    color: #fff;
+    text-align: center;
+}
+
+a {
+    text-decoration: none;
+    color: #44c;
+}
+
+footer a {
+    color: #aaf;
+}
+
+html,body {
+    margin: 0;
+    padding: 0 0 1em 0;
+}
+
+body {
+    background: #222;
+    background-image: url('//fc00.deviantart.net/fs71/i/2013/078/9/6/free_hexa_pattern_cc0_by_black_light_studio-d4ig12f.png');
+    background-position: center;
+}
+
+.comment {
+    color: #aaf;
+}
+
+table th, table td {
+    border: 1px solid #ccc;
+    padding: 2px;
+}
+
+h1, h2, th {
+    font-family: 'Gentium';
+}
+
+h1 {
+    text-align: center;
+    font-size: 22pt;
+}
+
+h2 {
+    font-size: 18pt;
+}
+
+h2 svg {
+    position: relative;
+    top: 16px;
+}
+
+p, td, footer, li, button {
+    font-family: 'PT Sans Narrow';
+    font-size: 14pt;
+}
+
+pre {
+    overflow: auto;
+    border: 1px solid #000;
+    background: #444;
+    color: #fff;
+    font-size: 12pt;
+    padding: 4px;
+    border-radius: 6px;
+    margin: 0 0;
+}
+
+#container {
+    max-width: 60em;
+    margin: 1em auto;
+    background: #fff;
+    padding: 1em;
+    border-style: solid;
+    border-width: 2px;
+    border-color: #aaa;
+    border-radius: 10px;
+}
+
+li {
+    margin: 4px 0;
+    padding: 4px 0;
+    clear: both;
+    border-top: 1px dashed #ccc;
+}

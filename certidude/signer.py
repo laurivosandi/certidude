@@ -33,7 +33,9 @@ def raw_sign(private_key, ca_cert, request, basic_constraints, lifetime, key_usa
         Sign certificate signing request directly with private key assuming it's readable by the process
         """
 
+        # Initialize X.509 certificate object
         cert = crypto.X509()
+        ca.set_version(2) # This corresponds to X.509v3
 
         # Set public key
         cert.set_pubkey(request.get_pubkey())
@@ -130,7 +132,8 @@ class SignHandler(asynchat.async_chat):
             self.send(crl.export(
                 self.server.certificate,
                 self.server.private_key,
-                crypto.FILETYPE_PEM))
+                crypto.FILETYPE_PEM,
+                self.server.revocation_list_lifetime))
 
         elif cmd == "ocsp-request":
             NotImplemented # TODO: Implement OCSP
@@ -168,7 +171,7 @@ class SignHandler(asynchat.async_chat):
 
 
 class SignServer(asyncore.dispatcher):
-    def __init__(self, socket_path, private_key, certificate, lifetime, basic_constraints, key_usage, extended_key_usage):
+    def __init__(self, socket_path, private_key, certificate, lifetime, basic_constraints, key_usage, extended_key_usage, revocation_list_lifetime):
         asyncore.dispatcher.__init__(self)
 
         # Bind to sockets
@@ -183,6 +186,7 @@ class SignServer(asyncore.dispatcher):
         self.private_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(private_key).read())
         self.certificate = crypto.load_certificate(crypto.FILETYPE_PEM, open(certificate).read())
         self.lifetime = lifetime
+        self.revocation_list_lifetime = revocation_list_lifetime
         self.basic_constraints = basic_constraints
         self.key_usage = key_usage
         self.extended_key_usage = extended_key_usage

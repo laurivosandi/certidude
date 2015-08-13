@@ -13,8 +13,8 @@ from certidude.api import CertificateAuthorityResource, \
 
 config = CertificateAuthorityConfig("/etc/ssl/openssl.cnf")
 
-assert os.getenv("CERTIDUDE_EVENT_SUBSCRIBE"), "Please set CERTIDUDE_EVENT_SUBSCRIBE to your web server's subscribe URL"
-assert os.getenv("CERTIDUDE_EVENT_PUBLISH"), "Please set CERTIDUDE_EVENT_SUBSCRIBE to your web server's subscribe URL"
+assert os.getenv("CERTIDUDE_EVENT_SUBSCRIBE"), "Please set CERTIDUDE_EVENT_SUBSCRIBE to your web server's subscription URL"
+assert os.getenv("CERTIDUDE_EVENT_PUBLISH"), "Please set CERTIDUDE_EVENT_PUBLISH to your web server's publishing URL"
 
 app = falcon.API()
 app.add_route("/api/{ca}/ocsp/", CertificateStatusResource(config))

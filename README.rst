@@ -13,13 +13,14 @@ Features
 --------
 
 * Standard request, sign, revoke workflow via web interface.
-* Colored command-line interface, check out ``certidude list``
-* OpenVPN integration, check out ``certidude setup openvpn server`` and ``certidude setup openvpn client``
+* Colored command-line interface, check out ``certidude list``.
+* OpenVPN integration, check out ``certidude setup openvpn server`` and ``certidude setup openvpn client``.
+* strongSwan integration, check out ``certidude setup strongswan server`` and ``certidude setup strongswan client``.
 * Privilege isolation, separate signer process is spawned per private key isolating
   private key use from the the web interface.
 * Certificate numbering obfuscation, certificate serial numbers are intentionally
   randomized to avoid leaking information about business practices.
-* Server-side events support via for example nginx-push-stream-module
+* Server-side events support via for example nginx-push-stream-module.
 
 
 TODO
@@ -27,7 +28,6 @@ TODO
 
 * Refactor mailing subsystem and server-side events to use hooks.
 * Notifications via e-mail.
-* strongSwan setup integration.
 * OCSP support.
 * Deep mailbox integration, eg fetch CSR-s from mailbox via IMAP.
 * WebCrypto support, meanwhile check out `hwcrypto.js <https://github.com/open-eid/hwcrypto.js>`_.
@@ -42,14 +42,14 @@ To install Certidude:
 
 .. code:: bash
 
-    apt-get install python3 python3-pip python3-dev cython3 build-essential libffi-dev libssl-dev
+    apt-get install -y python3 python3-netifaces python3-pip python3-dev cython3 build-essential libffi-dev libssl-dev
     pip3 install certidude
-    
-Create a user for ``certidude``:
+
+Create a system user for ``certidude``:
 
 .. code:: bash
 
-    useradd certidude
+    adduser --system --no-create-home --group certidude
 
 
 Setting up CA
@@ -63,6 +63,12 @@ Certidude can set up CA relatively easily:
 
 Tweak command-line options until you meet your requirements and
 then insert generated section to your /etc/ssl/openssl.cnf
+
+Spawn the signer process:
+
+.. code:: bash
+
+    certidude spawn
 
 Finally serve the certificate authority via web:
 
@@ -102,7 +108,13 @@ Install uWSGI:
 
     apt-get install uwsgi uwsgi-plugin-python3
 
-Configure uUWSGI application in ``/etc/uwsgi/apps-available/certidude.ini``:
+To set up ``nginx`` and ``uwsgi`` is suggested:
+
+.. code:: bash
+
+    certidude setup production
+
+Otherwise manually configure uUWSGI application in ``/etc/uwsgi/apps-available/certidude.ini``:
 
 .. code:: ini
 

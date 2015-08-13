@@ -1,11 +1,11 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # coding: utf-8
 import os
 from setuptools import setup
 
 setup(
     name = "certidude",
-    version = "0.1.7",
+    version = "0.1.17",
     author = u"Lauri Võsandi",
     author_email = "lauri.vosandi@gmail.com",
     description = "Certidude is a novel X.509 Certificate Authority management tool aiming to support PKCS#11 and in far future WebCrypto.",

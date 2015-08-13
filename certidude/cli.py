@@ -1,33 +1,35 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 # coding: utf-8
 
-import sys
+import asyncore
+import click
+import falcon
+import logging
+import mimetypes
+import netifaces
+import os
 import pwd
 import random
-import socket
-import click
-import os
-import asyncore
-import time
-import os
 import re
-import logging
 import signal
-import netifaces
-import urllib.request
+import socket
 import subprocess
-from humanize import naturaltime
-from ipaddress import ip_network
-from time import sleep
-from datetime import datetime
-from OpenSSL import crypto
-from setproctitle import setproctitle
+import sys
+import time
+from certidude.helpers import expand_paths, \
+    certidude_request_certificate
 from certidude.signer import SignServer
-from jinja2 import Environment, PackageLoader
 from certidude.wrappers import CertificateAuthorityConfig, \
     CertificateAuthority, Certificate, subject2dn, Request
+from datetime import datetime
+from humanize import naturaltime
+from ipaddress import ip_network
+from jinja2 import Environment, PackageLoader
+from time import sleep
+from setproctitle import setproctitle
+from OpenSSL import crypto
 
-env = Environment(loader=PackageLoader("certidude", "templates"))
+env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
 
 # Big fat warning:
 # m2crypto overflows around 2030 because on 32-bit systems
@@ -42,17 +44,20 @@ assert hasattr(crypto.X509Req(), "get_extensions"), "You're running too old vers
 # http://www.mad-hacking.net/documentation/linux/security/ssl-tls/creating-ca.xml
 # https://kjur.github.io/jsrsasign/
 # keyUsage, extendedKeyUsage - https://www.openssl.org/docs/apps/x509v3_config.html
+# strongSwan key paths - https://wiki.strongswan.org/projects/1/wiki/SimpleCA
 
 config = CertificateAuthorityConfig("/etc/ssl/openssl.cnf")
 
 # Parse command-line argument defaults from environment
 HOSTNAME = socket.gethostname()
 USERNAME = os.environ.get("USER")
-EMAIL = USERNAME + "@" + HOSTNAME
 NOW = datetime.utcnow().replace(tzinfo=None)
-
 FIRST_NAME = None
 SURNAME = None
+EMAIL = None
+
+if USERNAME:
+    EMAIL = USERNAME + "@" + HOSTNAME
 
 if os.getuid() >= 1000:
     _, _, _, _, gecos, _, _ = pwd.getpwnam(USERNAME)
@@ -61,32 +66,17 @@ if os.getuid() >= 1000:
     else:
         FIRST_NAME = gecos
 
-def first_nic_address():
-    """
-    Return IP address of the first network interface
-    """
-    for interface in netifaces.interfaces():
-        if interface == "lo":
-            continue
-        for iftype, addresses in netifaces.ifaddresses(interface).items():
-            if iftype != 2:
-                continue
-            for address in addresses:
-                return address.pop("addr")
-    raise ValueError("Unable to determine IP address of first NIC")
+DEFAULT_ROUTE, PRIMARY_INTERFACE = netifaces.gateways().get("default").get(2)
+PRIMARY_ALIASES = netifaces.ifaddresses(PRIMARY_INTERFACE).get(2)
+PRIMARY_ADDRESS = PRIMARY_ALIASES[0].get("addr")
 
-def spawn_signers(kill, no_interaction):
+@click.command("spawn", help="Run privilege isolated signer processes")
+@click.option("-k", "--kill", default=False, is_flag=True, help="Kill previous instances")
+@click.option("-n", "--no-interaction", default=True, is_flag=True, help="Don't load password protected keys")
+def certidude_spawn(kill, no_interaction):
     """
     Spawn processes for signers
     """
-
-    os.umask(0o027)
-    uid = os.getuid()
-    assert uid == 0, "Not running as root"
-
-    # Preload charmap encoding for byte_string() function of pyOpenSSL
-    # in order to enable chrooting
-    "".encode("charmap")
 
     # Process directories
     run_dir = "/run/certidude"
@@ -98,6 +88,14 @@ def spawn_signers(kill, no_interaction):
         click.echo("Creating: %s" % signer_dir)
         os.makedirs(signer_dir)
 
+    os.umask(0o027)
+    uid = os.getuid()
+    assert uid == 0, "Not running as root"
+
+    # Preload charmap encoding for byte_string() function of pyOpenSSL
+    # in order to enable chrooting
+    "".encode("charmap")
+
     # Prepare chroot directories
     if not os.path.exists(os.path.join(chroot_dir, "dev")):
         os.makedirs(os.path.join(chroot_dir, "dev"))
@@ -106,11 +104,11 @@ def spawn_signers(kill, no_interaction):
         os.system("mknod -m 444 %s c 1 9" % os.path.join(chroot_dir, "dev", "urandom"))
 
     for ca in config.all_authorities():
-
-        pidfile = "/run/certidude/signer/%s.pid" % ca.slug
+        socket_path = os.path.join(signer_dir, ca.slug + ".sock")
+        pidfile_path = os.path.join(signer_dir, ca.slug + ".pid")
 
         try:
-            with open(pidfile) as fh:
+            with open(pidfile_path) as fh:
                 pid = int(fh.readline())
                 os.kill(pid, 0)
                 click.echo("Found process with PID %d for %s" % (pid, ca.slug))
@@ -133,158 +131,19 @@ def spawn_signers(kill, no_interaction):
         child_pid = os.fork()
 
         if child_pid == 0:
-            with open(pidfile, "w") as fh:
+            with open(pidfile_path, "w") as fh:
                 fh.write("%d\n" % os.getpid())
 
             setproctitle("%s spawn %s" % (sys.argv[0], ca.slug))
             logging.basicConfig(
                 filename="/var/log/certidude-%s.log" % ca.slug,
                 level=logging.INFO)
-            socket_path = os.path.join(signer_dir, ca.slug + ".sock")
-            click.echo("Spawned certidude signer process with PID %d at %s" % (os.getpid(), socket_path))
             server = SignServer(socket_path, ca.private_key, ca.certificate.path,
-                ca.lifetime, ca.basic_constraints, ca.key_usage, ca.extended_key_usage)
+                ca.certificate_lifetime, ca.basic_constraints, ca.key_usage,
+                ca.extended_key_usage, ca.revocation_list_lifetime)
             asyncore.loop()
-
-def certidude_request_certificate(url, key_path, request_path, certificate_path, authority_path, common_name, org_unit, email_address=None, given_name=None, surname=None, autosign=False, wait=False, key_usage=None, extended_key_usage=None):
-    """
-    Exchange CSR for certificate using Certidude HTTP API server
-    """
-
-    # Set up URL-s
-    request_params = set()
-    if autosign:
-        request_params.add("autosign=yes")
-    if wait:
-        request_params.add("wait=forever")
-
-    if not url.endswith("/"):
-        url = url + "/"
-
-    authority_url = url + "certificate"
-    request_url = url + "request"
-
-    if request_params:
-        request_url = request_url + "?" + "&".join(request_params)
-
-    if os.path.exists(authority_path):
-        click.echo("Found CA certificate in: %s" % authority_path)
-    else:
-        if authority_url:
-            click.echo("Attempting to fetch CA certificate from %s" % authority_url)
-            try:
-                with urllib.request.urlopen(authority_url) as fh:
-                    buf = fh.read()
-                    try:
-                        cert = crypto.load_certificate(crypto.FILETYPE_PEM, buf)
-                    except crypto.Error:
-                        raise ValueError("Failed to parse PEM: %s" % buf)
-                    with open(authority_path + ".part", "wb") as oh:
-                        oh.write(buf)
-                    click.echo("Writing CA certificate to: %s" % authority_path)
-                    os.rename(authority_path + ".part", authority_path)
-            except urllib.error.HTTPError as e:
-                click.echo("Failed to fetch CA certificate, server responded with: %d %s" % (e.code, e.reason), err=True)
-                return 1
         else:
-            raise FileNotFoundError("CA certificate not found and no URL specified")
-
-    try:
-        certificate = Certificate(open(certificate_path))
-        click.echo("Found certificate: %s" % certificate_path)
-    except FileNotFoundError:
-        try:
-            request = Request(open(request_path))
-            click.echo("Found signing request: %s" % request_path)
-        except FileNotFoundError:
-
-            # Construct private key
-            click.echo("Generating 4096-bit RSA key...")
-            key = crypto.PKey()
-            key.generate_key(crypto.TYPE_RSA, 4096)
-
-            # Dump private key
-            os.umask(0o077)
-            with open(key_path + ".part", "wb") as fh:
-                fh.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
-
-            # Construct CSR
-            csr = crypto.X509Req()
-            csr.set_pubkey(key)
-            request = Request(csr)
-
-            # Set subject attributes
-            request.common_name = common_name
-            if given_name:
-                request.given_name = given_name
-            if surname:
-                request.surname = surname
-            if org_unit:
-                request.organizational_unit = org_unit
-
-            # Set extensions
-            extensions = []
-            if key_usage:
-                extensions.append(("keyUsage", key_usage, True))
-            if extended_key_usage:
-                extensions.append(("extendedKeyUsage", extended_key_usage, True))
-            if email_address:
-                extensions.append(("subjectAltName", "email:" + email_address, False))
-            request.set_extensions(extensions)
-
-            # Dump CSR
-            os.umask(0o022)
-            with open(request_path + ".part", "w") as fh:
-                fh.write(request.dump())
-
-            click.echo("Writing private key to: %s" % key_path)
-            os.rename(key_path + ".part", key_path)
-            click.echo("Writing certificate signing request to: %s" % request_path)
-            os.rename(request_path + ".part", request_path)
-
-
-        with open(request_path, "rb") as fh:
-            buf = fh.read()
-            submission = urllib.request.Request(request_url, buf)
-            submission.add_header("User-Agent", "Certidude")
-            submission.add_header("Content-Type", "application/pkcs10")
-
-            click.echo("Submitting to %s, waiting for response..." % request_url)
-            try:
-                response = urllib.request.urlopen(submission)
-                buf = response.read()
-                cert = crypto.load_certificate(crypto.FILETYPE_PEM, buf)
-            except crypto.Error:
-                raise ValueError("Failed to parse PEM: %s" % buf)
-            except urllib.error.HTTPError as e:
-                if e.code == 409:
-                    click.echo("Different signing request with same CN is already present on server, server refuses to overwrite", err=True)
-                    return 2
-                else:
-                    click.echo("Failed to fetch certificate, server responded with: %d %s" % (e.code, e.reason), err=True)
-                    return 3
-            else:
-                if response.code == 202:
-                    click.echo("Server stored the request for processing (202 Accepted), but waiting was not requested, hence quitting for now", err=True)
-                    return 254
-
-            os.umask(0o022)
-            with open(certificate_path + ".part", "wb") as gh:
-                gh.write(buf)
-
-            click.echo("Writing certificate to: %s" % certificate_path)
-            os.rename(certificate_path + ".part", certificate_path)
-
-    # TODO: Validate fetched certificate against CA
-    # TODO: Check that recevied certificate CN and pubkey match
-    # TODO: Check file permissions
-
-
-@click.command("spawn", help="Run privilege isolated signer processes")
-@click.option("-k", "--kill", default=False, is_flag=True, help="Kill previous instances")
-@click.option("-n", "--no-interaction", default=True, is_flag=True, help="Don't load password protected keys")
-def certidude_spawn(**args):
-    spawn_signers(**args)
+            click.echo("Spawned certidude signer process with PID %d at %s" % (child_pid, socket_path))
 
 
 @click.command("client", help="Setup X.509 certificates for application")
@@ -313,9 +172,10 @@ def certidude_setup_client(quiet, **kwargs):
 @click.option("--org-unit", "-ou", help="Organizational unit")
 @click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, '%s' by default" % EMAIL)
 @click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="OpenVPN subnet, 192.168.33.0/24 by default")
-@click.option("--local", "-l", default=first_nic_address(), help="OpenVPN listening address, %s" % first_nic_address())
+@click.option("--local", "-l", default=PRIMARY_ADDRESS, help="OpenVPN listening address, %s" % PRIMARY_ADDRESS)
 @click.option("--port", "-p", default=1194, type=click.IntRange(1,60000), help="OpenVPN listening port, 1194 by default")
 @click.option('--proto', "-t", default="udp", type=click.Choice(['udp', 'tcp']), help="OpenVPN transport protocol, UDP by default")
+@click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
 @click.option("--config", "-o",
     default="/etc/openvpn/site-to-client.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
@@ -326,7 +186,8 @@ def certidude_setup_client(quiet, **kwargs):
 @click.option("--certificate-path", "-crt", default=HOSTNAME + ".crt", help="Certificate path, %s.crt relative to --directory by default" % HOSTNAME)
 @click.option("--dhparam-path", "-dh", default="dhparam2048.pem", help="Diffie/Hellman parameters path, dhparam2048.pem relative to --directory by default")
 @click.option("--authority-path", "-ca", default="ca.crt", help="Certificate authority certificate path, ca.crt relative to --dir by default")
-def certidude_setup_openvpn_server(url, config, subnet, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, dhparam_path, local, proto, port):
+@expand_paths()
+def certidude_setup_openvpn_server(url, config, subnet, route, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, dhparam_path, local, proto, port):
     # TODO: Intelligent way of getting last IP address in the subnet
     subnet_first = None
     subnet_last = None
@@ -338,16 +199,6 @@ def certidude_setup_openvpn_server(url, config, subnet, email_address, common_na
         if not subnet_second:
             subnet_second = addr
         subnet_last = addr
-
-    if directory:
-        if not os.path.exists(directory):
-            click.echo("Making directory: %s" % directory)
-            os.makedirs(directory)
-        key_path = os.path.join(directory, key_path)
-        certificate_path = os.path.join(directory, certificate_path)
-        request_path = os.path.join(directory, request_path)
-        authority_path = os.path.join(directory, authority_path)
-        dhparam_path = os.path.join(directory, dhparam_path)
 
     if not os.path.exists(certificate_path):
         click.echo("As OpenVPN server certificate needs specific key usage extensions please")
@@ -365,7 +216,7 @@ def certidude_setup_openvpn_server(url, config, subnet, email_address, common_na
         org_unit,
         email_address,
         key_usage="nonRepudiation,digitalSignature,keyEncipherment",
-        extended_key_usage="serverAuth",
+        extended_key_usage="serverAuth,ikeIntermediate",
         wait=True)
 
     if not os.path.exists(dhparam_path):
@@ -376,7 +227,7 @@ def certidude_setup_openvpn_server(url, config, subnet, email_address, common_na
         return retval
 
     # TODO: Add dhparam
-    config.write(env.get_template("site-to-client.ovpn").render(locals()))
+    config.write(env.get_template("openvpn-site-to-client.ovpn").render(locals()))
 
     click.echo("Generated %s" % config.name)
     click.echo()
@@ -402,16 +253,8 @@ def certidude_setup_openvpn_server(url, config, subnet, email_address, common_na
 @click.option("--request-path", "-r", default=HOSTNAME + ".csr", help="Request path, %s.csr relative to --directory by default" % HOSTNAME)
 @click.option("--certificate-path", "-c", default=HOSTNAME + ".crt", help="Certificate path, %s.crt relative to --directory by default" % HOSTNAME)
 @click.option("--authority-path", "-a", default="ca.crt", help="Certificate authority certificate path, ca.crt relative to --dir by default")
+@expand_paths()
 def certidude_setup_openvpn_client(url, config, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, proto, remote):
-
-    if directory:
-        if not os.path.exists(directory):
-            click.echo("Making directory: %s" % directory)
-            os.makedirs(directory)
-        key_path = os.path.join(directory, key_path)
-        certificate_path = os.path.join(directory, certificate_path)
-        request_path = os.path.join(directory, request_path)
-        authority_path = os.path.join(directory, authority_path)
 
     retval = certidude_request_certificate(
         url,
@@ -428,7 +271,7 @@ def certidude_setup_openvpn_client(url, config, email_address, common_name, org_
         return retval
 
     # TODO: Add dhparam
-    config.write(env.get_template("client-to-site.ovpn").render(locals()))
+    config.write(env.get_template("openvpn-client-to-site.ovpn").render(locals()))
 
     click.echo("Generated %s" % config.name)
     click.echo()
@@ -438,6 +281,164 @@ def certidude_setup_openvpn_client(url, config, email_address, common_name, org_
     click.echo()
 
 
+@click.command("server", help="Set up strongSwan server")
+@click.argument("url")
+@click.option("--common-name", "-cn", default=HOSTNAME, help="Common name, %s by default" % HOSTNAME)
+@click.option("--org-unit", "-ou", help="Organizational unit")
+@click.option("--fqdn", "-f", default=HOSTNAME, help="Fully qualified hostname, %s by default" % PRIMARY_ADDRESS)
+@click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, %s by default" % EMAIL)
+@click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="IPsec virtual subnet, 192.168.33.0/24 by default")
+@click.option("--local", "-l", default=PRIMARY_ADDRESS, help="IPsec gateway address, %s" % PRIMARY_ADDRESS)
+@click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
+@click.option("--config", "-o",
+    default="/etc/ipsec.conf",
+    type=click.File(mode="w", atomic=True, lazy=True),
+    help="strongSwan configuration file, /etc/ipsec.conf by default")
+@click.option("--secrets", "-s",
+    default="/etc/ipsec.secrets",
+    type=click.File(mode="w", atomic=True, lazy=True),
+    help="strongSwan secrets file, /etc/ipsec.secrets by default")
+@click.option("--directory", "-d", default="/etc/ipsec.d", help="Directory for keys, /etc/ipsec.d by default")
+@click.option("--key-path", "-key", default="private/%s.pem" % HOSTNAME, help="Key path, private/%s.pem by default" % HOSTNAME)
+@click.option("--request-path", "-csr", default="reqs/%s.pem" % HOSTNAME, help="Request path, reqs/%s.pem by default" % HOSTNAME)
+@click.option("--certificate-path", "-crt", default="certs/%s.pem" % HOSTNAME, help="Certificate path, certs/%s.pem by default" % HOSTNAME)
+@click.option("--authority-path", "-ca", default="cacerts/ca.pem", help="Certificate authority certificate path, cacerts/ca.pem by default")
+@expand_paths()
+def certidude_setup_strongswan_server(url, config, secrets, subnet, route, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, local, ip_address, fqdn):
+
+    config.write(env.get_template("strongswan-site-to-client.conf").render(locals()))
+
+    if not os.path.exists(certificate_path):
+        click.echo("As strongSwan server certificate needs specific key usage extensions please")
+        click.echo("use following command to sign on Certidude server instead of web interface:")
+        click.echo()
+        click.echo("  certidude sign %s" % common_name)
+
+    retval = certidude_request_certificate(
+        url,
+        key_path,
+        request_path,
+        certificate_path,
+        authority_path,
+        common_name,
+        org_unit,
+        email_address,
+        key_usage="nonRepudiation,digitalSignature,keyEncipherment",
+        extended_key_usage="serverAuth,ikeIntermediate",
+        ipv4_address=None if local.is_private else local,
+        dns=None if local.is_private or "." not in fdqn else fdqn,
+        wait=True)
+
+    if retval:
+        return retval
+
+
+    click.echo("Generated %s" % config.name)
+    click.echo()
+    click.echo("Inspect newly created %s and start strongSwan service:" % config.name)
+    click.echo()
+    click.echo("  apt-get install strongswan strongswan-starter strongswan-ikev2")
+    click.secho("  service strongswan restart", bold=True)
+    click.echo()
+
+
+@click.command("client", help="Set up strongSwan client")
+@click.argument("url")
+@click.argument("remote")
+@click.option("--common-name", "-cn", default=HOSTNAME, help="Common name, %s by default" % HOSTNAME)
+@click.option("--org-unit", "-ou", help="Organizational unit")
+@click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, '%s' by default" % EMAIL)
+@click.option("--config", "-o",
+    default="/etc/ipsec.conf",
+    type=click.File(mode="w", atomic=True, lazy=True),
+    help="strongSwan configuration file, /etc/ipsec.conf by default")
+@click.option("--secrets", "-s",
+    default="/etc/ipsec.secrets",
+    type=click.File(mode="w", atomic=True, lazy=True),
+    help="strongSwan secrets file, /etc/ipsec.secrets by default")
+@click.option("--dpdaction", "-d",
+    default="restart",
+    type=click.Choice(["none", "clear", "hold", "restart"]),
+    help="Action upon dead peer detection; either none, clear, hold or restart")
+@click.option("--auto", "-a",
+    default="start",
+    type=click.Choice(["ignore", "add", "route", "start"]),
+    help="Operation at startup; either ignore, add, route or start")
+@click.option("--directory", "-d", default="/etc/ipsec.d", help="Directory for keys, /etc/ipsec.d by default")
+@click.option("--key-path", "-key", default="private/%s.pem" % HOSTNAME, help="Key path, private/%s.pem by default" % HOSTNAME)
+@click.option("--request-path", "-csr", default="reqs/%s.pem" % HOSTNAME, help="Request path, reqs/%s.pem by default" % HOSTNAME)
+@click.option("--certificate-path", "-crt", default="certs/%s.pem" % HOSTNAME, help="Certificate path, certs/%s.pem by default" % HOSTNAME)
+@click.option("--authority-path", "-ca", default="cacerts/ca.pem", help="Certificate authority certificate path, cacerts/ca.pem by default")
+@expand_paths()
+def certidude_setup_strongswan_client(url, config, secrets, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, remote, auto, dpdaction):
+
+    retval = certidude_request_certificate(
+        url,
+        key_path,
+        request_path,
+        certificate_path,
+        authority_path,
+        common_name,
+        org_unit,
+        email_address,
+        wait=True)
+
+    if retval:
+        return retval
+
+    # TODO: Add dhparam
+    config.write(env.get_template("strongswan-client-to-site.conf").render(locals()))
+
+    click.echo("Generated %s" % config.name)
+    click.echo()
+    click.echo("Inspect newly created %s and start strongSwan service:" % config.name)
+    click.echo()
+    click.echo("  apt-get install strongswan strongswan-starter")
+    click.echo("  service strongswan restart")
+    click.echo()
+
+
+@click.command("production", help="Set up nginx and uwsgi")
+@click.option("--username", default="certidude", help="Service user account, created if necessary, 'certidude' by default")
+@click.option("--hostname", default=HOSTNAME, help="nginx hostname, '%s' by default" % HOSTNAME)
+@click.option("--static-path", default=os.path.join(os.path.dirname(__file__), "static"), help="Static files")
+@click.option("--nginx-config", "-n",
+    default="/etc/nginx/nginx.conf",
+    type=click.File(mode="w", atomic=True, lazy=True),
+    help="nginx configuration, /etc/nginx/nginx.conf by default")
+@click.option("--uwsgi-config", "-u",
+    default="/etc/uwsgi/apps-available/certidude.ini",
+    type=click.File(mode="w", atomic=True, lazy=True),
+    help="uwsgi configuration, /etc/uwsgi/ by default")
+@click.option("--push-server", help="Push server URL, in case of different nginx instance")
+def certidude_setup_production(username, hostname, push_server, nginx_config, uwsgi_config, static_path):
+    try:
+        pwd.getpwnam(username)
+        click.echo("Username '%s' already exists, excellent!" % username)
+    except KeyError:
+        cmd = "adduser", "--system",  "--no-create-home", "--group", username
+        subprocess.check_call(cmd)
+
+#    cmd = "gpasswd", "-a", username, "www-data"
+#    subprocess.check_call(cmd)
+
+    if not static_path.endswith("/"):
+        static_path += "/"
+
+    nginx_config.write(env.get_template("nginx.conf").render(locals()))
+    click.echo("Generated: %s" % nginx_config.name)
+    uwsgi_config.write(env.get_template("uwsgi.ini").render(locals()))
+    click.echo("Generated: %s" % uwsgi_config.name)
+
+    if os.path.exists("/etc/uwsgi/apps-enabled/certidude.ini"):
+        os.unlink("/etc/uwsgi/apps-enabled/certidude.ini")
+    os.symlink(uwsgi_config.name, "/etc/uwsgi/apps-enabled/certidude.ini")
+    click.echo("Symlinked %s -> /etc/uwsgi/apps-enabled/certidude.ini" % uwsgi_config.name)
+
+    if not push_server:
+        click.echo("Remember to install nginx with wandenberg/nginx-push-stream-module!")
+
+
 @click.command("authority", help="Set up Certificate Authority in a directory")
 @click.option("--group", "-g", default="certidude", help="Group for file permissions, certidude by default")
 @click.option("--parent", "-p", help="Parent CA, none by default")
@@ -445,10 +446,11 @@ def certidude_setup_openvpn_client(url, config, email_address, common_name, org_
 @click.option("--country", "-c", default="ee", help="Country, Estonia by default")
 @click.option("--state", "-s", default="Harjumaa", help="State or country, Harjumaa by default")
 @click.option("--locality", "-l", default="Tallinn", help="City or locality, Tallinn by default")
-@click.option("--lifetime", default=20*365, help="Lifetime in days, 7300 days (20 years) by default")
+@click.option("--authority-lifetime", default=20*365, help="Authority certificate lifetime in days, 7300 days (20 years) by default")
+@click.option("--certificate-lifetime", default=5*365, help="Certificate lifetime in days, 1825 days (5 years) by default")
+@click.option("--revocation-list-lifetime", default=1, help="Revocation list lifetime in days, 1 day by default")
 @click.option("--organization", "-o", default="Example LLC", help="Company or organization name")
 @click.option("--organizational-unit", "-ou", default="Certification Department")
-@click.option("--crl-age", default=1, help="CRL expiration age, 1 day by default")
 @click.option("--pkcs11", default=False, is_flag=True, help="Use PKCS#11 token instead of files")
 @click.option("--crl-distribution-url", default=None, help="CRL distribution URL")
 @click.option("--ocsp-responder-url", default=None, help="OCSP responder URL")
@@ -456,7 +458,7 @@ def certidude_setup_openvpn_client(url, config, email_address, common_name, org_
 @click.option("--inbox", default="imap://user:pass@host:port/INBOX", help="Inbound e-mail server")
 @click.option("--outbox", default="smtp://localhost", help="Outbound e-mail server")
 @click.argument("directory")
-def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, crl_age, lifetime, pkcs11, group, crl_distribution_url, ocsp_responder_url, email_address, inbox, outbox):
+def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, group, crl_distribution_url, ocsp_responder_url, email_address, inbox, outbox):
     logging.info("Creating certificate authority in %s", directory)
     _, _, uid, gid, gecos, root, shell = pwd.getpwnam(group)
     os.setgid(gid)
@@ -481,7 +483,7 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     crl_distribution_points = "URI:%s" % crl_distribution_url
 
     ca = crypto.X509()
-    #ca.set_version(3) # breaks gcr-viewer?!
+    ca.set_version(2) # This corresponds to X.509v3
     ca.set_serial_number(1)
     ca.get_subject().CN = common_name
     ca.get_subject().C = country
@@ -490,7 +492,7 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     ca.get_subject().O = organization
     ca.get_subject().OU = organizational_unit
     ca.gmtime_adj_notBefore(0)
-    ca.gmtime_adj_notAfter(lifetime * 24 * 60 * 60)
+    ca.gmtime_adj_notAfter(authority_lifetime * 24 * 60 * 60)
     ca.set_issuer(ca.get_subject())
     ca.set_pubkey(key)
     ca.add_extensions([
@@ -522,7 +524,10 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
                 subject_alt_name.encode("ascii"))
         ])
 
-    if not ocsp_responder_url:
+    if ocsp_responder_url:
+        raise NotImplementedError()
+
+    """
         ocsp_responder_url = "http://%s/api/%s/ocsp/" % (common_name, slug)
         authority_info_access = "OCSP;URI:%s" % ocsp_responder_url
         ca.add_extensions([
@@ -531,6 +536,7 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
                 False,
                 authority_info_access.encode("ascii"))
         ])
+    """
 
     click.echo("Signing %s..." % subject2dn(ca.get_subject()))
 
@@ -550,7 +556,7 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
             os.mkdir(os.path.join(directory, subdir))
     with open(ca_crl, "wb") as fh:
         crl = crypto.CRL()
-        fh.write(crl.export(ca, key, days=crl_age))
+        fh.write(crl.export(ca, key, days=revocation_list_lifetime))
     with open(os.path.join(directory, "serial"), "w") as fh:
         fh.write("1")
 
@@ -730,12 +736,35 @@ def certidude_sign(common_name, overwrite, lifetime):
         else:
             # Sign directly using private key
             cert = ca.sign2(request, overwrite, True, lifetime)
-        os.unlink(request.path)
+
         click.echo("Signed %s" % cert.distinguished_name)
         for key, value, data in cert.extensions:
             click.echo("Added extension %s: %s" % (key, value))
         click.echo()
 
+class StaticResource(object):
+    def __init__(self, root):
+        self.root = os.path.realpath(root)
+        click.echo("Serving static from: %s" % self.root)
+
+    def __call__(self, req, resp):
+
+        path = os.path.realpath(os.path.join(self.root, req.path[1:]))
+        if not path.startswith(self.root):
+            raise falcon.HTTPForbidden
+
+        print("Serving:", path)
+        if os.path.exists(path):
+            content_type, content_encoding = mimetypes.guess_type(path)
+            if content_type:
+                resp.append_header("Content-Type", content_type)
+            if content_encoding:
+                resp.append_header("Content-Encoding", content_encoding)
+            resp.append_header("Content-Disposition", "attachment")
+            resp.stream = open(path, "rb")
+        else:
+            resp.status = falcon.HTTP_404
+            resp.body = "File '%s' not found" % req.path
 
 @click.command("serve", help="Run built-in HTTP server")
 @click.option("-u", "--user", default="certidude", help="Run as user")
@@ -743,7 +772,6 @@ def certidude_sign(common_name, overwrite, lifetime):
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
 @click.option("-s", "--enable-signature", default=False, is_flag=True, help="Allow signing operations with private key of CA")
 def certidude_serve(user, port, listen, enable_signature):
-    spawn_signers(kill=False, no_interaction=False)
 
     logging.basicConfig(
         filename='/var/log/certidude.log',
@@ -775,6 +803,8 @@ def certidude_serve(user, port, listen, enable_signature):
     app.add_route("/api/{ca}/request/{cn}/", RequestDetailResource(config))
     app.add_route("/api/{ca}/request/", RequestListResource(config))
     app.add_route("/api/{ca}/", IndexResource(config))
+
+    app.add_sink(StaticResource(os.path.join(os.path.dirname(__file__), "static")))
     httpd = make_server(listen, port, app, ThreadingWSGIServer)
     if user:
         _, _, uid, gid, gecos, root, shell = pwd.getpwnam(user)
@@ -789,6 +819,9 @@ def certidude_serve(user, port, listen, enable_signature):
         click.echo("Warning: running as root, this is not reccommended!")
     httpd.serve_forever()
 
+@click.group("strongswan", help="strongSwan helpers")
+def certidude_setup_strongswan(): pass
+
 @click.group("openvpn", help="OpenVPN helpers")
 def certidude_setup_openvpn(): pass
 
@@ -798,11 +831,15 @@ def certidude_setup(): pass
 @click.group()
 def entry_point(): pass
 
+certidude_setup_strongswan.add_command(certidude_setup_strongswan_server)
+certidude_setup_strongswan.add_command(certidude_setup_strongswan_client)
 certidude_setup_openvpn.add_command(certidude_setup_openvpn_server)
 certidude_setup_openvpn.add_command(certidude_setup_openvpn_client)
 certidude_setup.add_command(certidude_setup_authority)
 certidude_setup.add_command(certidude_setup_openvpn)
+certidude_setup.add_command(certidude_setup_strongswan)
 certidude_setup.add_command(certidude_setup_client)
+certidude_setup.add_command(certidude_setup_production)
 entry_point.add_command(certidude_setup)
 entry_point.add_command(certidude_serve)
 entry_point.add_command(certidude_spawn)

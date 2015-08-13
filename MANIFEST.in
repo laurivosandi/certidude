@@ -3,3 +3,8 @@ include certidude/templates/*.html
 include certidude/templates/*.svg
 include certidude/templates/*.ovpn
 include certidude/templates/*.cnf
+include certidude/templates/*.conf
+include certidude/templates/*.ini
+include certidude/static/js/*.js
+include certidude/static/css/*.css
+include certidude/static/*.html

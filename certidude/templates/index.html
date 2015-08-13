@@ -1,162 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/2.1.1/jquery.min.js"></script>
-    <link href='http://fonts.googleapis.com/css?family=Ubuntu+Mono' rel='stylesheet' type='text/css'>
-    <link href='http://fonts.googleapis.com/css?family=Gentium' rel='stylesheet' type='text/css'>
-    <link href="//fonts.googleapis.com/css?family=PT+Sans+Narrow" rel="stylesheet" type="text/css">
     <meta charset="utf-8"/>
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <title>Certidude server</title>
-    <style type="text/css">
-        svg {
-            position: relative;
-            top: 0.5em;
-        }
-
-        img {
-            max-width: 100%;
-            max-height: 100%;
-        }
-
-        ul {
-            list-style: none;
-            margin: 1em 0;
-            padding: 0;
-        }
-
-        button, .button {
-            color: #000;
-            float: right;
-            border: 1pt solid #ccc;
-            background-color: #eee;
-            border-radius: 6px;
-            margin: 2px;
-            padding: 4px 8px;
-            box-sizing: border-box;
-        }
-        
-        button:disabled, .button:disabled {
-            color: #888;
-        }
-
-        .monospace {
-            font-family: 'Ubuntu Mono', courier, monospace;
-        }
-
-        footer {
-            display: block;
-            color: #fff;
-            text-align: center;
-        }
-
-        a {
-            text-decoration: none;
-            color: #44c;
-        }
-
-        footer a {
-            color: #aaf;
-        }
-
-        html,body {
-            margin: 0;
-            padding: 0 0 1em 0;
-        }
-
-        body {
-            background: #222;
-            background-image: url('http://fc00.deviantart.net/fs71/i/2013/078/9/6/free_hexa_pattern_cc0_by_black_light_studio-d4ig12f.png');
-            background-position: center;
-        }
-
-        .comment {
-            color: #aaf;
-        }
-
-        table th, table td {
-            border: 1px solid #ccc;
-            padding: 2px;
-        }
-
-        h1, h2, th {
-            font-family: 'Gentium';
-        }
-
-        h1 {
-            text-align: center;
-            font-size: 22pt;
-        }
-
-        h2 {
-            font-size: 18pt;
-        }
-
-        h2 svg {
-            position: relative;
-            top: 16px;
-        }
-
-        p, td, footer, li, button {
-            font-family: 'PT Sans Narrow';
-            font-size: 14pt;
-        }
-
-        pre {
-            overflow: auto;
-            border: 1px solid #000;
-            background: #444;
-            color: #fff;
-            font-size: 12pt;
-            padding: 4px;
-            border-radius: 6px;
-            margin: 0 0;
-        }
-
-        #container {
-            max-width: 60em;
-            margin: 1em auto;
-            background: #fff;
-            padding: 1em;
-            border-style: solid;
-            border-width: 2px;
-            border-color: #aaa;
-            border-radius: 10px;
-        }
-
-        li {
-            margin: 4px 0;
-            padding: 4px 0;
-            clear: both;
-            border-top: 1px dashed #ccc;
-        }
-
-
-    </style>
+    <link href="/css/style.css" rel="stylesheet" type="text/css"/>
+    <link href="//fonts.googleapis.com/css?family=Ubuntu+Mono" rel="stylesheet" type="text/css"/>
+    <link href="//fonts.googleapis.com/css?family=Gentium" rel="stylesheet" type="text/css"/>
+    <link href="//fonts.googleapis.com/css?family=PT+Sans+Narrow" rel="stylesheet" type="text/css"/>
+    <script type="text/javascript" src="/js/jquery-2.1.4.min.js"></script>
 </head>
 <body>
 <div id="container">
 
 <h1>Submit signing request</h1>
 
+<p>Request submission is allowed from: {% for i in authority.request_whitelist %}{{ i }} {% endfor %}</p>
+<p>Autosign is allowed from: {% for i in authority.autosign_whitelist %}{{ i }} {% endfor %}</p>
+
+<h2>IPsec gateway on OpenWrt</h2>
+
 {% set s = authority.certificate.subject %}
 
-<!--
-<p>To submit new certificate signing request first set common name, eg:</p>
 <pre>
-export CN=$(hostname)
+opkg update
+opkg install strongswan-default curl openssl-util
+modprobe authenc
 </pre>
 
 <p>Generate key and submit using standard shell tools:</p>
 
 <pre>
-curl {{request.url}}/certificate/ > ca.crt
-openssl genrsa -out $CN.key 4096
-openssl req -new -sha256 -key $CN.key -out $CN.csr -subj "{% if s.C %}/C={{s.C}}{% endif %}{% if s.ST %}/ST={{s.ST}}{% endif %}{% if s.L %}/L={{s.L}}{% endif %}{% if s.O %}/O={{s.O}}{% endif %}{% if s.OU %}/OU={{s.OU}}{% endif %}/CN=$CN"
-wget --header "Content-Type: application/pkcs10" --post-data="$(cat $CN.csr)" http://localhost:9090/api/buujaa/request/?autosign=1\&wait=30 -O $CN.crt
-openssl verify -CAfile ca.crt $CN.crt
+CN=$(cat /proc/sys/kernel/hostname)
+curl {{request.url}}/certificate/ > /etc/ipsec.d/cacerts/ca.pem
+openssl genrsa -out /etc/ipsec.d/private/$CN.pem 4096
+chmod 0600 /etc/ipsec.d/private/$CN.pem
+openssl req -new -sha256 -key /etc/ipsec.d/private/$CN.pem -out /etc/ipsec.d/reqs/$CN.pem -subj "{% if s.C %}/C={{s.C}}{% endif %}{% if s.ST %}/ST={{s.ST}}{% endif %}{% if s.L %}/L={{s.L}}{% endif %}{% if s.O %}/O={{s.O}}{% endif %}{% if s.OU %}/OU={{s.OU}}{% endif %}/CN=$CN"
+curl -L -H "Content-Type: application/pkcs10" --data-binary @/etc/ipsec.d/reqs/$CN.pem {{request.uri}}/request/?autosign=1\&wait=30 > /etc/ipsec.d/certs/$CN.pem.part
+if [ $? -eq 0 ]; then mv /etc/ipsec.d/certs/$CN.pem.part /etc/ipsec.d/certs/$CN.pem; fi
+openssl verify -CAfile /etc/ipsec.d/cacerts/ca.pem /etc/ipsec.d/certs/$CN.pem
 </pre>
--->
+
+<p>
+Inspect newly created files:
+</p>
+
+<pre>
+openssl x509 -text -noout -in /etc/ipsec.d/cacerts/ca.pem
+openssl x509 -text -noout -in /etc/ipsec.d/certs/$CN.pem
+openssl rsa -check -in /etc/ipsec.d/private/$CN.pem
+</pre>
 
 <p>Assuming you have Certidude installed</p>
 

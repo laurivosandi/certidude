@@ -7,6 +7,7 @@ import click
 import socket
 import io
 import urllib.request
+import ipaddress
 from configparser import RawConfigParser
 from Crypto.Util import asn1
 from OpenSSL import crypto
@@ -78,7 +79,7 @@ class CertificateAuthorityConfig(object):
         section = "CA_" + slug
 
         dirs = dict([(key, self.get(section, key))
-            for key in ("dir", "certificate", "crl", "certs", "new_certs_dir", "private_key", "revoked_certs_dir", "autosign_whitelist")])
+            for key in ("dir", "certificate", "crl", "certs", "new_certs_dir", "private_key", "revoked_certs_dir", "request_whitelist", "autosign_whitelist")])
 
         # Variable expansion, eg $dir
         for key, value in dirs.items():
@@ -89,7 +90,8 @@ class CertificateAuthorityConfig(object):
         dirs["email_address"] = self.get(section, "emailAddress")
         dirs["inbox"] = self.get(section, "inbox")
         dirs["outbox"] = self.get(section, "outbox")
-        dirs["lifetime"] = int(self.get(section, "default_days", "1825"))
+        dirs["certificate_lifetime"] = int(self.get(section, "default_days", "1825"))
+        dirs["revocation_list_lifetime"] = int(self.get(section, "default_crl_days", "1"))
 
         extensions_section = self.get(section, "x509_extensions")
         if extensions_section:
@@ -296,7 +298,7 @@ class Request(CertificateBase):
         else:
             raise ValueError("Can't parse %s as X.509 certificate signing request!" % mixed)
 
-        assert not self.buf or self.buf == self.dump(), "%s is not %s" % (self.buf, self.dump())
+        assert not self.buf or self.buf == self.dump(), "%s is not %s" % (repr(self.buf), repr(self.dump()))
 
     @property
     def signable(self):
@@ -390,28 +392,24 @@ class Certificate(CertificateBase):
 
 class CertificateAuthority(object):
 
-    def __init__(self, slug, certificate, crl, certs, new_certs_dir, revoked_certs_dir=None, private_key=None, autosign=False, autosign_whitelist=None, email_address=None, inbox=None, outbox=None, basic_constraints="CA:FALSE", key_usage="digitalSignature,keyEncipherment", extended_key_usage="clientAuth", lifetime=5*365):
+    def __init__(self, slug, certificate, crl, certs, new_certs_dir, revoked_certs_dir=None, private_key=None, autosign=False, autosign_whitelist=None, request_whitelist=None, email_address=None, inbox=None, outbox=None, basic_constraints="CA:FALSE", key_usage="digitalSignature,keyEncipherment", extended_key_usage="clientAuth", certificate_lifetime=5*365, revocation_list_lifetime=1):
         self.slug = slug
         self.revocation_list = crl
         self.signed_dir = certs
         self.request_dir = new_certs_dir
         self.revoked_dir = revoked_certs_dir
         self.private_key = private_key
-        self.autosign_whitelist = set([j for j in autosign_whitelist.split(" ") if j])
+
+        self.autosign_whitelist = set([ipaddress.ip_network(j) for j in autosign_whitelist.split(" ") if j])
+        self.request_whitelist = set([ipaddress.ip_network(j) for j in request_whitelist.split(" ") if j]).union(self.autosign_whitelist)
+
         self.certificate = Certificate(open(certificate))
         self.mailer = Mailer(outbox) if outbox else None
-        self.lifetime = lifetime
+        self.certificate_lifetime = certificate_lifetime
+        self.revocation_list_lifetime = revocation_list_lifetime
         self.basic_constraints = basic_constraints
         self.key_usage = key_usage
         self.extended_key_usage = extended_key_usage
-
-    def autosign_allowed(self, addr):
-        for j in self.autosign_whitelist:
-            if j.endswith(".") and addr.startswith(j):
-                return True
-            elif j == addr:
-                return True
-        return False
 
     def _signer_exec(self, cmd, *bits):
         sock = self.connect_signer()
@@ -540,7 +538,7 @@ class CertificateAuthority(object):
             self.certificate._obj,
             request._obj,
             self.basic_constraints,
-            lifetime=lifetime or self.lifetime)
+            lifetime=lifetime or self.certificate_lifetime)
 
         path = os.path.join(self.signed_dir, request.common_name + ".pem")
         if os.path.exists(path):

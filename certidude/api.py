@@ -191,6 +191,16 @@ class RequestListResource(CertificateAuthorityBase):
         """
         Submit certificate signing request (CSR) in PEM format
         """
+        # Parse remote IPv4/IPv6 address
+        remote_addr = ipaddress.ip_address(req.env["REMOTE_ADDR"])
+
+        # Check for CSR submission whitelist
+        if ca.request_whitelist:
+            for subnet in ca.request_whitelist:
+                if subnet.overlaps(remote_addr):
+                    break
+            else:
+               raise falcon.HTTPForbidden("IP address %s not whitelisted" % remote_addr)
 
         if req.get_header("Content-Type") != "application/pkcs10":
             raise falcon.HTTPUnsupportedMediaType(
@@ -207,20 +217,23 @@ class RequestListResource(CertificateAuthorityBase):
         else:
             cert = Certificate(cert_buf)
             if cert.pubkey == csr.pubkey:
-                resp.status = falcon.HTTP_FOUND
+                resp.status = falcon.HTTP_SEE_OTHER
                 resp.location = os.path.join(os.path.dirname(req.relative_uri), "signed", csr.common_name)
                 return
 
         # TODO: check for revoked certificates and return HTTP 410 Gone
 
         # Process automatic signing if the IP address is whitelisted and autosigning was requested
-        if ca.autosign_allowed(req.env["REMOTE_ADDR"]) and req.get_param("autosign"):
-            try:
-                resp.append_header("Content-Type", "application/x-x509-user-cert")
-                resp.body = ca.sign(req).dump()
-                return
-            except FileExistsError: # Certificate already exists, try to save the request
-                pass
+        if req.get_param("autosign").lower() in ("yes", "1", "true"):
+            for subnet in ca.autosign_whitelist:
+                if subnet.overlaps(remote_addr):
+                    try:
+                        resp.append_header("Content-Type", "application/x-x509-user-cert")
+                        resp.body = ca.sign(req).dump()
+                        return
+                    except FileExistsError: # Certificate already exists, try to save the request
+                        pass
+                    break
 
         # Attempt to save the request otherwise
         try:
@@ -237,7 +250,7 @@ class RequestListResource(CertificateAuthorityBase):
                 # Redirect to nginx pub/sub
                 url = url_template % dict(channel=request.fingerprint())
                 click.echo("Redirecting to: %s"  % url)
-                resp.status = falcon.HTTP_FOUND
+                resp.status = falcon.HTTP_SEE_OTHER
                 resp.append_header("Location", url)
             else:
                 click.echo("Using dummy streaming mode, please switch to nginx in production!", err=True)
