@@ -21,6 +21,7 @@ Features
 * Certificate numbering obfuscation, certificate serial numbers are intentionally
   randomized to avoid leaking information about business practices.
 * Server-side events support via for example nginx-push-stream-module.
+* Kerberos based authentication
 
 
 TODO
@@ -42,8 +43,11 @@ To install Certidude:
 
 .. code:: bash
 
-    apt-get install -y python3 python3-netifaces python3-pip python3-dev cython3 build-essential libffi-dev libssl-dev
+    apt-get install -y python3 python3-pip python3-dev cython3 build-essential libffi-dev libssl-dev
     pip3 install certidude
+
+Make sure you're running PyOpenSSL 0.15+ and netifaces 0.10.4+ from PyPI,
+not the outdated ones provided by APT.
 
 Create a system user for ``certidude``:
 
@@ -106,7 +110,7 @@ Install uWSGI:
 
 .. code:: bash
 
-    apt-get install uwsgi uwsgi-plugin-python3
+    apt-get install nginx uwsgi uwsgi-plugin-python3
 
 To set up ``nginx`` and ``uwsgi`` is suggested:
 
@@ -132,8 +136,8 @@ Otherwise manually configure uUWSGI application in ``/etc/uwsgi/apps-available/c
     callable = app
     chmod-socket = 660
     chown-socket = certidude:www-data
-    env = CERTIDUDE_EVENT_PUBLISH=http://localhost/event/publish/%(channel)s
-    env = CERTIDUDE_EVENT_SUBSCRIBE=http://localhost/event/subscribe/%(channel)s
+    env = PUSH_PUBLISH=http://localhost/event/publish/%(channel)s
+    env = PUSH_SUBSCRIBE=http://localhost/event/subscribe/%(channel)s
 
 Also enable the application:
 
@@ -213,3 +217,71 @@ Restart the services:
 
     service uwsgi restart
     service nginx restart
+
+
+Setting up Kerberos authentication
+----------------------------------
+
+Following assumes you have already set up Kerberos infrastructure and
+Certidude is simply one of the servers making use of that infrastructure.
+
+Install dependencies:
+
+.. code:: bash
+
+    apt-get install samba-common-bin krb5-user ldap-utils
+
+Set up Samba client configuration in ``/etc/samba/smb.conf``:
+
+.. code:: ini
+
+    [global]
+    security = ads
+    netbios name = CERTIDUDE
+    workgroup = WORKGROUP
+    realm = EXAMPLE.LAN
+    kerberos method = system keytab
+
+Set up Kerberos keytab for the web service:
+
+.. code:: bash
+
+    KRB5_KTNAME=FILE:/etc/certidude.keytab net ads keytab add HTTP -U Administrator
+
+
+Setting up authorization
+------------------------
+
+Obviously arbitrary Kerberos authenticated user should not have access to
+the CA web interface.
+You could either specify user name list
+in ``/etc/ssl/openssl.cnf``:
+
+.. code:: bash
+
+    admin_users=alice bob john kate
+
+Or alternatively specify file path:
+
+.. code:: bash
+
+    admin_users=/run/certidude/user.whitelist
+
+Use following shell snippets eg in ``/etc/cron.hourly/update-certidude-user-whitelist``
+to generate user whitelist via LDAP:
+
+.. code:: bash
+
+    ldapsearch -H ldap://dc1.id.stipit.com -s sub -x -LLL \
+        -D 'cn=certidude,cn=Users,dc=id,dc=stipit,dc=com' \
+        -w 'certidudepass' \
+        -b 'ou=sso,dc=id,dc=stipit,dc=com' \
+        '(objectClass=user)' sAMAccountName userPrincipalName givenName sn \
+    | python3 -c "import ldif3; import sys; [sys.stdout.write('%s:%s:%s:%s\n' % (a.pop('sAMAccountName')[0], a.pop('userPrincipalName')[0], a.pop('givenName')[0], a.pop('sn')[0])) for _, a in ldif3.LDIFParser(sys.stdin.buffer).parse()]" \
+    > /run/certidude/user.whitelist
+
+Set permissions:
+
+.. code:: bash
+
+    chmod 700 /etc/cron.hourly/update-certidude-user-whitelist

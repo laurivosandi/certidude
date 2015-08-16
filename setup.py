@@ -27,7 +27,8 @@ setup(
         "humanize",
         "pycrypto",
         "cryptography",
-        "markupsafe"
+        "markupsafe",
+        "ldap3"
     ],
     scripts=[
         "misc/certidude"

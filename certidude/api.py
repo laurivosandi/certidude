@@ -7,6 +7,7 @@ import urllib.request
 import click
 from time import sleep
 from certidude.wrappers import Request, Certificate
+from certidude.auth import login_required
 from certidude.mailer import Mailer
 from pyasn1.codec.der import decoder
 from datetime import datetime, date
@@ -20,9 +21,20 @@ RE_HOSTNAME = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0
 def omit(**kwargs):
     return dict([(key,value) for (key, value) in kwargs.items() if value])
 
+def authorize_admin(func):
+    def wrapped(self, req, resp, *args, **kwargs):
+        kerberos_username, kerberos_realm = kwargs.get("user")
+        if kerberos_username not in kwargs.get("ca").admin_users:
+            raise falcon.HTTPForbidden("User %s not whitelisted" % kerberos_username)
+        kwargs["user"] = kerberos_username
+        return func(self, req, resp, *args, **kwargs)
+    return wrapped
+
+
 def pop_certificate_authority(func):
     def wrapped(self, req, resp, *args, **kwargs):
         kwargs["ca"] = self.config.instantiate_authority(kwargs["ca"])
+        print(func)
         return func(self, req, resp, *args, **kwargs)
     return wrapped
 
@@ -72,9 +84,11 @@ def serialize(func):
 def templatize(path):
     template = env.get_template(path)
     def wrapper(func):
-        def wrapped(instance, req, resp, **kwargs):
+        def wrapped(instance, req, resp, *args, **kwargs):
             assert not req.get_param("unicode") or req.get_param("unicode") == u"✓", "Unicode sanity check failed"
-            r = func(instance, req, resp, **kwargs)
+            print("templatize would call", func, "with", args, kwargs)
+            r = func(instance, req, resp, *args, **kwargs)
+            r.pop("self")
             if not resp.body:
                 if  req.get_header("Accept") == "application/json":
                     resp.set_header("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -114,9 +128,11 @@ class SignedCertificateDetailResource(CertificateAuthorityBase):
         resp.stream = open(path, "rb")
         resp.append_header("Content-Disposition", "attachment; filename=%s.crt" % cn)
 
+    @login_required
     @pop_certificate_authority
+    @authorize_admin
     @validate_common_name
-    def on_delete(self, req, resp, ca, cn):
+    def on_delete(self, req, resp, ca, cn, user):
         ca.revoke(cn)
 
 class SignedCertificateListResource(CertificateAuthorityBase):
@@ -152,9 +168,11 @@ class RequestDetailResource(CertificateAuthorityBase):
         resp.append_header("Content-Type", "application/x-x509-user-cert")
         resp.append_header("Content-Disposition", "attachment; filename=%s.csr" % cn)
 
+    @login_required
     @pop_certificate_authority
+    @authorize_admin
     @validate_common_name
-    def on_patch(self, req, resp, ca, cn):
+    def on_patch(self, req, resp, ca, cn, user):
         """
         Sign a certificate signing request
         """
@@ -165,8 +183,10 @@ class RequestDetailResource(CertificateAuthorityBase):
         resp.status = falcon.HTTP_201
         resp.location = os.path.join(req.relative_uri, "..", "..", "signed", cn)
 
+    @login_required
     @pop_certificate_authority
-    def on_delete(self, req, resp, ca, cn):
+    @authorize_admin
+    def on_delete(self, req, resp, ca, cn, user):
         ca.delete_request(cn)
 
 class RequestListResource(CertificateAuthorityBase):
@@ -195,8 +215,8 @@ class RequestListResource(CertificateAuthorityBase):
         remote_addr = ipaddress.ip_address(req.env["REMOTE_ADDR"])
 
         # Check for CSR submission whitelist
-        if ca.request_whitelist:
-            for subnet in ca.request_whitelist:
+        if ca.request_subnets:
+            for subnet in ca.request_subnets:
                 if subnet.overlaps(remote_addr):
                     break
             else:
@@ -225,11 +245,11 @@ class RequestListResource(CertificateAuthorityBase):
 
         # Process automatic signing if the IP address is whitelisted and autosigning was requested
         if req.get_param("autosign").lower() in ("yes", "1", "true"):
-            for subnet in ca.autosign_whitelist:
+            for subnet in ca.autosign_subnets:
                 if subnet.overlaps(remote_addr):
                     try:
                         resp.append_header("Content-Type", "application/x-x509-user-cert")
-                        resp.body = ca.sign(req).dump()
+                        resp.body = ca.sign(csr).dump()
                         return
                     except FileExistsError: # Certificate already exists, try to save the request
                         pass
@@ -245,7 +265,7 @@ class RequestListResource(CertificateAuthorityBase):
 
         # Wait the certificate to be signed if waiting is requested
         if req.get_param("wait"):
-            url_template = os.getenv("CERTIDUDE_EVENT_SUBSCRIBE")
+            url_template = os.getenv("PUSH_SUBSCRIBE")
             if url_template:
                 # Redirect to nginx pub/sub
                 url = url_template % dict(channel=request.fingerprint())
@@ -286,15 +306,15 @@ class CertificateAuthorityResource(CertificateAuthorityBase):
         resp.append_header("Content-Disposition", "attachment; filename=%s.crt" % ca.slug)
 
 class IndexResource(CertificateAuthorityBase):
-    @templatize("index.html")
+    @login_required
     @pop_certificate_authority
-    def on_get(self, req, resp, ca):
-        return {
-            "authority": ca }
+    @templatize("index.html")
+    def on_get(self, req, resp, ca, user):
+        return locals()
 
 class ApplicationConfigurationResource(CertificateAuthorityBase):
-    @validate_common_name
     @pop_certificate_authority
+    @validate_common_name
     def on_get(self, req, resp, ca, cn):
         ctx = dict(
             cn = cn,
@@ -304,9 +324,11 @@ class ApplicationConfigurationResource(CertificateAuthorityBase):
         resp.append_header("Content-Disposition", "attachment; filename=%s.ovpn" % cn)
         resp.body = Template(open("/etc/openvpn/%s.template" % ca.slug).read()).render(ctx)
 
-    @validate_common_name
+    @login_required
     @pop_certificate_authority
-    def on_put(self, req, resp, ca, cn=None):
+    @authorize_admin
+    @validate_common_name
+    def on_put(self, req, resp, user, ca, cn=None):
         pkey_buf, req_buf, cert_buf = ca.create_bundle(cn)
 
         ctx = dict(

@@ -27,7 +27,7 @@ def notify(func):
     def wrapped(instance, csr, *args, **kwargs):
         cert = func(instance, csr, *args, **kwargs)
         assert isinstance(cert, Certificate), "notify wrapped function %s returned %s" % (func, type(cert))
-        url_template = os.getenv("CERTIDUDE_EVENT_PUBLISH")
+        url_template = os.getenv("PUSH_PUBLISH")
         if url_template:
             url = url_template % dict(channel=csr.fingerprint())
             notification = urllib.request.Request(url, cert.dump().encode("ascii"))
@@ -79,7 +79,7 @@ class CertificateAuthorityConfig(object):
         section = "CA_" + slug
 
         dirs = dict([(key, self.get(section, key))
-            for key in ("dir", "certificate", "crl", "certs", "new_certs_dir", "private_key", "revoked_certs_dir", "request_whitelist", "autosign_whitelist")])
+            for key in ("dir", "certificate", "crl", "certs", "new_certs_dir", "private_key", "revoked_certs_dir", "request_subnets", "autosign_subnets", "admin_subnets", "admin_users")])
 
         # Variable expansion, eg $dir
         for key, value in dirs.items():
@@ -391,8 +391,7 @@ class Certificate(CertificateBase):
         return self.signed <= other.signed
 
 class CertificateAuthority(object):
-
-    def __init__(self, slug, certificate, crl, certs, new_certs_dir, revoked_certs_dir=None, private_key=None, autosign=False, autosign_whitelist=None, request_whitelist=None, email_address=None, inbox=None, outbox=None, basic_constraints="CA:FALSE", key_usage="digitalSignature,keyEncipherment", extended_key_usage="clientAuth", certificate_lifetime=5*365, revocation_list_lifetime=1):
+    def __init__(self, slug, certificate, crl, certs, new_certs_dir, revoked_certs_dir=None, private_key=None, autosign_subnets=None, request_subnets=None, admin_subnets=None, admin_users=None, email_address=None, inbox=None, outbox=None, basic_constraints="CA:FALSE", key_usage="digitalSignature,keyEncipherment", extended_key_usage="clientAuth", certificate_lifetime=5*365, revocation_list_lifetime=1):
         self.slug = slug
         self.revocation_list = crl
         self.signed_dir = certs
@@ -400,8 +399,9 @@ class CertificateAuthority(object):
         self.revoked_dir = revoked_certs_dir
         self.private_key = private_key
 
-        self.autosign_whitelist = set([ipaddress.ip_network(j) for j in autosign_whitelist.split(" ") if j])
-        self.request_whitelist = set([ipaddress.ip_network(j) for j in request_whitelist.split(" ") if j]).union(self.autosign_whitelist)
+        self.admin_subnets = set([ipaddress.ip_network(j) for j in admin_subnets.split(" ") if j])
+        self.autosign_subnets = set([ipaddress.ip_network(j) for j in autosign_subnets.split(" ") if j])
+        self.request_subnets = set([ipaddress.ip_network(j) for j in request_subnets.split(" ") if j]).union(self.autosign_subnets)
 
         self.certificate = Certificate(open(certificate))
         self.mailer = Mailer(outbox) if outbox else None
@@ -410,6 +410,18 @@ class CertificateAuthority(object):
         self.basic_constraints = basic_constraints
         self.key_usage = key_usage
         self.extended_key_usage = extended_key_usage
+
+        self.admin_emails = dict()
+        self.admin_users = set()
+        if admin_users:
+            if admin_users.startswith("/"):
+                for user in open(admin_users):
+                    if ":" in user:
+                        user, email, first_name, last_name = user.split(":")
+                    self.admin_emails[user] = email
+                    self.admin_users.add(user)
+            else:
+                self.admin_users = set([j for j in admin_users.split(" ") if j])
 
     def _signer_exec(self, cmd, *bits):
         sock = self.connect_signer()

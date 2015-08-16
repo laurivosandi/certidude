@@ -15,12 +15,16 @@
 
 <h1>Submit signing request</h1>
 
-<p>Request submission is allowed from: {% for i in authority.request_whitelist %}{{ i }} {% endfor %}</p>
-<p>Autosign is allowed from: {% for i in authority.autosign_whitelist %}{{ i }} {% endfor %}</p>
+<p>Hi, {{user}}</p>
+
+<p>Request submission is allowed from: {% if ca.request_subnets %}{% for i in ca.request_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}</p>
+<p>Autosign is allowed from: {% if ca.autosign_subnets %}{% for i in ca.autosign_subnets %}{{ i }} {% endfor %}{% else %}nowhere{% endif %}</p>
+<p>Authority administration is allowed from: {% if ca.admin_subnets %}{% for i in ca.admin_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}
+<p>Authority administration allowed for: {% for i in ca.admin_users %}{{ i }} {% endfor %}</p>
 
 <h2>IPsec gateway on OpenWrt</h2>
 
-{% set s = authority.certificate.subject %}
+{% set s = ca.certificate.subject %}
 
 <pre>
 opkg update
@@ -70,15 +74,15 @@ certidude setup openvpn client {{request.url}}
 <h1>Pending requests</h1>
 
 <ul>
-    {% for j in authority.get_requests() %}
+    {% for j in ca.get_requests() %}
         <li>
-            <a class="button" href="/api/{{authority.slug}}/request/{{j.common_name}}/">Fetch</a>
+            <a class="button" href="/api/{{ca.slug}}/request/{{j.common_name}}/">Fetch</a>
             {% if j.signable %}
-            <button onClick="javascript:$.ajax({url:'/api/{{authority.slug}}/request/{{j.common_name}}/',type:'patch'});">Sign</button>
+            <button onClick="javascript:$.ajax({url:'/api/{{ca.slug}}/request/{{j.common_name}}/',type:'patch'});">Sign</button>
             {% else %}
             <button title="Please use certidude command-line utility to sign unusual requests" disabled>Sign</button>
             {% endif %}
-            <button onClick="javascript:$.ajax({url:'/api/{{authority.slug}}/request/{{j.common_name}}/',type:'delete'});">Delete</button>
+            <button onClick="javascript:$.ajax({url:'/api/{{ca.slug}}/request/{{j.common_name}}/',type:'delete'});">Delete</button>
 
 
             <div class="monospace">
@@ -124,10 +128,10 @@ curl -f {{request.url}}/signed/$CN > $CN.crt
 </pre>
 
 <ul>
-    {% for j in authority.get_signed() | sort | reverse %}
+    {% for j in ca.get_signed() | sort | reverse %}
         <li>
-            <a class="button" href="/api/{{authority.slug}}/signed/{{j.subject.CN}}/">Fetch</a>
-            <button onClick="javascript:$.ajax({url:'/api/{{authority.slug}}/signed/{{j.subject.CN}}/',type:'delete'});">Revoke</button>
+            <a class="button" href="/api/{{ca.slug}}/signed/{{j.subject.CN}}/">Fetch</a>
+            <button onClick="javascript:$.ajax({url:'/api/{{ca.slug}}/signed/{{j.subject.CN}}/',type:'delete'});">Revoke</button>
 
             <div class="monospace">
             {% include 'iconmonstr-certificate-15-icon.svg' %}
@@ -172,7 +176,7 @@ openssl ocsp -issuer ca.pem -CAfile ca.pem -url {{request.url}}/ocsp/ -serial 0x
 </pre>
 -->
 <ul>
-    {% for j in authority.get_revoked() %}
+    {% for j in ca.get_revoked() %}
         <li>
             {{j.changed}}
             {{j.serial_number}} <span class="monospace">{{j.distinguished_name}}</span>

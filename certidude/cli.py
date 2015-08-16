@@ -402,6 +402,7 @@ def certidude_setup_strongswan_client(url, config, secrets, email_address, commo
 @click.option("--username", default="certidude", help="Service user account, created if necessary, 'certidude' by default")
 @click.option("--hostname", default=HOSTNAME, help="nginx hostname, '%s' by default" % HOSTNAME)
 @click.option("--static-path", default=os.path.join(os.path.dirname(__file__), "static"), help="Static files")
+@click.option("--kerberos-keytab", default="/etc/certidude.keytab", help="Specify Kerberos keytab")
 @click.option("--nginx-config", "-n",
     default="/etc/nginx/nginx.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
@@ -411,7 +412,7 @@ def certidude_setup_strongswan_client(url, config, secrets, email_address, commo
     type=click.File(mode="w", atomic=True, lazy=True),
     help="uwsgi configuration, /etc/uwsgi/ by default")
 @click.option("--push-server", help="Push server URL, in case of different nginx instance")
-def certidude_setup_production(username, hostname, push_server, nginx_config, uwsgi_config, static_path):
+def certidude_setup_production(username, hostname, push_server, nginx_config, uwsgi_config, static_path, kerberos_keytab):
     try:
         pwd.getpwnam(username)
         click.echo("Username '%s' already exists, excellent!" % username)
@@ -419,8 +420,13 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
         cmd = "adduser", "--system",  "--no-create-home", "--group", username
         subprocess.check_call(cmd)
 
-#    cmd = "gpasswd", "-a", username, "www-data"
-#    subprocess.check_call(cmd)
+    if subprocess.call("net ads testjoin", shell=True):
+        click.echo("Domain membership check failed, 'net ads testjoin' returned non-zero value", stderr=True)
+        exit(255)
+
+    if not os.path.exists(kerberos_keytab):
+        subprocess.call("KRB5_KTNAME=FILE:" + kerberos_keytab + " net ads keytab add HTTP -P")
+        click.echo("Created Kerberos keytab in '%s'" % kerberos_keytab)
 
     if not static_path.endswith("/"):
         static_path += "/"

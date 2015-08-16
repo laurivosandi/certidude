@@ -17,8 +17,12 @@ emailAddress = {{email_address}}
 {% endif %}
 x509_extensions = {{slug}}_cert
 policy = poliy_{{slug}}
-request_whitelist =
-autosign_whitelist = 127.0.0.0/8
+
+# Certidude specific stuff, TODO: move to separate section?
+request_subnets = 10.0.0.0/8 192.168.0.0/16 172.168.0.0/16
+autosign_subnets = 127.0.0.0/8
+admin_subnets = 127.0.0.0/8
+admin_users =
 inbox = {{inbox}}
 outbox = {{outbox}}
 
