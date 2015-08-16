@@ -5,9 +5,10 @@ Introduction
 ------------
 
 Certidude is a novel X.509 Certificate Authority management tool
-with privilege isolation mechanism aiming to
+with privilege isolation mechanism and Kerberos authentication aiming to
 eventually support PKCS#11 and in far future WebCrypto.
 
+.. figure:: doc/usecase-diagram.png
 
 Features
 --------
@@ -106,19 +107,19 @@ Use web interface or following to sign a certificate on Certidude server:
 Production deployment
 ---------------------
 
-Install uWSGI:
+Install ``nginx`` and ``uwsgi``:
 
 .. code:: bash
 
     apt-get install nginx uwsgi uwsgi-plugin-python3
 
-To set up ``nginx`` and ``uwsgi`` is suggested:
+For easy setup following is reccommended:
 
 .. code:: bash
 
     certidude setup production
 
-Otherwise manually configure uUWSGI application in ``/etc/uwsgi/apps-available/certidude.ini``:
+Otherwise manually configure ``uwsgi`` application in ``/etc/uwsgi/apps-available/certidude.ini``:
 
 .. code:: ini
 
@@ -136,8 +137,12 @@ Otherwise manually configure uUWSGI application in ``/etc/uwsgi/apps-available/c
     callable = app
     chmod-socket = 660
     chown-socket = certidude:www-data
+    buffer-size = 32768
     env = PUSH_PUBLISH=http://localhost/event/publish/%(channel)s
     env = PUSH_SUBSCRIBE=http://localhost/event/subscribe/%(channel)s
+    env = LANG=C.UTF-8
+    env = LC_ALL=C.UTF-8
+    env = KRB5_KTNAME=/etc/certidude.keytab
 
 Also enable the application:
 
@@ -272,11 +277,11 @@ to generate user whitelist via LDAP:
 
 .. code:: bash
 
-    ldapsearch -H ldap://dc1.id.stipit.com -s sub -x -LLL \
-        -D 'cn=certidude,cn=Users,dc=id,dc=stipit,dc=com' \
+    ldapsearch -H ldap://dc1.example.com -s sub -x -LLL \
+        -D 'cn=certidude,cn=Users,dc=example,dc=com' \
         -w 'certidudepass' \
-        -b 'ou=sso,dc=id,dc=stipit,dc=com' \
-        '(objectClass=user)' sAMAccountName userPrincipalName givenName sn \
+        -b 'dc=example,dc=com' \
+        '(&(objectClass=user)(memberOf=cn=Domain Admins,cn=Users,dc=example,dc=com))' sAMAccountName userPrincipalName givenName sn \
     | python3 -c "import ldif3; import sys; [sys.stdout.write('%s:%s:%s:%s\n' % (a.pop('sAMAccountName')[0], a.pop('userPrincipalName')[0], a.pop('givenName')[0], a.pop('sn')[0])) for _, a in ldif3.LDIFParser(sys.stdin.buffer).parse()]" \
     > /run/certidude/user.whitelist
 

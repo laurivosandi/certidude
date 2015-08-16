@@ -1,5 +1,6 @@
 import re
 import falcon
+import ipaddress
 import os
 import json
 import types
@@ -23,9 +24,25 @@ def omit(**kwargs):
 
 def authorize_admin(func):
     def wrapped(self, req, resp, *args, **kwargs):
+        authority = kwargs.get("ca")
+
+        # Parse remote IPv4/IPv6 address
+        remote_addr = ipaddress.ip_network(req.env["REMOTE_ADDR"])
+
+        # Check for administration subnet whitelist
+        print("Comparing:", authority.admin_subnets, "To:", remote_addr)
+        for subnet in authority.admin_subnets:
+            if subnet.overlaps(remote_addr):
+                break
+        else:
+            raise falcon.HTTPForbidden("Forbidden", "Remote address %s not whitelisted" % remote_addr)
+
+        # Check for username whitelist
         kerberos_username, kerberos_realm = kwargs.get("user")
-        if kerberos_username not in kwargs.get("ca").admin_users:
-            raise falcon.HTTPForbidden("User %s not whitelisted" % kerberos_username)
+        if kerberos_username not in authority.admin_users:
+            raise falcon.HTTPForbidden("Forbidden", "User %s not whitelisted" % kerberos_username)
+
+        # Retain username, TODO: Better abstraction with username, e-mail, sn, gn?
         kwargs["user"] = kerberos_username
         return func(self, req, resp, *args, **kwargs)
     return wrapped
@@ -34,7 +51,6 @@ def authorize_admin(func):
 def pop_certificate_authority(func):
     def wrapped(self, req, resp, *args, **kwargs):
         kwargs["ca"] = self.config.instantiate_authority(kwargs["ca"])
-        print(func)
         return func(self, req, resp, *args, **kwargs)
     return wrapped
 
@@ -86,7 +102,6 @@ def templatize(path):
     def wrapper(func):
         def wrapped(instance, req, resp, *args, **kwargs):
             assert not req.get_param("unicode") or req.get_param("unicode") == u"✓", "Unicode sanity check failed"
-            print("templatize would call", func, "with", args, kwargs)
             r = func(instance, req, resp, *args, **kwargs)
             r.pop("self")
             if not resp.body:
@@ -212,7 +227,7 @@ class RequestListResource(CertificateAuthorityBase):
         Submit certificate signing request (CSR) in PEM format
         """
         # Parse remote IPv4/IPv6 address
-        remote_addr = ipaddress.ip_address(req.env["REMOTE_ADDR"])
+        remote_addr = ipaddress.ip_network(req.env["REMOTE_ADDR"])
 
         # Check for CSR submission whitelist
         if ca.request_subnets:
@@ -220,7 +235,7 @@ class RequestListResource(CertificateAuthorityBase):
                 if subnet.overlaps(remote_addr):
                     break
             else:
-               raise falcon.HTTPForbidden("IP address %s not whitelisted" % remote_addr)
+               raise falcon.HTTPForbidden("Forbidden", "IP address %s not whitelisted" % remote_addr)
 
         if req.get_header("Content-Type") != "application/pkcs10":
             raise falcon.HTTPUnsupportedMediaType(
@@ -308,6 +323,7 @@ class CertificateAuthorityResource(CertificateAuthorityBase):
 class IndexResource(CertificateAuthorityBase):
     @login_required
     @pop_certificate_authority
+    @authorize_admin
     @templatize("index.html")
     def on_get(self, req, resp, ca, user):
         return locals()
