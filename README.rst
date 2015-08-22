@@ -10,6 +10,13 @@ eventually support PKCS#11 and in far future WebCrypto.
 
 .. figure:: doc/usecase-diagram.png
 
+Certidude is mainly designed for VPN gateway operators to make VPN adoption usage
+as simple as possible.
+For a full-blown CA you might want to take a look at
+`EJBCA <http://www.ejbca.org/features.html>`_ or
+`OpenCA <https://pki.openca.org/>`_.
+
+
 Features
 --------
 
@@ -22,20 +29,29 @@ Features
 * Certificate numbering obfuscation, certificate serial numbers are intentionally
   randomized to avoid leaking information about business practices.
 * Server-side events support via for example nginx-push-stream-module.
-* Kerberos based authentication
+* Kerberos based web interface authentication.
+* File based whitelist authorization, easy to integrate with LDAP as shown below.
+
+
+Coming soon
+-----------
+
+* Refactor mailing subsystem and server-side events to use hooks.
+* Notifications via e-mail.
 
 
 TODO
 ----
 
-* Refactor mailing subsystem and server-side events to use hooks.
-* Notifications via e-mail.
-* OCSP support.
+* `OCSP <https://tools.ietf.org/html/rfc4557>`_ support, needs a bit hacking since OpenSSL wrappers are not exposing the functionality.
+* `SECP <https://tools.ietf.org/html/draft-nourse-scep-23>`_ support, a client implementation available `here <https://github.com/certnanny/sscep>`_. Not sure if we can implement server-side events within current standard.
 * Deep mailbox integration, eg fetch CSR-s from mailbox via IMAP.
 * WebCrypto support, meanwhile check out `hwcrypto.js <https://github.com/open-eid/hwcrypto.js>`_.
 * Certificate push/pull, making it possible to sign offline.
 * PKCS#11 hardware token support for signatures at command-line.
-
+* Ability to send ``.ovpn`` bundle URL tokens via e-mail, for simplified VPN adoption.
+* Cronjob for deleting expired certificates
+* Signer process logging.
 
 Install
 -------
