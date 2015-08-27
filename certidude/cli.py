@@ -124,7 +124,9 @@ def certidude_spawn(kill, no_interaction):
                     sleep(1)
                 except ProcessLookupError:
                     pass
+                ca_loaded = True
             else:
+                ca_loaded = True
                 continue
 
         child_pid = os.fork()
