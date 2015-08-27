@@ -9,18 +9,15 @@ import mimetypes
 import netifaces
 import os
 import pwd
-import random
 import re
 import signal
 import socket
 import subprocess
 import sys
-import time
 from certidude.helpers import expand_paths, \
     certidude_request_certificate
 from certidude.signer import SignServer
-from certidude.wrappers import CertificateAuthorityConfig, \
-    CertificateAuthority, Certificate, subject2dn, Request
+from certidude.wrappers import CertificateAuthorityConfig, subject2dn
 from datetime import datetime
 from humanize import naturaltime
 from ipaddress import ip_network
