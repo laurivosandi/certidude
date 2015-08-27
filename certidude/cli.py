@@ -579,9 +579,13 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     with open(ca_key, "wb") as fh:
         fh.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
 
-    click.echo("Insert following to /etc/ssl/openssl.cnf:")
+    with open(os.path.join(directory, "openssl.cnf.example"), "w") as fh:
+        fh.write(env.get_template("openssl.cnf").render(locals()))
+
+    click.echo("You need to copy the contents of the 'openssl.cnf.example'")
+    click.echo("to system-wide OpenSSL configuration file, usually located")
+    click.echo("at /etc/ssl/openssl.cnf")
     click.echo()
-    click.secho(env.get_template("openssl.cnf").render(locals()), fg="blue")
 
     click.echo()
     click.echo("Use following commands to inspect the newly created files:")
