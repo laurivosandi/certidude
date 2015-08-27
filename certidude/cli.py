@@ -74,6 +74,11 @@ def certidude_spawn(kill, no_interaction):
     """
     Spawn processes for signers
     """
+    # Check whether we have privileges
+    os.umask(0o027)
+    uid = os.getuid()
+    if uid != 0:
+        raise click.ClickException("Not running as root")
 
     # Process directories
     run_dir = "/run/certidude"
@@ -84,10 +89,6 @@ def certidude_spawn(kill, no_interaction):
     if not os.path.exists(signer_dir):
         click.echo("Creating: %s" % signer_dir)
         os.makedirs(signer_dir)
-
-    os.umask(0o027)
-    uid = os.getuid()
-    assert uid == 0, "Not running as root"
 
     # Preload charmap encoding for byte_string() function of pyOpenSSL
     # in order to enable chrooting
@@ -100,6 +101,7 @@ def certidude_spawn(kill, no_interaction):
         # TODO: use os.mknod instead
         os.system("mknod -m 444 %s c 1 9" % os.path.join(chroot_dir, "dev", "urandom"))
 
+    ca_loaded = False
     for ca in config.all_authorities():
         socket_path = os.path.join(signer_dir, ca.slug + ".sock")
         pidfile_path = os.path.join(signer_dir, ca.slug + ".pid")
@@ -141,6 +143,10 @@ def certidude_spawn(kill, no_interaction):
             asyncore.loop()
         else:
             click.echo("Spawned certidude signer process with PID %d at %s" % (child_pid, socket_path))
+        ca_loaded = True
+
+    if not ca_loaded:
+        raise click.ClickException("No CA sections defined in configuration: {}".format(config.path))
 
 
 @click.command("client", help="Setup X.509 certificates for application")
