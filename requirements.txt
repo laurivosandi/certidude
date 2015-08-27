@@ -12,6 +12,7 @@ pyasn1==0.1.8
 pycountry==1.14
 pycparser==2.14
 pycrypto==2.6.1
+pykerberos==1.1.8
 pyOpenSSL==0.15.1
 python-mimeparse==0.1.4
 setproctitle==1.1.9
