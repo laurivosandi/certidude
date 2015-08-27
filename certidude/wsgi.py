@@ -11,7 +11,7 @@ from certidude.api import CertificateAuthorityResource, \
 # TODO: deduplicate routing code
 # TODO: set up /run/certidude/api paths and permissions
 
-config = CertificateAuthorityConfig("/etc/ssl/openssl.cnf")
+config = CertificateAuthorityConfig()
 
 assert os.getenv("PUSH_SUBSCRIBE"), "Please set PUSH_SUBSCRIBE to your web server's subscription URL"
 assert os.getenv("PUSH_PUBLISH"), "Please set PUSH_PUBLISH to your web server's publishing URL"

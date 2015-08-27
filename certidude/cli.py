@@ -43,7 +43,7 @@ assert hasattr(crypto.X509Req(), "get_extensions"), "You're running too old vers
 # keyUsage, extendedKeyUsage - https://www.openssl.org/docs/apps/x509v3_config.html
 # strongSwan key paths - https://wiki.strongswan.org/projects/1/wiki/SimpleCA
 
-config = CertificateAuthorityConfig("/etc/ssl/openssl.cnf")
+config = CertificateAuthorityConfig()
 
 # Parse command-line argument defaults from environment
 HOSTNAME = socket.gethostname()
