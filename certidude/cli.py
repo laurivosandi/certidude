@@ -469,6 +469,12 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     _, _, uid, gid, gecos, root, shell = pwd.getpwnam(group)
     os.setgid(gid)
 
+    slug = os.path.basename(directory[:-1] if directory.endswith('/') else directory)
+    if not slug:
+        raise ValueError("Please supply proper target path")
+
+    click.echo("CA configuration files are saved to: {}".format(os.path.abspath(slug)))
+
     click.echo("Generating 4096-bit RSA key...")
 
     if pkcs11:
@@ -476,8 +482,6 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     else:
         key = crypto.PKey()
         key.generate_key(crypto.TYPE_RSA, 4096)
-
-    slug = os.path.basename(directory)
 
     if not crl_distribution_url:
         crl_distribution_url = "http://%s/api/%s/revoked/" % (common_name, slug)
