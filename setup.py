@@ -28,7 +28,8 @@ setup(
         "pycrypto",
         "cryptography",
         "markupsafe",
-        "ldap3"
+        "ldap3",
+        "pykerberos",
     ],
     scripts=[
         "misc/certidude"

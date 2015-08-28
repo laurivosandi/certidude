@@ -61,13 +61,19 @@ def subject2dn(subject):
 
 class CertificateAuthorityConfig(object):
     """
-    Attempt to parse CA-s from openssl.cnf
+    Certificate Authority configuration
+
+    :param path: Absolute path to configuration file.
+                 Defaults to /etc/ssl/openssl.cnf
     """
 
-    def __init__(self, *args):
+    def __init__(self, path='/etc/ssl/openssl.cnf', *args):
+
+        #: Path to file where current configuration is loaded from.
+        self.path = path
+
         self._config = RawConfigParser()
-        for arg in args:
-            self._config.readfp(itertools.chain(["[global]"], open(os.path.expanduser(arg))))
+        self._config.readfp(itertools.chain(["[global]"], open(self.path)))
 
     def get(self, section, key, default=""):
         if self._config.has_option(section, key):

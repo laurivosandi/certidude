@@ -9,18 +9,15 @@ import mimetypes
 import netifaces
 import os
 import pwd
-import random
 import re
 import signal
 import socket
 import subprocess
 import sys
-import time
 from certidude.helpers import expand_paths, \
     certidude_request_certificate
 from certidude.signer import SignServer
-from certidude.wrappers import CertificateAuthorityConfig, \
-    CertificateAuthority, Certificate, subject2dn, Request
+from certidude.wrappers import CertificateAuthorityConfig, subject2dn
 from datetime import datetime
 from humanize import naturaltime
 from ipaddress import ip_network
@@ -46,7 +43,7 @@ assert hasattr(crypto.X509Req(), "get_extensions"), "You're running too old vers
 # keyUsage, extendedKeyUsage - https://www.openssl.org/docs/apps/x509v3_config.html
 # strongSwan key paths - https://wiki.strongswan.org/projects/1/wiki/SimpleCA
 
-config = CertificateAuthorityConfig("/etc/ssl/openssl.cnf")
+config = CertificateAuthorityConfig()
 
 # Parse command-line argument defaults from environment
 HOSTNAME = socket.gethostname()
@@ -77,6 +74,11 @@ def certidude_spawn(kill, no_interaction):
     """
     Spawn processes for signers
     """
+    # Check whether we have privileges
+    os.umask(0o027)
+    uid = os.getuid()
+    if uid != 0:
+        raise click.ClickException("Not running as root")
 
     # Process directories
     run_dir = "/run/certidude"
@@ -87,10 +89,6 @@ def certidude_spawn(kill, no_interaction):
     if not os.path.exists(signer_dir):
         click.echo("Creating: %s" % signer_dir)
         os.makedirs(signer_dir)
-
-    os.umask(0o027)
-    uid = os.getuid()
-    assert uid == 0, "Not running as root"
 
     # Preload charmap encoding for byte_string() function of pyOpenSSL
     # in order to enable chrooting
@@ -103,6 +101,7 @@ def certidude_spawn(kill, no_interaction):
         # TODO: use os.mknod instead
         os.system("mknod -m 444 %s c 1 9" % os.path.join(chroot_dir, "dev", "urandom"))
 
+    ca_loaded = False
     for ca in config.all_authorities():
         socket_path = os.path.join(signer_dir, ca.slug + ".sock")
         pidfile_path = os.path.join(signer_dir, ca.slug + ".pid")
@@ -125,7 +124,9 @@ def certidude_spawn(kill, no_interaction):
                     sleep(1)
                 except ProcessLookupError:
                     pass
+                ca_loaded = True
             else:
+                ca_loaded = True
                 continue
 
         child_pid = os.fork()
@@ -144,6 +145,10 @@ def certidude_spawn(kill, no_interaction):
             asyncore.loop()
         else:
             click.echo("Spawned certidude signer process with PID %d at %s" % (child_pid, socket_path))
+        ca_loaded = True
+
+    if not ca_loaded:
+        raise click.ClickException("No CA sections defined in configuration: {}".format(config.path))
 
 
 @click.command("client", help="Setup X.509 certificates for application")
@@ -469,6 +474,12 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     _, _, uid, gid, gecos, root, shell = pwd.getpwnam(group)
     os.setgid(gid)
 
+    slug = os.path.basename(directory[:-1] if directory.endswith('/') else directory)
+    if not slug:
+        raise ValueError("Please supply proper target path")
+
+    click.echo("CA configuration files are saved to: {}".format(os.path.abspath(slug)))
+
     click.echo("Generating 4096-bit RSA key...")
 
     if pkcs11:
@@ -476,8 +487,6 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     else:
         key = crypto.PKey()
         key.generate_key(crypto.TYPE_RSA, 4096)
-
-    slug = os.path.basename(directory)
 
     if not crl_distribution_url:
         crl_distribution_url = "http://%s/api/%s/revoked/" % (common_name, slug)
@@ -575,9 +584,13 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     with open(ca_key, "wb") as fh:
         fh.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
 
-    click.echo("Insert following to /etc/ssl/openssl.cnf:")
+    with open(os.path.join(directory, "openssl.cnf.example"), "w") as fh:
+        fh.write(env.get_template("openssl.cnf").render(locals()))
+
+    click.echo("You need to copy the contents of the 'openssl.cnf.example'")
+    click.echo("to system-wide OpenSSL configuration file, usually located")
+    click.echo("at /etc/ssl/openssl.cnf")
     click.echo()
-    click.secho(env.get_template("openssl.cnf").render(locals()), fg="blue")
 
     click.echo()
     click.echo("Use following commands to inspect the newly created files:")
