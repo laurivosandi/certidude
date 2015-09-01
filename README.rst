@@ -252,14 +252,21 @@ Install dependencies:
 
     apt-get install samba-common-bin krb5-user ldap-utils
 
+Make sure Certidude machine's fully qualified hostname is correct in ``/etc/hosts``:
+
+.. code::
+
+    127.0.0.1 localhost
+    127.0.1.1 ca.example.lan ca
+
 Set up Samba client configuration in ``/etc/samba/smb.conf``:
 
 .. code:: ini
 
     [global]
     security = ads
-    netbios name = CERTIDUDE
-    workgroup = WORKGROUP
+    netbios name = CA
+    workgroup = EXAMPLE
     realm = EXAMPLE.LAN
     kerberos method = system keytab
 
