@@ -7,7 +7,7 @@ import types
 import urllib.request
 import click
 from time import sleep
-from certidude.wrappers import Request, Certificate
+from certidude.wrappers import Request, Certificate, CertificateAuthorityConfig
 from certidude.auth import login_required
 from certidude.mailer import Mailer
 from pyasn1.codec.der import decoder
@@ -356,3 +356,19 @@ class ApplicationConfigurationResource(CertificateAuthorityBase):
         resp.append_header("Content-Disposition", "attachment; filename=%s.ovpn" % cn)
         resp.body = Template(open("/etc/openvpn/%s.template" % ca.slug).read()).render(ctx)
         
+
+def certidude_app():
+    config = CertificateAuthorityConfig()
+
+    app = falcon.API()
+    app.add_route("/api/{ca}/ocsp/", CertificateStatusResource(config))
+    app.add_route("/api/{ca}/signed/{cn}/openvpn", ApplicationConfigurationResource(config))
+    app.add_route("/api/{ca}/certificate/", CertificateAuthorityResource(config))
+    app.add_route("/api/{ca}/revoked/", RevocationListResource(config))
+    app.add_route("/api/{ca}/signed/{cn}/", SignedCertificateDetailResource(config))
+    app.add_route("/api/{ca}/signed/", SignedCertificateListResource(config))
+    app.add_route("/api/{ca}/request/{cn}/", RequestDetailResource(config))
+    app.add_route("/api/{ca}/request/", RequestListResource(config))
+    app.add_route("/api/{ca}/", IndexResource(config))
+
+    return app

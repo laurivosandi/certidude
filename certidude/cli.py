@@ -798,30 +798,16 @@ def certidude_serve(user, port, listen, enable_signature):
 
     click.echo("Serving API at %s:%d" % (listen, port))
     import pwd
-    import falcon
     from wsgiref.simple_server import make_server, WSGIServer
     from socketserver import ThreadingMixIn
-    from certidude.api import CertificateAuthorityResource, \
-        RequestDetailResource, RequestListResource, \
-        SignedCertificateDetailResource, SignedCertificateListResource, \
-        RevocationListResource, IndexResource, ApplicationConfigurationResource, \
-        CertificateStatusResource
+    from certidude.api import certidude_app
 
     class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
         pass
 
     click.echo("Listening on %s:%d" % (listen, port))
 
-    app = falcon.API()
-    app.add_route("/api/{ca}/ocsp/", CertificateStatusResource(config))
-    app.add_route("/api/{ca}/signed/{cn}/openvpn", ApplicationConfigurationResource(config))
-    app.add_route("/api/{ca}/certificate/", CertificateAuthorityResource(config))
-    app.add_route("/api/{ca}/revoked/", RevocationListResource(config))
-    app.add_route("/api/{ca}/signed/{cn}/", SignedCertificateDetailResource(config))
-    app.add_route("/api/{ca}/signed/", SignedCertificateListResource(config))
-    app.add_route("/api/{ca}/request/{cn}/", RequestDetailResource(config))
-    app.add_route("/api/{ca}/request/", RequestListResource(config))
-    app.add_route("/api/{ca}/", IndexResource(config))
+    app = certidude_app()
 
     app.add_sink(StaticResource(os.path.join(os.path.dirname(__file__), "static")))
     httpd = make_server(listen, port, app, ThreadingWSGIServer)
