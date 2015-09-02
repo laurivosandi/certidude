@@ -3,9 +3,7 @@
 
 import asyncore
 import click
-import falcon
 import logging
-import mimetypes
 import netifaces
 import os
 import pwd
@@ -761,30 +759,6 @@ def certidude_sign(common_name, overwrite, lifetime):
             click.echo("Added extension %s: %s" % (key, value))
         click.echo()
 
-class StaticResource(object):
-    def __init__(self, root):
-        self.root = os.path.realpath(root)
-        click.echo("Serving static from: %s" % self.root)
-
-    def __call__(self, req, resp):
-
-        path = os.path.realpath(os.path.join(self.root, req.path[1:]))
-        if not path.startswith(self.root):
-            raise falcon.HTTPForbidden
-
-        print("Serving:", path)
-        if os.path.exists(path):
-            content_type, content_encoding = mimetypes.guess_type(path)
-            if content_type:
-                resp.append_header("Content-Type", content_type)
-            if content_encoding:
-                resp.append_header("Content-Encoding", content_encoding)
-            resp.append_header("Content-Disposition", "attachment")
-            resp.stream = open(path, "rb")
-        else:
-            resp.status = falcon.HTTP_404
-            resp.body = "File '%s' not found" % req.path
-
 @click.command("serve", help="Run built-in HTTP server")
 @click.option("-u", "--user", default="certidude", help="Run as user")
 @click.option("-p", "--port", default=80, help="Listen port")
@@ -800,7 +774,7 @@ def certidude_serve(user, port, listen, enable_signature):
     import pwd
     from wsgiref.simple_server import make_server, WSGIServer
     from socketserver import ThreadingMixIn
-    from certidude.api import certidude_app
+    from certidude.api import certidude_app, StaticResource
 
     class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
         pass
@@ -810,6 +784,7 @@ def certidude_serve(user, port, listen, enable_signature):
     app = certidude_app()
 
     app.add_sink(StaticResource(os.path.join(os.path.dirname(__file__), "static")))
+
     httpd = make_server(listen, port, app, ThreadingWSGIServer)
     if user:
         _, _, uid, gid, gecos, root, shell = pwd.getpwnam(user)

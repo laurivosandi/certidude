@@ -1,6 +1,7 @@
 import re
 import falcon
 import ipaddress
+import mimetypes
 import os
 import json
 import types
@@ -355,7 +356,32 @@ class ApplicationConfigurationResource(CertificateAuthorityBase):
         resp.append_header("Content-Type", "application/ovpn")
         resp.append_header("Content-Disposition", "attachment; filename=%s.ovpn" % cn)
         resp.body = Template(open("/etc/openvpn/%s.template" % ca.slug).read()).render(ctx)
-        
+
+
+class StaticResource(object):
+    def __init__(self, root):
+        self.root = os.path.realpath(root)
+
+    def __call__(self, req, resp):
+
+        path = os.path.realpath(os.path.join(self.root, req.path[1:]))
+        if not path.startswith(self.root):
+            raise falcon.HTTPForbidden
+
+        print("Serving:", path)
+        if os.path.exists(path):
+            content_type, content_encoding = mimetypes.guess_type(path)
+            if content_type:
+                resp.append_header("Content-Type", content_type)
+            if content_encoding:
+                resp.append_header("Content-Encoding", content_encoding)
+            resp.append_header("Content-Disposition", "attachment")
+            resp.stream = open(path, "rb")
+        else:
+            resp.status = falcon.HTTP_404
+            resp.body = "File '%s' not found" % req.path
+
+
 
 def certidude_app():
     config = CertificateAuthorityConfig()
