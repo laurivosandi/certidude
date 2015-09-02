@@ -5,15 +5,12 @@ import mimetypes
 import os
 import json
 import types
-import urllib.request
 import click
 from time import sleep
 from certidude.wrappers import Request, Certificate, CertificateAuthorityConfig
 from certidude.auth import login_required
-from certidude.mailer import Mailer
 from pyasn1.codec.der import decoder
 from datetime import datetime, date
-from OpenSSL import crypto
 from jinja2 import Environment, PackageLoader, Template
 
 env = Environment(loader=PackageLoader("certidude", "templates"))
