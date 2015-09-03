@@ -786,7 +786,13 @@ def certidude_serve(user, port, listen, enable_signature):
     app.add_sink(StaticResource(os.path.join(os.path.dirname(__file__), "static")))
 
     httpd = make_server(listen, port, app, ThreadingWSGIServer)
+
     if user:
+        # Load required utils which cannot be imported from chroot
+        # TODO: Figure out better approach
+        from jinja2.debug import make_traceback as _make_traceback
+        "".encode("charmap")
+
         _, _, uid, gid, gecos, root, shell = pwd.getpwnam(user)
         if uid == 0:
             click.echo("Please specify unprivileged user")
@@ -796,7 +802,7 @@ def certidude_serve(user, port, listen, enable_signature):
         os.setuid(uid)
         os.umask(0o007)
     elif os.getuid() == 0:
-        click.echo("Warning: running as root, this is not reccommended!")
+        click.echo("Warning: running as root, this is not recommended!")
     httpd.serve_forever()
 
 @click.group("strongswan", help="strongSwan helpers")
