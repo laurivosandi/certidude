@@ -3,9 +3,7 @@
 
 import asyncore
 import click
-import falcon
 import logging
-import mimetypes
 import netifaces
 import os
 import pwd
@@ -761,30 +759,6 @@ def certidude_sign(common_name, overwrite, lifetime):
             click.echo("Added extension %s: %s" % (key, value))
         click.echo()
 
-class StaticResource(object):
-    def __init__(self, root):
-        self.root = os.path.realpath(root)
-        click.echo("Serving static from: %s" % self.root)
-
-    def __call__(self, req, resp):
-
-        path = os.path.realpath(os.path.join(self.root, req.path[1:]))
-        if not path.startswith(self.root):
-            raise falcon.HTTPForbidden
-
-        print("Serving:", path)
-        if os.path.exists(path):
-            content_type, content_encoding = mimetypes.guess_type(path)
-            if content_type:
-                resp.append_header("Content-Type", content_type)
-            if content_encoding:
-                resp.append_header("Content-Encoding", content_encoding)
-            resp.append_header("Content-Disposition", "attachment")
-            resp.stream = open(path, "rb")
-        else:
-            resp.status = falcon.HTTP_404
-            resp.body = "File '%s' not found" % req.path
-
 @click.command("serve", help="Run built-in HTTP server")
 @click.option("-u", "--user", default="certidude", help="Run as user")
 @click.option("-p", "--port", default=80, help="Listen port")
@@ -798,34 +772,27 @@ def certidude_serve(user, port, listen, enable_signature):
 
     click.echo("Serving API at %s:%d" % (listen, port))
     import pwd
-    import falcon
     from wsgiref.simple_server import make_server, WSGIServer
     from socketserver import ThreadingMixIn
-    from certidude.api import CertificateAuthorityResource, \
-        RequestDetailResource, RequestListResource, \
-        SignedCertificateDetailResource, SignedCertificateListResource, \
-        RevocationListResource, IndexResource, ApplicationConfigurationResource, \
-        CertificateStatusResource
+    from certidude.api import certidude_app, StaticResource
 
     class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
         pass
 
     click.echo("Listening on %s:%d" % (listen, port))
 
-    app = falcon.API()
-    app.add_route("/api/{ca}/ocsp/", CertificateStatusResource(config))
-    app.add_route("/api/{ca}/signed/{cn}/openvpn", ApplicationConfigurationResource(config))
-    app.add_route("/api/{ca}/certificate/", CertificateAuthorityResource(config))
-    app.add_route("/api/{ca}/revoked/", RevocationListResource(config))
-    app.add_route("/api/{ca}/signed/{cn}/", SignedCertificateDetailResource(config))
-    app.add_route("/api/{ca}/signed/", SignedCertificateListResource(config))
-    app.add_route("/api/{ca}/request/{cn}/", RequestDetailResource(config))
-    app.add_route("/api/{ca}/request/", RequestListResource(config))
-    app.add_route("/api/{ca}/", IndexResource(config))
+    app = certidude_app()
 
     app.add_sink(StaticResource(os.path.join(os.path.dirname(__file__), "static")))
+
     httpd = make_server(listen, port, app, ThreadingWSGIServer)
+
     if user:
+        # Load required utils which cannot be imported from chroot
+        # TODO: Figure out better approach
+        from jinja2.debug import make_traceback as _make_traceback
+        "".encode("charmap")
+
         _, _, uid, gid, gecos, root, shell = pwd.getpwnam(user)
         if uid == 0:
             click.echo("Please specify unprivileged user")
@@ -835,7 +802,7 @@ def certidude_serve(user, port, listen, enable_signature):
         os.setuid(uid)
         os.umask(0o007)
     elif os.getuid() == 0:
-        click.echo("Warning: running as root, this is not reccommended!")
+        click.echo("Warning: running as root, this is not recommended!")
     httpd.serve_forever()
 
 @click.group("strongswan", help="strongSwan helpers")

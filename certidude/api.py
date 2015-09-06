@@ -1,18 +1,16 @@
 import re
 import falcon
 import ipaddress
+import mimetypes
 import os
 import json
 import types
-import urllib.request
 import click
 from time import sleep
-from certidude.wrappers import Request, Certificate
+from certidude.wrappers import Request, Certificate, CertificateAuthorityConfig
 from certidude.auth import login_required
-from certidude.mailer import Mailer
 from pyasn1.codec.der import decoder
 from datetime import datetime, date
-from OpenSSL import crypto
 from jinja2 import Environment, PackageLoader, Template
 
 env = Environment(loader=PackageLoader("certidude", "templates"))
@@ -355,4 +353,45 @@ class ApplicationConfigurationResource(CertificateAuthorityBase):
         resp.append_header("Content-Type", "application/ovpn")
         resp.append_header("Content-Disposition", "attachment; filename=%s.ovpn" % cn)
         resp.body = Template(open("/etc/openvpn/%s.template" % ca.slug).read()).render(ctx)
-        
+
+
+class StaticResource(object):
+    def __init__(self, root):
+        self.root = os.path.realpath(root)
+
+    def __call__(self, req, resp):
+
+        path = os.path.realpath(os.path.join(self.root, req.path[1:]))
+        if not path.startswith(self.root):
+            raise falcon.HTTPForbidden
+
+        print("Serving:", path)
+        if os.path.exists(path):
+            content_type, content_encoding = mimetypes.guess_type(path)
+            if content_type:
+                resp.append_header("Content-Type", content_type)
+            if content_encoding:
+                resp.append_header("Content-Encoding", content_encoding)
+            resp.append_header("Content-Disposition", "attachment")
+            resp.stream = open(path, "rb")
+        else:
+            resp.status = falcon.HTTP_404
+            resp.body = "File '%s' not found" % req.path
+
+
+
+def certidude_app():
+    config = CertificateAuthorityConfig()
+
+    app = falcon.API()
+    app.add_route("/api/{ca}/ocsp/", CertificateStatusResource(config))
+    app.add_route("/api/{ca}/signed/{cn}/openvpn", ApplicationConfigurationResource(config))
+    app.add_route("/api/{ca}/certificate/", CertificateAuthorityResource(config))
+    app.add_route("/api/{ca}/revoked/", RevocationListResource(config))
+    app.add_route("/api/{ca}/signed/{cn}/", SignedCertificateDetailResource(config))
+    app.add_route("/api/{ca}/signed/", SignedCertificateListResource(config))
+    app.add_route("/api/{ca}/request/{cn}/", RequestDetailResource(config))
+    app.add_route("/api/{ca}/request/", RequestListResource(config))
+    app.add_route("/api/{ca}/", IndexResource(config))
+
+    return app
