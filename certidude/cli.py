@@ -4,7 +4,6 @@
 import asyncore
 import click
 import logging
-import netifaces
 import os
 import pwd
 import re
@@ -60,10 +59,6 @@ if os.getuid() >= 1000:
         FIRST_NAME, SURNAME = gecos.split(" ", 1)
     else:
         FIRST_NAME = gecos
-
-DEFAULT_ROUTE, PRIMARY_INTERFACE = netifaces.gateways().get("default").get(2)
-PRIMARY_ALIASES = netifaces.ifaddresses(PRIMARY_INTERFACE).get(2)
-PRIMARY_ADDRESS = PRIMARY_ALIASES[0].get("addr")
 
 @click.command("spawn", help="Run privilege isolated signer processes")
 @click.option("-k", "--kill", default=False, is_flag=True, help="Kill previous instances")
@@ -175,7 +170,7 @@ def certidude_setup_client(quiet, **kwargs):
 @click.option("--org-unit", "-ou", help="Organizational unit")
 @click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, '%s' by default" % EMAIL)
 @click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="OpenVPN subnet, 192.168.33.0/24 by default")
-@click.option("--local", "-l", default=PRIMARY_ADDRESS, help="OpenVPN listening address, %s" % PRIMARY_ADDRESS)
+@click.option("--local", "-l", default="127.0.0.1", help="OpenVPN listening address, defaults to 127.0.0.1")
 @click.option("--port", "-p", default=1194, type=click.IntRange(1,60000), help="OpenVPN listening port, 1194 by default")
 @click.option('--proto', "-t", default="udp", type=click.Choice(['udp', 'tcp']), help="OpenVPN transport protocol, UDP by default")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
@@ -288,10 +283,10 @@ def certidude_setup_openvpn_client(url, config, email_address, common_name, org_
 @click.argument("url")
 @click.option("--common-name", "-cn", default=HOSTNAME, help="Common name, %s by default" % HOSTNAME)
 @click.option("--org-unit", "-ou", help="Organizational unit")
-@click.option("--fqdn", "-f", default=HOSTNAME, help="Fully qualified hostname, %s by default" % PRIMARY_ADDRESS)
+@click.option("--fqdn", "-f", default=HOSTNAME, help="Fully qualified hostname, %s by default" % HOSTNAME)
 @click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, %s by default" % EMAIL)
 @click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="IPsec virtual subnet, 192.168.33.0/24 by default")
-@click.option("--local", "-l", default=PRIMARY_ADDRESS, help="IPsec gateway address, %s" % PRIMARY_ADDRESS)
+@click.option("--local", "-l", default="127.0.0.1", help="IPsec gateway address, defaults to 127.0.0.1")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
 @click.option("--config", "-o",
     default="/etc/ipsec.conf",
