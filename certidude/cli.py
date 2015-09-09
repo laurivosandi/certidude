@@ -474,7 +474,10 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
 
     slug = os.path.basename(directory[:-1] if directory.endswith('/') else directory)
     if not slug:
-        raise ValueError("Please supply proper target path")
+        raise click.ClickException("Please supply proper target path")
+    # Make sure slug is valid
+    if not re.match(r"^[_a-zA-Z0-9]+$", slug):
+        raise click.ClickException("CA name can contain only alphanumeric and '_' characters")
 
     click.echo("CA configuration files are saved to: {}".format(os.path.abspath(slug)))
 
