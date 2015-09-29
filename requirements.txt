@@ -7,7 +7,6 @@ idna==2.0
 Jinja2==2.8
 ldap3==0.9.8.8
 MarkupSafe==0.23
-netifaces==0.10.4
 pyasn1==0.1.8
 pycountry==1.14
 pycparser==2.14

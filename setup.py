@@ -21,7 +21,6 @@ setup(
         "click",
         "falcon",
         "jinja2",
-        "netifaces",
         "pyopenssl",
         "pycountry",
         "humanize",
