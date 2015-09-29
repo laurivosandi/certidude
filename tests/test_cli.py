@@ -41,3 +41,11 @@ def test_cli_setup_authority_invalid_name():
 
         result = runner.invoke(cli, ['setup', 'authority', '""'])
         assert result.exception
+
+def test_cli_setup_authority_overwrite():
+    with runner.isolated_filesystem():
+        result = runner.invoke(cli, ['setup', 'authority', 'foo'])
+        assert not result.exception
+
+        result = runner.invoke(cli, ['setup', 'authority', 'foo'])
+        assert result.exception

@@ -469,7 +469,10 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     if not re.match(r"^[_a-zA-Z0-9]+$", slug):
         raise click.ClickException("CA name can contain only alphanumeric and '_' characters")
 
-    click.echo("CA configuration files are saved to: {}".format(os.path.abspath(slug)))
+    if os.path.lexists(directory):
+        raise click.ClickException("Output directory {} already exists.".format(directory))
+
+    click.echo("CA configuration files are saved to: {}".format(directory))
 
     click.echo("Generating 4096-bit RSA key...")
 
