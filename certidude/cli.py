@@ -549,10 +549,10 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
 
     click.echo("Signing %s..." % subject2dn(ca.get_subject()))
 
-    # openssl x509 -in ca_crt.pem -outform DER | sha1sum
+    # openssl x509 -in ca_crt.pem -outform DER | sha256sum
     # openssl x509 -fingerprint -in ca_crt.pem
 
-    ca.sign(key, "sha1")
+    ca.sign(key, "sha256")
 
     os.umask(0o027)
     if not os.path.exists(directory):
