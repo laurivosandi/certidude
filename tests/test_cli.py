@@ -14,11 +14,9 @@ def user_check(name='certidude'):
         pass
     return True
 
-@pytest.mark.skipif(user_check(), reason="Missing certidude user")
-def test_cli():
-
+def test_cli_setup_authority():
     # Authority setup
-    # TODO: group, parent, common-name, country, state, locality
+    # TODO: parent, common-name, country, state, locality
     # {authority,certificate,revocation-list}-lifetime
     # organization, organizational-unit
     # pkcs11
@@ -36,7 +34,7 @@ def test_cli():
         for d in ('requests', 'revoked', 'signed'):
             assert os.path.isdir(os.path.join('ca', d))
 
-def test_cli_setup_authority_slug_name():
+def test_cli_setup_authority_invalid_name():
     with runner.isolated_filesystem():
         result = runner.invoke(cli, ['setup', 'authority'])
         assert result.exception

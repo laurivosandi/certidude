@@ -444,7 +444,6 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 
 
 @click.command("authority", help="Set up Certificate Authority in a directory")
-@click.option("--group", "-g", default="certidude", help="Group for file permissions, certidude by default")
 @click.option("--parent", "-p", help="Parent CA, none by default")
 @click.option("--common-name", "-cn", default=HOSTNAME, help="Common name, hostname by default")
 @click.option("--country", "-c", default="ee", help="Country, Estonia by default")
@@ -462,11 +461,7 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 @click.option("--inbox", default="imap://user:pass@host:port/INBOX", help="Inbound e-mail server")
 @click.option("--outbox", default="smtp://localhost", help="Outbound e-mail server")
 @click.argument("directory")
-def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, group, crl_distribution_url, ocsp_responder_url, email_address, inbox, outbox):
-    logging.info("Creating certificate authority in %s", directory)
-    _, _, uid, gid, gecos, root, shell = pwd.getpwnam(group)
-    os.setgid(gid)
-
+def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, crl_distribution_url, ocsp_responder_url, email_address, inbox, outbox):
     slug = os.path.basename(directory[:-1] if directory.endswith('/') else directory)
     if not slug:
         raise click.ClickException("Please supply proper target path")
@@ -575,7 +570,6 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     with open(ca_crt, "wb") as fh:
         fh.write(crypto.dump_certificate(crypto.FILETYPE_PEM, ca))
 
-
     os.umask(0o077)
     with open(ca_key, "wb") as fh:
         fh.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
@@ -586,7 +580,6 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     click.echo("You need to copy the contents of the 'openssl.cnf.example'")
     click.echo("to system-wide OpenSSL configuration file, usually located")
     click.echo("at /etc/ssl/openssl.cnf")
-    click.echo()
 
     click.echo()
     click.echo("Use following commands to inspect the newly created files:")
