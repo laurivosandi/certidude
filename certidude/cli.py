@@ -40,8 +40,6 @@ assert hasattr(crypto.X509Req(), "get_extensions"), "You're running too old vers
 # keyUsage, extendedKeyUsage - https://www.openssl.org/docs/apps/x509v3_config.html
 # strongSwan key paths - https://wiki.strongswan.org/projects/1/wiki/SimpleCA
 
-config = CertificateAuthorityConfig()
-
 # Parse command-line argument defaults from environment
 HOSTNAME = socket.gethostname()
 USERNAME = os.environ.get("USER")
@@ -59,6 +57,14 @@ if os.getuid() >= 1000:
         FIRST_NAME, SURNAME = gecos.split(" ", 1)
     else:
         FIRST_NAME = gecos
+
+
+def load_config():
+    path = os.getenv('CERTIDUDE_CONF')
+    if path and os.path.isfile(path):
+        return CertificateAuthorityConfig(path)
+    return CertificateAuthorityConfig()
+
 
 @click.command("spawn", help="Run privilege isolated signer processes")
 @click.option("-k", "--kill", default=False, is_flag=True, help="Kill previous instances")
@@ -95,6 +101,7 @@ def certidude_spawn(kill, no_interaction):
         os.system("mknod -m 444 %s c 1 9" % os.path.join(chroot_dir, "dev", "urandom"))
 
     ca_loaded = False
+    config = load_config()
     for ca in config.all_authorities():
         socket_path = os.path.join(signer_dir, ca.slug + ".sock")
         pidfile_path = os.path.join(signer_dir, ca.slug + ".pid")
@@ -638,6 +645,7 @@ def certidude_list(ca, show_key_type, show_extensions, show_path):
             click.echo(" |    |   Key usage: " + j.key_usage)
         click.echo(" |    |")
 
+    config = load_config()
     for ca in config.all_authorities():
         click.echo("Certificate authority " + click.style(ca.slug, fg="blue"))
 #        if ca.certificate.email_address:
@@ -699,10 +707,12 @@ def certidude_list(ca, show_key_type, show_extensions, show_path):
 
 @click.command("list", help="List Certificate Authorities")
 @click.argument("ca")
-@config.pop_certificate_authority()
+#@config.pop_certificate_authority()
 def cert_list(ca):
 
     mapping = {}
+
+    config = load_config()
 
     click.echo("Listing certificates for: %s" % ca.certificate.subject.CN)
 
@@ -726,6 +736,7 @@ def cert_list(ca):
 @click.option("--overwrite", "-o", default=False, is_flag=True, help="Revoke valid certificate with same CN")
 @click.option("--lifetime", "-l", help="Lifetime")
 def certidude_sign(common_name, overwrite, lifetime):
+    config = load_config()
     def iterate():
         for ca in config.all_authorities():
             for request in ca.get_requests():
