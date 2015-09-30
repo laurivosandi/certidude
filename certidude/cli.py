@@ -646,7 +646,15 @@ def certidude_list(ca, show_key_type, show_extensions, show_path):
         click.echo(" |    |")
 
     config = load_config()
-    for ca in config.all_authorities():
+
+    wanted_list = None
+    if ca:
+        missing = list(set(ca) - set(config.ca_list))
+        if missing:
+            raise click.NoSuchOption(option_name='', message="Unable to find certificate authority.", possibilities=config.ca_list)
+        wanted_list = ca
+
+    for ca in config.all_authorities(wanted_list):
         click.echo("Certificate authority " + click.style(ca.slug, fg="blue"))
 #        if ca.certificate.email_address:
 #            click.echo("  \u2709 %s" % ca.certificate.email_address)

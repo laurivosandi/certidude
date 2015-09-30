@@ -107,13 +107,28 @@ class CertificateAuthorityConfig(object):
         authority = CertificateAuthority(slug, **dirs)
         return authority
 
-    def all_authorities(self):
-        for section in self._config:
-            if section.startswith("CA_"):
-                try:
-                    yield self.instantiate_authority(section[3:])
-                except FileNotFoundError:
-                    pass
+
+    def all_authorities(self, wanted=None):
+        for ca in self.ca_list:
+            if wanted and ca not in wanted:
+                continue
+            try:
+                yield self.instantiate_authority(ca)
+            except FileNotFoundError:
+                pass
+
+
+    @property
+    def ca_list(self):
+        """
+        Returns sorted list of CA-s defined in the configuration file.
+        """
+        l = [s[3:] for s in self._config if s.startswith("CA_")]
+        # Sanity check for duplicates (although ConfigParser fails earlier)
+        if len(l) != len(set(l)):
+            raise ValueError
+        return sorted(l)
+
 
     def pop_certificate_authority(self):
         def wrapper(func):
