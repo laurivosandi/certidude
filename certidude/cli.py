@@ -4,7 +4,6 @@
 import asyncore
 import click
 import logging
-import netifaces
 import os
 import pwd
 import re
@@ -41,8 +40,6 @@ assert hasattr(crypto.X509Req(), "get_extensions"), "You're running too old vers
 # keyUsage, extendedKeyUsage - https://www.openssl.org/docs/apps/x509v3_config.html
 # strongSwan key paths - https://wiki.strongswan.org/projects/1/wiki/SimpleCA
 
-config = CertificateAuthorityConfig()
-
 # Parse command-line argument defaults from environment
 HOSTNAME = socket.gethostname()
 USERNAME = os.environ.get("USER")
@@ -61,9 +58,13 @@ if os.getuid() >= 1000:
     else:
         FIRST_NAME = gecos
 
-DEFAULT_ROUTE, PRIMARY_INTERFACE = netifaces.gateways().get("default").get(2)
-PRIMARY_ALIASES = netifaces.ifaddresses(PRIMARY_INTERFACE).get(2)
-PRIMARY_ADDRESS = PRIMARY_ALIASES[0].get("addr")
+
+def load_config():
+    path = os.getenv('CERTIDUDE_CONF')
+    if path and os.path.isfile(path):
+        return CertificateAuthorityConfig(path)
+    return CertificateAuthorityConfig()
+
 
 @click.command("spawn", help="Run privilege isolated signer processes")
 @click.option("-k", "--kill", default=False, is_flag=True, help="Kill previous instances")
@@ -100,6 +101,7 @@ def certidude_spawn(kill, no_interaction):
         os.system("mknod -m 444 %s c 1 9" % os.path.join(chroot_dir, "dev", "urandom"))
 
     ca_loaded = False
+    config = load_config()
     for ca in config.all_authorities():
         socket_path = os.path.join(signer_dir, ca.slug + ".sock")
         pidfile_path = os.path.join(signer_dir, ca.slug + ".pid")
@@ -175,7 +177,7 @@ def certidude_setup_client(quiet, **kwargs):
 @click.option("--org-unit", "-ou", help="Organizational unit")
 @click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, '%s' by default" % EMAIL)
 @click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="OpenVPN subnet, 192.168.33.0/24 by default")
-@click.option("--local", "-l", default=PRIMARY_ADDRESS, help="OpenVPN listening address, %s" % PRIMARY_ADDRESS)
+@click.option("--local", "-l", default="127.0.0.1", help="OpenVPN listening address, defaults to 127.0.0.1")
 @click.option("--port", "-p", default=1194, type=click.IntRange(1,60000), help="OpenVPN listening port, 1194 by default")
 @click.option('--proto', "-t", default="udp", type=click.Choice(['udp', 'tcp']), help="OpenVPN transport protocol, UDP by default")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
@@ -288,10 +290,10 @@ def certidude_setup_openvpn_client(url, config, email_address, common_name, org_
 @click.argument("url")
 @click.option("--common-name", "-cn", default=HOSTNAME, help="Common name, %s by default" % HOSTNAME)
 @click.option("--org-unit", "-ou", help="Organizational unit")
-@click.option("--fqdn", "-f", default=HOSTNAME, help="Fully qualified hostname, %s by default" % PRIMARY_ADDRESS)
+@click.option("--fqdn", "-f", default=HOSTNAME, help="Fully qualified hostname, %s by default" % HOSTNAME)
 @click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, %s by default" % EMAIL)
 @click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="IPsec virtual subnet, 192.168.33.0/24 by default")
-@click.option("--local", "-l", default=PRIMARY_ADDRESS, help="IPsec gateway address, %s" % PRIMARY_ADDRESS)
+@click.option("--local", "-l", default="127.0.0.1", help="IPsec gateway address, defaults to 127.0.0.1")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
 @click.option("--config", "-o",
     default="/etc/ipsec.conf",
@@ -449,7 +451,6 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 
 
 @click.command("authority", help="Set up Certificate Authority in a directory")
-@click.option("--group", "-g", default="certidude", help="Group for file permissions, certidude by default")
 @click.option("--parent", "-p", help="Parent CA, none by default")
 @click.option("--common-name", "-cn", default=HOSTNAME, help="Common name, hostname by default")
 @click.option("--country", "-c", default="ee", help="Country, Estonia by default")
@@ -467,16 +468,18 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 @click.option("--inbox", default="imap://user:pass@host:port/INBOX", help="Inbound e-mail server")
 @click.option("--outbox", default="smtp://localhost", help="Outbound e-mail server")
 @click.argument("directory")
-def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, group, crl_distribution_url, ocsp_responder_url, email_address, inbox, outbox):
-    logging.info("Creating certificate authority in %s", directory)
-    _, _, uid, gid, gecos, root, shell = pwd.getpwnam(group)
-    os.setgid(gid)
-
+def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, crl_distribution_url, ocsp_responder_url, email_address, inbox, outbox):
     slug = os.path.basename(directory[:-1] if directory.endswith('/') else directory)
     if not slug:
-        raise ValueError("Please supply proper target path")
+        raise click.ClickException("Please supply proper target path")
+    # Make sure slug is valid
+    if not re.match(r"^[_a-zA-Z0-9]+$", slug):
+        raise click.ClickException("CA name can contain only alphanumeric and '_' characters")
 
-    click.echo("CA configuration files are saved to: {}".format(os.path.abspath(slug)))
+    if os.path.lexists(directory):
+        raise click.ClickException("Output directory {} already exists.".format(directory))
+
+    click.echo("CA configuration files are saved to: {}".format(directory))
 
     click.echo("Generating 4096-bit RSA key...")
 
@@ -553,10 +556,10 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
 
     click.echo("Signing %s..." % subject2dn(ca.get_subject()))
 
-    # openssl x509 -in ca_crt.pem -outform DER | sha1sum
+    # openssl x509 -in ca_crt.pem -outform DER | sha256sum
     # openssl x509 -fingerprint -in ca_crt.pem
 
-    ca.sign(key, "sha1")
+    ca.sign(key, "sha256")
 
     os.umask(0o027)
     if not os.path.exists(directory):
@@ -577,7 +580,6 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     with open(ca_crt, "wb") as fh:
         fh.write(crypto.dump_certificate(crypto.FILETYPE_PEM, ca))
 
-
     os.umask(0o077)
     with open(ca_key, "wb") as fh:
         fh.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
@@ -588,7 +590,6 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     click.echo("You need to copy the contents of the 'openssl.cnf.example'")
     click.echo("to system-wide OpenSSL configuration file, usually located")
     click.echo("at /etc/ssl/openssl.cnf")
-    click.echo()
 
     click.echo()
     click.echo("Use following commands to inspect the newly created files:")
@@ -644,7 +645,16 @@ def certidude_list(ca, show_key_type, show_extensions, show_path):
             click.echo(" |    |   Key usage: " + j.key_usage)
         click.echo(" |    |")
 
-    for ca in config.all_authorities():
+    config = load_config()
+
+    wanted_list = None
+    if ca:
+        missing = list(set(ca) - set(config.ca_list))
+        if missing:
+            raise click.NoSuchOption(option_name='', message="Unable to find certificate authority.", possibilities=config.ca_list)
+        wanted_list = ca
+
+    for ca in config.all_authorities(wanted_list):
         click.echo("Certificate authority " + click.style(ca.slug, fg="blue"))
 #        if ca.certificate.email_address:
 #            click.echo("  \u2709 %s" % ca.certificate.email_address)
@@ -705,10 +715,12 @@ def certidude_list(ca, show_key_type, show_extensions, show_path):
 
 @click.command("list", help="List Certificate Authorities")
 @click.argument("ca")
-@config.pop_certificate_authority()
+#@config.pop_certificate_authority()
 def cert_list(ca):
 
     mapping = {}
+
+    config = load_config()
 
     click.echo("Listing certificates for: %s" % ca.certificate.subject.CN)
 
@@ -732,6 +744,7 @@ def cert_list(ca):
 @click.option("--overwrite", "-o", default=False, is_flag=True, help="Revoke valid certificate with same CN")
 @click.option("--lifetime", "-l", help="Lifetime")
 def certidude_sign(common_name, overwrite, lifetime):
+    config = load_config()
     def iterate():
         for ca in config.all_authorities():
             for request in ca.get_requests():

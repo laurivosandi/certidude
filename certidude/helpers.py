@@ -1,11 +1,8 @@
 
 import click
-import logging
-import netifaces
 import os
 import urllib.request
 from certidude.wrappers import Certificate, Request
-from certidude.signer import SignServer
 from OpenSSL import crypto
 
 def expand_paths():
