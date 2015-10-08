@@ -40,7 +40,7 @@ curl {{request.url}}/certificate/ > /etc/ipsec.d/cacerts/ca.pem
 openssl genrsa -out /etc/ipsec.d/private/$CN.pem 4096
 chmod 0600 /etc/ipsec.d/private/$CN.pem
 openssl req -new -sha256 -key /etc/ipsec.d/private/$CN.pem -out /etc/ipsec.d/reqs/$CN.pem -subj "{% if s.C %}/C={{s.C}}{% endif %}{% if s.ST %}/ST={{s.ST}}{% endif %}{% if s.L %}/L={{s.L}}{% endif %}{% if s.O %}/O={{s.O}}{% endif %}{% if s.OU %}/OU={{s.OU}}{% endif %}/CN=$CN"
-curl -L -H "Content-Type: application/pkcs10" --data-binary @/etc/ipsec.d/reqs/$CN.pem {{request.uri}}/request/?autosign=1\&wait=30 > /etc/ipsec.d/certs/$CN.pem.part
+curl -L -H "Content-Type: application/pkcs10" --data-binary @/etc/ipsec.d/reqs/$CN.pem {{request.uri}}/request/?autosign=yes\&wait=30 > /etc/ipsec.d/certs/$CN.pem.part
 if [ $? -eq 0 ]; then mv /etc/ipsec.d/certs/$CN.pem.part /etc/ipsec.d/certs/$CN.pem; fi
 openssl verify -CAfile /etc/ipsec.d/cacerts/ca.pem /etc/ipsec.d/certs/$CN.pem
 </pre>
