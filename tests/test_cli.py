@@ -1,6 +1,4 @@
 import os
-import pwd
-import pytest
 from click.testing import CliRunner
 from certidude.cli import entry_point as cli
 
