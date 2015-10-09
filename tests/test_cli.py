@@ -6,14 +6,6 @@ from certidude.cli import entry_point as cli
 
 runner = CliRunner()
 
-def user_check(name='certidude'):
-    try:
-        pwd.getpwnam(name)
-        return False
-    except KeyError:
-        pass
-    return True
-
 def test_cli_setup_authority():
     # Authority setup
     # TODO: parent, common-name, country, state, locality
