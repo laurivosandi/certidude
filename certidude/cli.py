@@ -17,7 +17,7 @@ from certidude.signer import SignServer
 from certidude.wrappers import CertificateAuthorityConfig, subject2dn
 from datetime import datetime
 from humanize import naturaltime
-from ipaddress import ip_network
+from ipaddress import ip_network, ip_address
 from jinja2 import Environment, PackageLoader
 from time import sleep
 from setproctitle import setproctitle
@@ -293,7 +293,7 @@ def certidude_setup_openvpn_client(url, config, email_address, common_name, org_
 @click.option("--fqdn", "-f", default=HOSTNAME, help="Fully qualified hostname, %s by default" % HOSTNAME)
 @click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, %s by default" % EMAIL)
 @click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="IPsec virtual subnet, 192.168.33.0/24 by default")
-@click.option("--local", "-l", default="127.0.0.1", help="IPsec gateway address, defaults to 127.0.0.1")
+@click.option("--local", "-l", default="127.0.0.1", type=ip_address, help="IPsec gateway address, defaults to 127.0.0.1")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
 @click.option("--config", "-o",
     default="/etc/ipsec.conf",
@@ -309,7 +309,7 @@ def certidude_setup_openvpn_client(url, config, email_address, common_name, org_
 @click.option("--certificate-path", "-crt", default="certs/%s.pem" % HOSTNAME, help="Certificate path, certs/%s.pem by default" % HOSTNAME)
 @click.option("--authority-path", "-ca", default="cacerts/ca.pem", help="Certificate authority certificate path, cacerts/ca.pem by default")
 @expand_paths()
-def certidude_setup_strongswan_server(url, config, secrets, subnet, route, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, local, ip_address, fqdn):
+def certidude_setup_strongswan_server(url, config, secrets, subnet, route, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, local, fqdn):
 
     config.write(env.get_template("strongswan-site-to-client.conf").render(locals()))
 
@@ -329,8 +329,8 @@ def certidude_setup_strongswan_server(url, config, secrets, subnet, route, email
         org_unit,
         email_address,
         key_usage="nonRepudiation,digitalSignature,keyEncipherment",
-        extended_key_usage="serverAuth,ikeIntermediate",
-        ipv4_address=None if local.is_private else local,
+        extended_key_usage="serverAuth",
+        ip_address=None if local.is_private else local,
         dns=None if local.is_private or "." not in fdqn else fdqn,
         wait=True)
 
