@@ -209,7 +209,11 @@ class CertificateBase:
         def iterate():
             for key, value, data in self.extensions:
                 if key == "keyUsage" or key == "extendedKeyUsage":
-                    yield value
+                    for bit in value.split(", "):
+                        if bit == "1.3.6.1.5.5.8.2.2":
+                            yield "IKE Intermediate"
+                        else:
+                            yield bit
         return ", ".join(iterate())
 
     @property
