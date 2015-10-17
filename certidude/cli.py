@@ -313,8 +313,6 @@ def certidude_setup_openvpn_client(url, config, email_address, common_name, org_
 @expand_paths()
 def certidude_setup_strongswan_server(url, config, secrets, subnet, route, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, local, fqdn):
 
-    config.write(env.get_template("strongswan-site-to-client.conf").render(locals()))
-
     if not os.path.exists(certificate_path):
         click.echo("As strongSwan server certificate needs specific key usage extensions please")
         click.echo("use following command to sign on Certidude server instead of web interface:")
@@ -339,8 +337,10 @@ def certidude_setup_strongswan_server(url, config, secrets, subnet, route, email
     if retval:
         return retval
 
+    config.write(env.get_template("strongswan-site-to-client.conf").render(locals()))
+    secrets.write(": RSA %s\n" % key_path)
 
-    click.echo("Generated %s" % config.name)
+    click.echo("Generated %s and %s" % (config.name, secrets.name))
     click.echo()
     click.echo("Inspect newly created %s and start strongSwan service:" % config.name)
     click.echo()
@@ -395,8 +395,9 @@ def certidude_setup_strongswan_client(url, config, secrets, email_address, commo
 
     # TODO: Add dhparam
     config.write(env.get_template("strongswan-client-to-site.conf").render(locals()))
+    secrets.write(": RSA %s\n" % key_path)
 
-    click.echo("Generated %s" % config.name)
+    click.echo("Generated %s and %s" % (config.name, secrets.name))
     click.echo()
     click.echo("Inspect newly created %s and start strongSwan service:" % config.name)
     click.echo()
