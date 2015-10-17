@@ -3,6 +3,8 @@
 
 import asyncore
 import click
+import configparser
+import hashlib
 import logging
 import os
 import pwd
@@ -401,6 +403,75 @@ def certidude_setup_strongswan_client(url, config, secrets, email_address, commo
     click.echo("  apt-get install strongswan strongswan-starter")
     click.echo("  service strongswan restart")
     click.echo()
+
+
+@click.command("networkmanager", help="Set up strongSwan client via NetworkManager")
+@click.argument("url")
+@click.argument("remote")
+@click.option("--common-name", "-cn", default=HOSTNAME, help="Common name, %s by default" % HOSTNAME)
+@click.option("--org-unit", "-ou", help="Organizational unit")
+@click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, '%s' by default" % EMAIL)
+@click.option("--directory", "-d", default="/etc/ipsec.d", help="Directory for keys, /etc/ipsec.d by default")
+@click.option("--key-path", "-key", default="private/%s.pem" % HOSTNAME, help="Key path, private/%s.pem by default" % HOSTNAME)
+@click.option("--request-path", "-csr", default="reqs/%s.pem" % HOSTNAME, help="Request path, reqs/%s.pem by default" % HOSTNAME)
+@click.option("--certificate-path", "-crt", default="certs/%s.pem" % HOSTNAME, help="Certificate path, certs/%s.pem by default" % HOSTNAME)
+@click.option("--authority-path", "-ca", default="cacerts/ca.pem", help="Certificate authority certificate path, cacerts/ca.pem by default")
+@expand_paths()
+def certidude_setup_strongswan_networkmanager(url, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, remote):
+
+    retval = certidude_request_certificate(
+        url,
+        key_path,
+        request_path,
+        certificate_path,
+        authority_path,
+        common_name,
+        org_unit,
+        email_address,
+        wait=True)
+
+    if retval:
+        return retval
+
+    csummer = hashlib.sha1()
+    csummer.update(remote.encode("ascii"))
+    csum = csummer.hexdigest()
+    uuid = csum[:8] + "-" + csum[8:12] + "-" + csum[12:16] + "-" + csum[16:20] + "-" + csum[20:32]
+
+    config = configparser.ConfigParser()
+    config.add_section("connection")
+    config.add_section("vpn")
+    config.add_section("ipv4")
+
+    config.set("connection", "id", remote)
+    config.set("connection", "uuid", uuid)
+    config.set("connection", "type", "vpn")
+    config.set("connection", "autoconnect", "true")
+
+    config.set("vpn", "service-type", "org.freedesktop.NetworkManager.strongswan")
+    config.set("vpn", "userkey", key_path)
+    config.set("vpn", "usercert", certificate_path)
+    config.set("vpn", "encap", "no")
+    config.set("vpn", "address", remote)
+    config.set("vpn", "virtual", "yes")
+    config.set("vpn", "method", "key")
+    config.set("vpn", "certificate", authority_path)
+    config.set("vpn", "ipcomp", "no")
+
+    config.set("ipv4", "method", "auto")
+
+    # Prevent creation of files with liberal permissions
+    os.umask(0o277)
+
+    # Write keyfile
+    with open(os.path.join("/etc/NetworkManager/system-connections", remote), "w") as configfile:
+        config.write(configfile)
+
+    # TODO: Avoid race condition here
+    sleep(3)
+
+    # Tell NetworkManager to bring up the VPN connection
+    subprocess.call(("nmcli", "c", "up", "uuid", uuid))
 
 
 @click.command("production", help="Set up nginx and uwsgi")
@@ -832,6 +903,7 @@ def entry_point(): pass
 
 certidude_setup_strongswan.add_command(certidude_setup_strongswan_server)
 certidude_setup_strongswan.add_command(certidude_setup_strongswan_client)
+certidude_setup_strongswan.add_command(certidude_setup_strongswan_networkmanager)
 certidude_setup_openvpn.add_command(certidude_setup_openvpn_server)
 certidude_setup_openvpn.add_command(certidude_setup_openvpn_client)
 certidude_setup.add_command(certidude_setup_authority)
