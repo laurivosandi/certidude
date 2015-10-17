@@ -313,3 +313,33 @@ Set permissions:
 .. code:: bash
 
     chmod 700 /etc/cron.hourly/update-certidude-user-whitelist
+
+
+Automating certificate setup
+----------------------------
+
+Ubuntu 14.04 based desktops come with NetworkManager installed.
+Create ``/etc/NetworkManager/dispatcher.d/certidude`` with following content:
+
+.. code:: bash
+
+    #!/bin/sh -e
+    # Set up certificates for IPSec connection
+
+    case "$2" in
+        up)
+            LANG=C.UTF-8 /usr/local/bin/certidude setup strongswan networkmanager http://ca.example.org/api/laptops/ gateway.example.org
+        ;;
+    esac
+
+Finally make it executable:
+
+.. code:: bash
+
+    chmod +x /etc/NetworkManager/dispatcher.d/certidude
+
+Whenever a wired or wireless connection is brought up,
+the dispatcher invokes ``certidude`` in order to generate RSA keys,
+submit CSR, fetch signed certificate,
+create NetworkManager configuration for the VPN connection and
+finally to bring up the VPN tunnel as well.
