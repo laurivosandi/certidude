@@ -44,6 +44,7 @@ assert hasattr(crypto.X509Req(), "get_extensions"), "You're running too old vers
 
 # Parse command-line argument defaults from environment
 HOSTNAME = socket.gethostname()
+FQDN = socket.getaddrinfo(HOSTNAME, 0, flags=socket.AI_CANONNAME)[0][3]
 USERNAME = os.environ.get("USER")
 NOW = datetime.utcnow().replace(tzinfo=None)
 FIRST_NAME = None
@@ -292,10 +293,10 @@ def certidude_setup_openvpn_client(url, config, email_address, common_name, org_
 @click.argument("url")
 @click.option("--common-name", "-cn", default=HOSTNAME, help="Common name, %s by default" % HOSTNAME)
 @click.option("--org-unit", "-ou", help="Organizational unit")
-@click.option("--fqdn", "-f", default=HOSTNAME, help="Fully qualified hostname, %s by default" % HOSTNAME)
+@click.option("--fqdn", "-f", default=FQDN, help="Fully qualified hostname associated with the certificate")
 @click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, %s by default" % EMAIL)
 @click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="IPsec virtual subnet, 192.168.33.0/24 by default")
-@click.option("--local", "-l", default="127.0.0.1", type=ip_address, help="IPsec gateway address, defaults to 127.0.0.1")
+@click.option("--local", "-l", default=None, type=ip_address, help="IP address associated with the certificate, none by default")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
 @click.option("--config", "-o",
     default="/etc/ipsec.conf",
@@ -330,8 +331,8 @@ def certidude_setup_strongswan_server(url, config, secrets, subnet, route, email
         email_address,
         key_usage="nonRepudiation,digitalSignature,keyEncipherment",
         extended_key_usage="serverAuth,1.3.6.1.5.5.8.2.2",
-        ip_address=None if local.is_private else local,
-        dns=None if local.is_private or "." not in fdqn else fdqn,
+        ip_address=local,
+        dns=fqdn,
         wait=True)
 
     if retval:
