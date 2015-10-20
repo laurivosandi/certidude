@@ -35,7 +35,7 @@ def raw_sign(private_key, ca_cert, request, basic_constraints, lifetime, key_usa
 
         # Initialize X.509 certificate object
         cert = crypto.X509()
-        ca.set_version(2) # This corresponds to X.509v3
+        cert.set_version(2) # This corresponds to X.509v3
 
         # Set public key
         cert.set_pubkey(request.get_pubkey())
