@@ -329,7 +329,7 @@ def certidude_setup_strongswan_server(url, config, secrets, subnet, route, email
         org_unit,
         email_address,
         key_usage="nonRepudiation,digitalSignature,keyEncipherment",
-        extended_key_usage="serverAuth",
+        extended_key_usage="serverAuth,1.3.6.1.5.5.8.2.2",
         ip_address=None if local.is_private else local,
         dns=None if local.is_private or "." not in fdqn else fdqn,
         wait=True)
