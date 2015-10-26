@@ -489,7 +489,6 @@ def certidude_setup_strongswan_networkmanager(url, email_address, common_name, o
     default="/etc/uwsgi/apps-available/certidude.ini",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="uwsgi configuration, /etc/uwsgi/ by default")
-@click.option("--push-server", help="Push server URL, in case of different nginx instance")
 def certidude_setup_production(username, hostname, push_server, nginx_config, uwsgi_config, static_path, kerberos_keytab):
     try:
         pwd.getpwnam(username)
@@ -540,8 +539,13 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 @click.option("--email-address", default=EMAIL, help="CA e-mail address")
 @click.option("--inbox", default="imap://user:pass@host:port/INBOX", help="Inbound e-mail server")
 @click.option("--outbox", default="smtp://localhost", help="Outbound e-mail server")
+@click.option("--push-server", default="", help="Streaming nginx push server")
 @click.argument("directory")
-def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, crl_distribution_url, ocsp_responder_url, email_address, inbox, outbox):
+def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, crl_distribution_url, ocsp_responder_url, email_address, inbox, outbox, push_server):
+
+    publish_certificate_url = push_server + "/publish/%(request_sha1sum)s"
+    subscribe_certificate_url = push_server + "/subscribe/%(request_sha1sum)s"
+
     slug = os.path.basename(directory[:-1] if directory.endswith('/') else directory)
     if not slug:
         raise click.ClickException("Please supply proper target path")

@@ -13,6 +13,7 @@ from pyasn1.codec.der import decoder
 from datetime import datetime, date
 from jinja2 import Environment, PackageLoader, Template
 
+# TODO: Restrictive filesystem permissions result in TemplateNotFound exceptions
 env = Environment(loader=PackageLoader("certidude", "templates"))
 
 RE_HOSTNAME = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$"
@@ -278,10 +279,9 @@ class RequestListResource(CertificateAuthorityBase):
 
         # Wait the certificate to be signed if waiting is requested
         if req.get_param("wait"):
-            url_template = os.getenv("PUSH_SUBSCRIBE")
-            if url_template:
+            if ca.subscribe_certificate_url:
                 # Redirect to nginx pub/sub
-                url = url_template % dict(channel=request.fingerprint())
+                url = ca.subscribe_certificate_url % dict(request_sha1sum=request.fingerprint())
                 click.echo("Redirecting to: %s"  % url)
                 resp.status = falcon.HTTP_SEE_OTHER
                 resp.append_header("Location", url)

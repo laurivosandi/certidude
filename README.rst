@@ -154,8 +154,6 @@ Otherwise manually configure ``uwsgi`` application in ``/etc/uwsgi/apps-availabl
     chmod-socket = 660
     chown-socket = certidude:www-data
     buffer-size = 32768
-    env = PUSH_PUBLISH=http://localhost/event/publish/%(channel)s
-    env = PUSH_SUBSCRIBE=http://localhost/event/subscribe/%(channel)s
     env = LANG=C.UTF-8
     env = LC_ALL=C.UTF-8
     env = KRB5_KTNAME=/etc/certidude.keytab
@@ -231,6 +229,11 @@ Also adjust ``/etc/nginx/nginx.conf``:
         gzip_disable "msie6";
         include /etc/nginx/sites-enabled/*;
     }
+
+In your CA ssl.cnf make sure Certidude is aware of your nginx setup:
+
+    publish_certificate_url = http://push.example.com/event/publish/%(request_sha1sum)s
+    subscribe_certificate_url = http://push.example.com/event/subscribe/%(request_sha1sum)s
 
 Restart the services:
 
