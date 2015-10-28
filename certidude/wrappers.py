@@ -28,14 +28,17 @@ def publish_certificate(func):
         cert = func(instance, csr, *args, **kwargs)
         assert isinstance(cert, Certificate), "notify wrapped function %s returned %s" % (func, type(cert))
 
-        if instance.publish_certificate_url:
-            url = instance.publish_certificate_url % dict(request_sha1sum=csr.fingerprint())
+        if instance.push_server:
+            url = instance.push_server + "/pub/?id=" + csr.fingerprint()
             notification = urllib.request.Request(url, cert.dump().encode("ascii"))
             notification.add_header("User-Agent", "Certidude API")
             notification.add_header("Content-Type", "application/x-x509-user-cert")
             click.echo("Publishing certificate at %s, waiting for response..." % url)
             response = urllib.request.urlopen(notification)
             response.read()
+
+            instance.event_publish("request_signed", csr.fingerprint())
+
         return cert
 
 # TODO: Implement e-mailing
@@ -85,7 +88,7 @@ class CertificateAuthorityConfig(object):
         section = "CA_" + slug
 
         dirs = dict([(key, self.get(section, key))
-            for key in ("dir", "certificate", "crl", "certs", "new_certs_dir", "private_key", "revoked_certs_dir", "request_subnets", "autosign_subnets", "admin_subnets", "admin_users", "publish_certificate_url", "subscribe_certificate_url", "inbox", "outbox")])
+            for key in ("dir", "certificate", "crl", "certs", "new_certs_dir", "private_key", "revoked_certs_dir", "request_subnets", "autosign_subnets", "admin_subnets", "admin_users", "push_server", "inbox", "outbox")])
 
         # Variable expansion, eg $dir
         for key, value in dirs.items():
@@ -299,6 +302,7 @@ class CertificateBase:
     def fingerprint(self):
         import binascii
         m, _ = self.pubkey
+        return "%x" % m
         return ":".join(re.findall("..", hashlib.sha1(binascii.unhexlify("%x" % m)).hexdigest()))
 
 class Request(CertificateBase):
@@ -424,7 +428,14 @@ class Certificate(CertificateBase):
         return self.signed <= other.signed
 
 class CertificateAuthority(object):
-    def __init__(self, slug, certificate, crl, certs, new_certs_dir, revoked_certs_dir=None, private_key=None, autosign_subnets=None, request_subnets=None, admin_subnets=None, admin_users=None, email_address=None, inbox=None, outbox=None, basic_constraints="CA:FALSE", key_usage="digitalSignature,keyEncipherment", extended_key_usage="clientAuth", certificate_lifetime=5*365, revocation_list_lifetime=1, publish_certificate_url=None, subscribe_certificate_url=None):
+    def __init__(self, slug, certificate, crl, certs, new_certs_dir, revoked_certs_dir=None, private_key=None, autosign_subnets=None, request_subnets=None, admin_subnets=None, admin_users=None, email_address=None, inbox=None, outbox=None, basic_constraints="CA:FALSE", key_usage="digitalSignature,keyEncipherment", extended_key_usage="clientAuth", certificate_lifetime=5*365, revocation_list_lifetime=1, push_server=None):
+
+        import hashlib
+        m = hashlib.sha512()
+        m.update(slug.encode("ascii"))
+        m.update(b"TODO:server-secret-goes-here")
+        self.uuid = m.hexdigest()
+
         self.slug = slug
         self.revocation_list = crl
         self.signed_dir = certs
@@ -438,8 +449,7 @@ class CertificateAuthority(object):
 
         self.certificate = Certificate(open(certificate))
         self.mailer = Mailer(outbox) if outbox else None
-        self.publish_certificate_url = publish_certificate_url
-        self.subscribe_certificate_url = subscribe_certificate_url
+        self.push_server = push_server
 
         self.certificate_lifetime = certificate_lifetime
         self.revocation_list_lifetime = revocation_list_lifetime
@@ -458,6 +468,29 @@ class CertificateAuthority(object):
                     self.admin_users.add(user)
             else:
                 self.admin_users = set([j for j in admin_users.split(" ") if j])
+
+    def event_publish(self, event_type, event_data):
+        """
+        Publish event on push server
+        """
+        url = self.push_server + "/pub?id=" + self.uuid # Derive CA's push channel URL
+
+        notification = urllib.request.Request(
+            url,
+            event_data.encode("utf-8"),
+            {"Event-ID": b"TODO", "Event-Type":event_type.encode("ascii")})
+        notification.add_header("User-Agent", "Certidude API")
+        click.echo("Posting event %s %s at %s, waiting for response..." % (repr(event_type), repr(event_data), repr(url)))
+        try:
+            response = urllib.request.urlopen(notification)
+            body = response.read()
+        except urllib.error.HTTPError as err:
+            if err.code == 404:
+                print("No subscribers on the channel")
+            else:
+                raise
+        else:
+            print("Push server returned:", response.code, body)
 
     def _signer_exec(self, cmd, *bits):
         sock = self.connect_signer()
@@ -486,6 +519,7 @@ class CertificateAuthority(object):
         cert = Certificate(open(os.path.join(self.signed_dir, cn + ".pem")))
         revoked_filename = os.path.join(self.revoked_dir, "%s.pem" % cert.serial_number)
         os.rename(cert.path, revoked_filename)
+        self.event_publish("certificate_revoked", cert.fingerprint())
 
     def get_revoked(self):
         for root, dirs, files in os.walk(self.revoked_dir):
@@ -532,7 +566,28 @@ class CertificateAuthority(object):
         return os.path.exists(os.path.join(self.request_dir, cn + ".pem"))
 
     def delete_request(self, cn):
-        os.unlink(os.path.join(self.request_dir, cn + ".pem"))
+        path = os.path.join(self.request_dir, cn + ".pem")
+        request_sha1sum = Request(open(path)).fingerprint()
+        os.unlink(path)
+
+        # Publish event at CA channel
+        self.event_publish("request_deleted", request_sha1sum)
+
+        # Write empty certificate to long-polling URL
+        url = self.push_server + "/pub/?id=" + request_sha1sum
+        publisher = urllib.request.Request(url, b"-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n")
+        publisher.add_header("User-Agent", "Certidude API")
+        click.echo("POST-ing empty certificate at %s, waiting for response..." % url)
+        try:
+            response = urllib.request.urlopen(publisher)
+            body = response.read()
+        except urllib.error.HTTPError as err:
+            if err.code == 404:
+                print("No subscribers on the channel")
+            else:
+                raise
+        else:
+            print("Push server returned:", response.code, body)
 
     def create_bundle(self, common_name, organizational_unit=None, email_address=None, overwrite=True):
         req = Request.create()

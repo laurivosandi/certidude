@@ -9,6 +9,7 @@
     <link href="//fonts.googleapis.com/css?family=Gentium" rel="stylesheet" type="text/css"/>
     <link href="//fonts.googleapis.com/css?family=PT+Sans+Narrow" rel="stylesheet" type="text/css"/>
     <script type="text/javascript" src="/js/jquery-2.1.4.min.js"></script>
+    <script type="text/javascript" src="/js/certidude.js"></script>
 </head>
 <body>
 <div id="container">
@@ -75,7 +76,7 @@ certidude setup openvpn client {{request.url}}
 
 <ul>
     {% for j in ca.get_requests() %}
-        <li>
+        <li id="request_{{ j.fingerprint() }}">
             <a class="button" href="/api/{{ca.slug}}/request/{{j.common_name}}/">Fetch</a>
             {% if j.signable %}
             <button onClick="javascript:$.ajax({url:'/api/{{ca.slug}}/request/{{j.common_name}}/',type:'patch'});">Sign</button>
@@ -129,7 +130,7 @@ curl -f {{request.url}}/signed/$CN > $CN.crt
 
 <ul>
     {% for j in ca.get_signed() | sort | reverse %}
-        <li>
+        <li id="certificate_{{ j.fingerprint() }}">
             <a class="button" href="/api/{{ca.slug}}/signed/{{j.subject.CN}}/">Fetch</a>
             <button onClick="javascript:$.ajax({url:'/api/{{ca.slug}}/signed/{{j.subject.CN}}/',type:'delete'});">Revoke</button>
 
@@ -177,7 +178,7 @@ openssl ocsp -issuer ca.pem -CAfile ca.pem -url {{request.url}}/ocsp/ -serial 0x
 -->
 <ul>
     {% for j in ca.get_revoked() %}
-        <li>
+        <li id="certificate_{{ j.fingerprint() }}">
             {{j.changed}}
             {{j.serial_number}} <span class="monospace">{{j.distinguished_name}}</span>
         </li>

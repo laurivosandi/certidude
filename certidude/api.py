@@ -21,6 +21,15 @@ RE_HOSTNAME = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0
 def omit(**kwargs):
     return dict([(key,value) for (key, value) in kwargs.items() if value])
 
+def event_source(func):
+    def wrapped(self, req, resp, ca, *args, **kwargs):
+        if req.get_header("Accept") == "text/event-stream":
+            resp.status = falcon.HTTP_SEE_OTHER
+            resp.location = ca.push_server + "/ev/" + ca.uuid
+            print("Delegating EventSource handling to:", resp.location)
+        return func(self, req, resp, ca, *args, **kwargs)
+    return wrapped
+
 def authorize_admin(func):
     def wrapped(self, req, resp, *args, **kwargs):
         authority = kwargs.get("ca")
@@ -276,12 +285,12 @@ class RequestListResource(CertificateAuthorityBase):
             raise falcon.HTTPConflict(
                 "CSR with such CN already exists",
                 "Will not overwrite existing certificate signing request, explicitly delete CSR and try again")
-
+        ca.event_publish("request_submitted", request.fingerprint())
         # Wait the certificate to be signed if waiting is requested
         if req.get_param("wait"):
-            if ca.subscribe_certificate_url:
+            if ca.push_server:
                 # Redirect to nginx pub/sub
-                url = ca.subscribe_certificate_url % dict(request_sha1sum=request.fingerprint())
+                url = ca.push_server + "/lp/" + request.fingerprint()
                 click.echo("Redirecting to: %s"  % url)
                 resp.status = falcon.HTTP_SEE_OTHER
                 resp.append_header("Location", url)
@@ -298,6 +307,8 @@ class RequestListResource(CertificateAuthorityBase):
         else:
             # Request was accepted, but not processed
             resp.status = falcon.HTTP_202
+
+
 
 class CertificateStatusResource(CertificateAuthorityBase):
     """
@@ -322,6 +333,7 @@ class IndexResource(CertificateAuthorityBase):
     @login_required
     @pop_certificate_authority
     @authorize_admin
+    @event_source
     @templatize("index.html")
     def on_get(self, req, resp, ca, user):
         return locals()

@@ -155,7 +155,10 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
                 assert buf, "Server responded with no body, status code %d" % response.code
                 cert = crypto.load_certificate(crypto.FILETYPE_PEM, buf)
             except crypto.Error:
-                raise ValueError("Failed to parse PEM: %s" % buf)
+                if buf == b'-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n':
+                    raise ValueError("Server refused to sign the request") # TODO: Raise proper exception
+                else:
+                    raise ValueError("Failed to parse PEM: %s" % buf)
             except urllib.error.HTTPError as e:
                 if e.code == 409:
                     click.echo("Different signing request with same CN is already present on server, server refuses to overwrite", err=True)
