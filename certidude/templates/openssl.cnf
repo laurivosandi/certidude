@@ -19,7 +19,7 @@ crlDistributionPoints = {{crl_distribution_points}}
 emailAddress = {{email_address}}
 {% endif %}
 x509_extensions = {{slug}}_cert
-policy = poliy_{{slug}}
+policy = policy_{{slug}}
 
 # Certidude specific stuff, TODO: move to separate section?
 request_subnets = 10.0.0.0/8 192.168.0.0/16 172.168.0.0/16
@@ -28,6 +28,8 @@ admin_subnets = 127.0.0.0/8
 admin_users =
 inbox = {{inbox}}
 outbox = {{outbox}}
+publish_certificate_url = {{publish_certificate_url}}
+subscribe_certificate_url = {{subscribe_certificate_url}}
 
 [policy_{{slug}}]
 countryName = match

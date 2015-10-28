@@ -22,18 +22,18 @@ env = Environment(loader=PackageLoader("certidude", "email_templates"))
 # https://jamielinux.com/docs/openssl-certificate-authority/
 # http://pycopia.googlecode.com/svn/trunk/net/pycopia/ssl/certs.py
 
-def notify(func):
+def publish_certificate(func):
     # TODO: Implement e-mail and nginx notifications using hooks
     def wrapped(instance, csr, *args, **kwargs):
         cert = func(instance, csr, *args, **kwargs)
         assert isinstance(cert, Certificate), "notify wrapped function %s returned %s" % (func, type(cert))
-        url_template = os.getenv("PUSH_PUBLISH")
-        if url_template:
-            url = url_template % dict(channel=csr.fingerprint())
+
+        if instance.publish_certificate_url:
+            url = instance.publish_certificate_url % dict(request_sha1sum=csr.fingerprint())
             notification = urllib.request.Request(url, cert.dump().encode("ascii"))
             notification.add_header("User-Agent", "Certidude API")
             notification.add_header("Content-Type", "application/x-x509-user-cert")
-            click.echo("Submitting notification to %s, waiting for response..." % url)
+            click.echo("Publishing certificate at %s, waiting for response..." % url)
             response = urllib.request.urlopen(notification)
             response.read()
         return cert
@@ -85,7 +85,7 @@ class CertificateAuthorityConfig(object):
         section = "CA_" + slug
 
         dirs = dict([(key, self.get(section, key))
-            for key in ("dir", "certificate", "crl", "certs", "new_certs_dir", "private_key", "revoked_certs_dir", "request_subnets", "autosign_subnets", "admin_subnets", "admin_users")])
+            for key in ("dir", "certificate", "crl", "certs", "new_certs_dir", "private_key", "revoked_certs_dir", "request_subnets", "autosign_subnets", "admin_subnets", "admin_users", "publish_certificate_url", "subscribe_certificate_url", "inbox", "outbox")])
 
         # Variable expansion, eg $dir
         for key, value in dirs.items():
@@ -94,8 +94,6 @@ class CertificateAuthorityConfig(object):
 
         dirs.pop("dir")
         dirs["email_address"] = self.get(section, "emailAddress")
-        dirs["inbox"] = self.get(section, "inbox")
-        dirs["outbox"] = self.get(section, "outbox")
         dirs["certificate_lifetime"] = int(self.get(section, "default_days", "1825"))
         dirs["revocation_list_lifetime"] = int(self.get(section, "default_crl_days", "1"))
 
@@ -426,7 +424,7 @@ class Certificate(CertificateBase):
         return self.signed <= other.signed
 
 class CertificateAuthority(object):
-    def __init__(self, slug, certificate, crl, certs, new_certs_dir, revoked_certs_dir=None, private_key=None, autosign_subnets=None, request_subnets=None, admin_subnets=None, admin_users=None, email_address=None, inbox=None, outbox=None, basic_constraints="CA:FALSE", key_usage="digitalSignature,keyEncipherment", extended_key_usage="clientAuth", certificate_lifetime=5*365, revocation_list_lifetime=1):
+    def __init__(self, slug, certificate, crl, certs, new_certs_dir, revoked_certs_dir=None, private_key=None, autosign_subnets=None, request_subnets=None, admin_subnets=None, admin_users=None, email_address=None, inbox=None, outbox=None, basic_constraints="CA:FALSE", key_usage="digitalSignature,keyEncipherment", extended_key_usage="clientAuth", certificate_lifetime=5*365, revocation_list_lifetime=1, publish_certificate_url=None, subscribe_certificate_url=None):
         self.slug = slug
         self.revocation_list = crl
         self.signed_dir = certs
@@ -440,6 +438,9 @@ class CertificateAuthority(object):
 
         self.certificate = Certificate(open(certificate))
         self.mailer = Mailer(outbox) if outbox else None
+        self.publish_certificate_url = publish_certificate_url
+        self.subscribe_certificate_url = subscribe_certificate_url
+
         self.certificate_lifetime = certificate_lifetime
         self.revocation_list_lifetime = revocation_list_lifetime
         self.basic_constraints = basic_constraints
@@ -546,7 +547,7 @@ class CertificateAuthority(object):
         return crypto.dump_privatekey(crypto.FILETYPE_PEM, key).decode("ascii"), \
             req_buf, cert_buf
 
-    @notify
+    @publish_certificate
     def sign(self, req, overwrite=False, delete=True):
         """
         Sign certificate signing request via signer process
@@ -572,7 +573,7 @@ class CertificateAuthority(object):
 
         return Certificate(open(cert_path))
 
-    @notify
+    @publish_certificate
     def sign2(self, request, overwrite=False, delete=True, lifetime=None):
         """
         Sign directly using private key, this is usually done by root.
