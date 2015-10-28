@@ -266,6 +266,13 @@ class CertificateBase:
         return ""
 
     @property
+    def fqdn(self):
+        for bit in self.subject_alt_name.split(", "):
+            if bit.startswith("DNS:"):
+                return bit[4:]
+        return ""
+
+    @property
     def subject_alt_name(self):
         for key, value, data in self.extensions:
             if key == "subjectAltName":
@@ -295,7 +302,6 @@ class CertificateBase:
         import binascii
         m, _ = self.pubkey
         return ":".join(re.findall("..", hashlib.sha1(binascii.unhexlify("%x" % m)).hexdigest()))
-
 
 class Request(CertificateBase):
     def __init__(self, mixed=None):
@@ -356,8 +362,8 @@ class Certificate(CertificateBase):
 
         if isinstance(mixed, io.TextIOWrapper):
             self.path = mixed.name
-            _, _, _, _, _, _, _, _, _, ctime = os.stat(self.path)
-            self.changed = datetime.fromtimestamp(ctime)
+            _, _, _, _, _, _, _, _, mtime, _ = os.stat(self.path)
+            self.changed = datetime.fromtimestamp(mtime)
             mixed = mixed.read()
 
         if isinstance(mixed, str):
@@ -378,13 +384,17 @@ class Certificate(CertificateBase):
     @property
     def extensions(self):
         # WTF?!
-        for j in range(1, self._obj.get_extension_count()):
+        for j in range(0, self._obj.get_extension_count()):
             e = self._obj.get_extension(j)
             yield e.get_short_name().decode("ascii"), str(e), e.get_data()
 
     @property
     def serial_number(self):
         return "%040x" % self._obj.get_serial_number()
+
+    @property
+    def serial_number_hex(self):
+        return ":".join(re.findall("[0123456789abcdef]{2}", self.serial_number))
 
     @property
     def signed(self):

@@ -683,20 +683,29 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
 
 @click.command("list", help="List certificates")
 @click.argument("ca", nargs=-1)
+@click.option("--verbose", "-v", default=False, is_flag=True, help="Verbose output")
 @click.option("--show-key-type", "-k", default=False, is_flag=True, help="Show key type and length")
 @click.option("--show-path", "-p", default=False, is_flag=True, help="Show filesystem paths")
 @click.option("--show-extensions", "-e", default=False, is_flag=True, help="Show X.509 Certificate Extensions")
-def certidude_list(ca, show_key_type, show_extensions, show_path):
+@click.option("--hide-requests", "-h", default=False, is_flag=True, help="Hide signing requests")
+@click.option("--show-signed", "-s", default=False, is_flag=True, help="Show signed certificates")
+@click.option("--show-revoked", "-r", default=False, is_flag=True, help="Show revoked certificates")
+def certidude_list(ca, verbose, show_key_type, show_extensions, show_path, show_signed, show_revoked, hide_requests):
+    # Statuses:
+    #   s - submitted
+    #   v - valid
+    #   e - expired
+    #   y - not valid yet
+    #   r - revoked
+
     from pycountry import countries
     def dump_common(j):
-        if show_path:
-            click.echo(" |    |   Path: %s" % j.path)
 
         person = [j for j in (j.given_name, j.surname) if j]
         if person:
-            click.echo(" |    |   Associated person: %s" % " ".join(person) + (" <%s>" % j.email_address if j.email_address else ""))
+            click.echo("Associated person: %s" % " ".join(person) + (" <%s>" % j.email_address if j.email_address else ""))
         elif j.email_address:
-            click.echo(" |    |   Associated e-mail: " + j.email_address)
+            click.echo("Associated e-mail: " + j.email_address)
 
         bits = [j for j in (
             countries.get(alpha2=j.country_code.upper()).name if
@@ -706,17 +715,19 @@ def certidude_list(ca, show_key_type, show_extensions, show_path):
             j.organization,
             j.organizational_unit) if j]
         if bits:
-            click.echo(" |    |   Organization: %s" % ", ".join(bits))
+            click.echo("Organization: %s" % ", ".join(bits))
 
         if show_key_type:
-            click.echo(" |    |   Key type: %s-bit %s" % (j.key_length, j.key_type))
+            click.echo("Key type: %s-bit %s" % (j.key_length, j.key_type))
 
         if show_extensions:
             for key, value, data in j.extensions:
-                click.echo((" |    |   Extension " + key + ":").ljust(50) + " " + value)
-        elif j.key_usage:
-            click.echo(" |    |   Key usage: " + j.key_usage)
-        click.echo(" |    |")
+                click.echo(("Extension " + key + ":").ljust(50) + " " + value)
+        else:
+            if j.key_usage:
+                click.echo("Key usage: " + j.key_usage)
+            if j.fqdn:
+                click.echo("Associated hostname: " + j.fqdn)
 
     config = load_config()
 
@@ -728,61 +739,75 @@ def certidude_list(ca, show_key_type, show_extensions, show_path):
         wanted_list = ca
 
     for ca in config.all_authorities(wanted_list):
-        click.echo("Certificate authority " + click.style(ca.slug, fg="blue"))
-#        if ca.certificate.email_address:
-#            click.echo("  \u2709 %s" % ca.certificate.email_address)
+        if not hide_requests:
+            for j in ca.get_requests():
+                if not verbose:
+                    click.echo("s " + j.path + " " + j.distinguished_name)
+                    continue
+                click.echo(click.style(j.common_name, fg="blue"))
+                click.echo("=" * len(j.common_name))
+                click.echo("State: ? " + click.style("submitted", fg="yellow") + " " + naturaltime(j.created) + click.style(", %s" %j.created,  fg="white"))
 
-        if ca.certificate.signed < NOW and ca.certificate.expires > NOW:
-            print(ca.certificate.expires)
-            click.echo(" | \u2713 Certificate: " + click.style("valid", fg="green") + ", %s" % ca.certificate.expires)
-        elif NOW > ca.certificate.expires:
-            click.echo(" | \u2717 Certificate: " + click.style("expired", fg="red"))
-        else:
-            click.echo(" | \u2717 Certificate: " + click.style("not valid yet", fg="red"))
+                dump_common(j)
 
-        if os.path.exists(ca.private_key):
-            click.echo(" | \u2713 Private key " + ca.private_key + ": " + click.style("okay", fg="green"))
-            # TODO: Check permissions
-        else:
-            click.echo(" | \u2717 Private key " + ca.private_key + ": " + click.style("does not exist", fg="red"))
+                # Calculate checksums for cross-checking
+                import hashlib
+                md5sum = hashlib.md5()
+                sha1sum = hashlib.sha1()
+                sha256sum = hashlib.sha256()
+                with open(j.path, "rb") as fh:
+                    buf = fh.read()
+                    md5sum.update(buf)
+                    sha1sum.update(buf)
+                    sha256sum.update(buf)
+                click.echo("MD5 checksum: %s" % md5sum.hexdigest())
+                click.echo("SHA-1 checksum: %s" % sha1sum.hexdigest())
+                click.echo("SHA-256 checksum: %s" % sha256sum.hexdigest())
 
-        if os.path.isdir(ca.signed_dir):
-            click.echo(" | \u2713 Signed certificates directory " + ca.signed_dir + ": " + click.style("okay", fg="green"))
-        else:
-            click.echo(" | \u2717 Signed certificates directory " + ca.signed_dir + ": " + click.style("does not exist", fg="red"))
+                if show_path:
+                    click.echo("Details: openssl req -in %s -text -noout" % j.path)
+                    click.echo("Sign: certidude sign %s" % j.path)
+                click.echo()
 
-        if ca.revoked_dir:
-            click.echo(" |   Revoked certificates directory: %s" % ca.revoked_dir)
+        if show_signed:
+            for j in ca.get_signed():
+                if not verbose:
+                    if j.signed < NOW and j.expires > NOW:
+                        click.echo("v " + j.path + " " + j.distinguished_name)
+                    elif NOW > j.expires:
+                        click.echo("e " + j.path + " " + j.distinguished_name)
+                    else:
+                        click.echo("y " + j.path + " " + j.distinguished_name)
+                    continue
 
-        click.echo(" +-- Pending requests")
+                click.echo(click.style(j.common_name, fg="blue") + " " + click.style(j.serial_number_hex, fg="white"))
+                click.echo("="*(len(j.common_name)+60))
 
-        for j in ca.get_requests():
-            click.echo(" |    +-- Request " + click.style(j.common_name, fg="blue"))
-            click.echo(" |    |   Submitted: %s, %s" % (naturaltime(j.created), j.created))
-            dump_common(j)
+                if j.signed < NOW and j.expires > NOW:
+                    click.echo("Status: \u2713 " + click.style("valid", fg="green") + " " + naturaltime(j.expires) + click.style(", %s" %j.expires,  fg="white"))
+                elif NOW > j.expires:
+                    click.echo("Status: \u2717 " + click.style("expired", fg="red") + " " + naturaltime(j.expires) + click.style(", %s" %j.expires,  fg="white"))
+                else:
+                    click.echo("Status: \u2717 " + click.style("not valid yet", fg="red") + click.style(", %s" %j.expires,  fg="white"))
+                dump_common(j)
 
-        click.echo(" +-- Signed certificates")
+                if show_path:
+                    click.echo("Details: openssl x509 -in %s -text -noout" % j.path)
+                    click.echo("Revoke: certidude revoke %s" % j.path)
+                click.echo()
 
-        for j in ca.get_signed():
-            click.echo(" |    +-- Certificate " + click.style(j.common_name, fg="blue") + " " + click.style(":".join(re.findall("\d\d", j.serial_number)), fg="white"))
-
-            if j.signed < NOW and j.expires > NOW:
-                click.echo(" |    | \u2713 Certificate " + click.style("valid", fg="green") + " " + naturaltime(j.expires))
-            elif NOW > j.expires:
-                click.echo(" |    | \u2717 Certificate " + click.style("expired", fg="red") + " " + naturaltime(j.expires))
-            else:
-                click.echo(" |    | \u2717 Certificate " + click.style("not valid yet", fg="red"))
-            dump_common(j)
-
-        click.echo(" +-- Revocations")
-
-        for j in ca.get_revoked():
-            click.echo(" |    +-- Revocation " + click.style(j.common_name, fg="blue") + " " + click.style(":".join(re.findall("\d\d", j.serial_number)), fg="white"))
-     #       click.echo(" |    |   Serial: %s" % ":".join(re.findall("\d\d", j.serial_number)))
-            if show_path:
-                click.echo(" |    |   Path: %s" % j.path)
-            click.echo(" |    |   Revoked: %s%s" % (naturaltime(NOW-j.changed), click.style(", %s" % j.changed, fg="white")))
-            dump_common(j)
+        if show_revoked:
+            for j in ca.get_revoked():
+                if not verbose:
+                    click.echo("r " + j.path + " " + j.distinguished_name)
+                    continue
+                click.echo(click.style(j.common_name, fg="blue") + " " + click.style(j.serial_number_hex, fg="white"))
+                click.echo("="*(len(j.common_name)+60))
+                click.echo("Status: \u2717 " + click.style("revoked", fg="red") + " %s%s" % (naturaltime(NOW-j.changed), click.style(", %s" % j.changed, fg="white")))
+                dump_common(j)
+                if show_path:
+                    click.echo("Details: openssl x509 -in %s -text -noout" % j.path)
+                click.echo()
 
         click.echo()
 
