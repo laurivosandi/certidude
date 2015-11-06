@@ -1,18 +1,8 @@
 import os
-import pwd
-import pytest
 from click.testing import CliRunner
 from certidude.cli import entry_point as cli
 
 runner = CliRunner()
-
-def user_check(name='certidude'):
-    try:
-        pwd.getpwnam(name)
-        return False
-    except KeyError:
-        pass
-    return True
 
 def test_cli_setup_authority():
     # Authority setup
