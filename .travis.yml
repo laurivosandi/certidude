@@ -7,10 +7,16 @@ python:
   - "3.3"
   - "3.4"
   - "3.5"
+after_success:
+  - codecov
+before_install:
+  # codecov.io
+  - pip install codecov pytest-cov
 install:
   - pip install -r requirements.txt
   - pip install --editable .
-script: py.test
+script:
+  - py.test && py.test --cov-report xml --cov=certidude tests/
 cache:
   directories:
     - $HOME/.cache/pip
