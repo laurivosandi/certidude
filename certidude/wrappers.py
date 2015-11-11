@@ -124,12 +124,7 @@ class CertificateAuthorityConfig(object):
         """
         Returns sorted list of CA-s defined in the configuration file.
         """
-        l = [s[3:] for s in self._config if s.startswith("CA_")]
-        # Sanity check for duplicates (although ConfigParser fails earlier)
-        if len(l) != len(set(l)):
-            raise ValueError
-        return sorted(l)
-
+        return sorted([s[3:] for s in self._config if s.startswith("CA_")])
 
     def pop_certificate_authority(self):
         def wrapper(func):

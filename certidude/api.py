@@ -310,7 +310,7 @@ class RequestListResource(CertificateAuthorityBase):
         # TODO: check for revoked certificates and return HTTP 410 Gone
 
         # Process automatic signing if the IP address is whitelisted and autosigning was requested
-        if req.get_param("autosign") in ("yes", "1", "true"):
+        if req.get_param_as_bool("autosign"):
             for subnet in ca.autosign_subnets:
                 if subnet.overlaps(remote_addr):
                     try:
