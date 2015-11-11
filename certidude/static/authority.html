@@ -1,0 +1,82 @@
+<h1>{{authority.slug}} management</h1>
+
+<p>Hi {{session.username}},</p>
+
+<p>Request submission is allowed from: {% if authority.request_subnets %}{% for i in authority.request_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}</p>
+<p>Autosign is allowed from: {% if authority.autosign_subnets %}{% for i in authority.autosign_subnets %}{{ i }} {% endfor %}{% else %}nowhere{% endif %}</p>
+<p>Authority administration is allowed from: {% if authority.admin_subnets %}{% for i in authority.admin_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}
+<p>Authority administration allowed for: {% for i in authority.admin_users %}{{ i }} {% endfor %}</p>
+
+{% set s = authority.certificate.subject %}
+
+<h1>Pending requests</h1>
+
+<ul>
+    {% for j in authority.requests %}
+         {% include "request.html" %}
+    {% else %}
+        <li>Great job! No certificate signing requests to sign.</li>
+	{% endfor %}
+</ul>
+
+<h1>Signed certificates</h1>
+
+<ul>
+    {% for j in authority.signed | sort | reverse %}
+        <li id="certificate_{{ j.sha256sum }}">
+            <a class="button" href="/api/{{authority.slug}}/signed/{{j.subject}}/">Fetch</a>
+            <button onClick="javascript:$.ajax({url:'/api/{{authority.slug}}/signed/{{j.subject.CN}}/',type:'delete'});">Revoke</button>
+
+            <div class="monospace">
+            {% include 'iconmonstr-certificate-15-icon.svg' %}
+            {{j.subject}}
+            </div>
+
+            {% if j.email_address %}
+            <div class="email">{% include 'iconmonstr-email-2-icon.svg' %} {{ j.email_address }}</div>
+            {% endif %}
+
+            <div class="monospace">
+            {% include 'iconmonstr-key-2-icon.svg' %}
+            <span title="SHA-256 of public key">
+            {{ j.sha256sum }}
+            </span>
+            {{ j.key_length }}-bit
+            {{ j.key_type }}
+            </div>
+
+            <div>
+            {% include 'iconmonstr-flag-3-icon.svg' %}
+            {{j.key_usage}}
+            </div>
+
+
+        </li>
+	{% endfor %}
+</ul>
+
+<h1>Revoked certificates</h1>
+
+<p>To fetch certificate revocation list:</p>
+<pre>
+curl {{request.url}}/revoked/ | openssl crl -text -noout
+</pre>
+<!--
+<p>To perform online certificate status request</p>
+
+<pre>
+curl {{request.url}}/certificate/ > authority.pem
+openssl ocsp -issuer authority.pem -CAfile authority.pem -url {{request.url}}/ocsp/ -serial 0x
+</pre>
+-->
+<ul>
+    {% for j in authority.revoked %}
+        <li id="certificate_{{ j.sha256sum }}">
+            {{j.changed}}
+            {{j.serial_number}} <span class="monospace">{{j.distinguished_name}}</span>
+        </li>
+    {% else %}
+        <li>Great job! No certificate signing requests to sign.</li>
+	{% endfor %}
+</ul>
+

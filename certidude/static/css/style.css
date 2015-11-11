@@ -1,3 +1,24 @@
+@font-face {
+  font-family: 'PT Sans Narrow';
+  font-style: normal;
+  font-weight: 400;
+  src: local('PT Sans Narrow'), local('PTSans-Narrow'), url('../fonts/pt-sans.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Ubuntu Mono';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Ubuntu Mono'), local('UbuntuMono-Regular'), url('../fonts/ubuntu-mono.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Gentium Basic';
+  font-style: normal;
+  font-weight: 400;
+  src: local('Gentium Basic'), local('GentiumBasic'), url('../fonts/gentium-basic.woff2') format('woff2');
+}
+
 svg {
     position: relative;
     top: 0.5em;
@@ -55,7 +76,7 @@ html,body {
 
 body {
     background: #222;
-    background-image: url('//fc00.deviantart.net/fs71/i/2013/078/9/6/free_hexa_pattern_cc0_by_black_light_studio-d4ig12f.png');
+    background-image: url('../img/free_hexa_pattern_cc0_by_black_light_studio.png');
     background-position: center;
 }
 

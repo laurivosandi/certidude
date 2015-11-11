@@ -7,8 +7,10 @@ import json
 import types
 import click
 from time import sleep
-from certidude.wrappers import Request, Certificate, CertificateAuthorityConfig
+from certidude.wrappers import Request, Certificate, CertificateAuthority, \
+    CertificateAuthorityConfig
 from certidude.auth import login_required
+from OpenSSL import crypto
 from pyasn1.codec.der import decoder
 from datetime import datetime, date
 from jinja2 import Environment, PackageLoader, Template
@@ -26,6 +28,7 @@ def event_source(func):
         if req.get_header("Accept") == "text/event-stream":
             resp.status = falcon.HTTP_SEE_OTHER
             resp.location = ca.push_server + "/ev/" + ca.uuid
+            resp.body = "Redirecting to:" + resp.location
             print("Delegating EventSource handling to:", resp.location)
         return func(self, req, resp, ca, *args, **kwargs)
     return wrapped
@@ -72,7 +75,24 @@ def validate_common_name(func):
 
 
 class MyEncoder(json.JSONEncoder):
+    REQUEST_ATTRIBUTES = "signable", "subject", "changed", "common_name", \
+        "organizational_unit", "given_name", "surname", "fqdn", "email_address", \
+        "key_type", "key_length", "md5sum", "sha1sum", "sha256sum", "key_usage"
+
+    CERTIFICATE_ATTRIBUTES = "revokable", "subject", "changed", "common_name", \
+        "organizational_unit", "given_name", "surname", "fqdn", "email_address", \
+        "key_type", "key_length", "sha256sum", "serial_number", "key_usage"
+
     def default(self, obj):
+        if isinstance(obj, crypto.X509Name):
+            try:
+                return "".join(["/%s=%s" % (k.decode("ascii"),v.decode("utf-8")) for k, v in obj.get_components()])
+            except UnicodeDecodeError: # Work around old buggy pyopenssl
+                return "".join(["/%s=%s" % (k.decode("ascii"),v.decode("iso8859")) for k, v in obj.get_components()])
+        if isinstance(obj, ipaddress._IPAddressBase):
+            return str(obj)
+        if isinstance(obj, set):
+            return tuple(obj)
         if isinstance(obj, datetime):
             return obj.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         if isinstance(obj, date):
@@ -81,6 +101,26 @@ class MyEncoder(json.JSONEncoder):
             return tuple(obj)
         if isinstance(obj, types.GeneratorType):
             return tuple(obj)
+        if isinstance(obj, Request):
+            return dict([(key, getattr(obj, key)) for key in self.REQUEST_ATTRIBUTES \
+                if hasattr(obj, key) and getattr(obj, key)])
+        if isinstance(obj, Certificate):
+            return dict([(key, getattr(obj, key)) for key in self.CERTIFICATE_ATTRIBUTES \
+                if hasattr(obj, key) and getattr(obj, key)])
+        if isinstance(obj, CertificateAuthority):
+            return dict(
+                slug = obj.slug,
+                certificate = obj.certificate,
+                admin_users = obj.admin_users,
+                autosign_subnets = obj.autosign_subnets,
+                request_subnets = obj.request_subnets,
+                admin_subnets=obj.admin_subnets,
+                requests=obj.get_requests(),
+                signed=obj.get_signed(),
+                revoked=obj.get_revoked()
+            )
+        if hasattr(obj, "serialize"):
+            return obj.serialize()
         return json.JSONEncoder.default(self, obj)
 
 
@@ -94,7 +134,7 @@ def serialize(func):
         resp.set_header("Pragma", "no-cache");
         resp.set_header("Expires", "0");
         r = func(instance, req, resp, **kwargs)
-        if not resp.body:
+        if resp.body is None:
             if not req.client_accepts_json:
                 raise falcon.HTTPUnsupportedMediaType(
                     "This API only supports the JSON media type.",
@@ -118,6 +158,9 @@ def templatize(path):
                     resp.set_header("Pragma", "no-cache");
                     resp.set_header("Expires", "0");
                     resp.set_header("Content-Type", "application/json")
+                    r.pop("req")
+                    r.pop("resp")
+                    r.pop("user")
                     resp.body = json.dumps(r, cls=MyEncoder)
                     return r
                 else:
@@ -174,7 +217,7 @@ class SignedCertificateListResource(CertificateAuthorityBase):
                 l=j.city,
                 o=j.organization,
                 ou=j.organizational_unit,
-                fingerprint=j.fingerprint)
+                fingerprint=j.fingerprint())
 
 
 class RequestDetailResource(CertificateAuthorityBase):
@@ -330,13 +373,22 @@ class CertificateAuthorityResource(CertificateAuthorityBase):
         resp.append_header("Content-Disposition", "attachment; filename=%s.crt" % ca.slug)
 
 class IndexResource(CertificateAuthorityBase):
+    @serialize
     @login_required
     @pop_certificate_authority
     @authorize_admin
     @event_source
-    @templatize("index.html")
     def on_get(self, req, resp, ca, user):
-        return locals()
+        return ca
+
+class AuthorityListResource(CertificateAuthorityBase):
+    @serialize
+    @login_required
+    def on_get(self, req, resp, user):
+        return dict(
+            authorities=(self.config.ca_list), # TODO: Check if user is CA admin
+            username=user[0]
+        )
 
 class ApplicationConfigurationResource(CertificateAuthorityBase):
     @pop_certificate_authority
@@ -377,14 +429,16 @@ class StaticResource(object):
         if not path.startswith(self.root):
             raise falcon.HTTPForbidden
 
+        if os.path.isdir(path):
+            path = os.path.join(path, "index.html")
         print("Serving:", path)
+
         if os.path.exists(path):
             content_type, content_encoding = mimetypes.guess_type(path)
             if content_type:
                 resp.append_header("Content-Type", content_type)
             if content_encoding:
                 resp.append_header("Content-Encoding", content_encoding)
-            resp.append_header("Content-Disposition", "attachment")
             resp.stream = open(path, "rb")
         else:
             resp.status = falcon.HTTP_404
@@ -396,14 +450,14 @@ def certidude_app():
     config = CertificateAuthorityConfig()
 
     app = falcon.API()
-    app.add_route("/api/{ca}/ocsp/", CertificateStatusResource(config))
-    app.add_route("/api/{ca}/signed/{cn}/openvpn", ApplicationConfigurationResource(config))
-    app.add_route("/api/{ca}/certificate/", CertificateAuthorityResource(config))
-    app.add_route("/api/{ca}/revoked/", RevocationListResource(config))
-    app.add_route("/api/{ca}/signed/{cn}/", SignedCertificateDetailResource(config))
-    app.add_route("/api/{ca}/signed/", SignedCertificateListResource(config))
-    app.add_route("/api/{ca}/request/{cn}/", RequestDetailResource(config))
-    app.add_route("/api/{ca}/request/", RequestListResource(config))
-    app.add_route("/api/{ca}/", IndexResource(config))
-
+    app.add_route("/api/ca/{ca}/ocsp/", CertificateStatusResource(config))
+    app.add_route("/api/ca/{ca}/signed/{cn}/openvpn", ApplicationConfigurationResource(config))
+    app.add_route("/api/ca/{ca}/certificate/", CertificateAuthorityResource(config))
+    app.add_route("/api/ca/{ca}/revoked/", RevocationListResource(config))
+    app.add_route("/api/ca/{ca}/signed/{cn}/", SignedCertificateDetailResource(config))
+    app.add_route("/api/ca/{ca}/signed/", SignedCertificateListResource(config))
+    app.add_route("/api/ca/{ca}/request/{cn}/", RequestDetailResource(config))
+    app.add_route("/api/ca/{ca}/request/", RequestListResource(config))
+    app.add_route("/api/ca/{ca}/", IndexResource(config))
+    app.add_route("/api/ca/", AuthorityListResource(config))
     return app

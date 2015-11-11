@@ -299,11 +299,21 @@ class CertificateBase:
         assert len(h) * 4 == self.key_length, "%s is not %s" % (len(h)*4, self.key_length)
         return re.findall("\d\d", h)
 
-    def fingerprint(self):
-        import binascii
-        m, _ = self.pubkey
-        return "%x" % m
-        return ":".join(re.findall("..", hashlib.sha1(binascii.unhexlify("%x" % m)).hexdigest()))
+    def fingerprint(self, algorithm="sha256"):
+        return hashlib.new(algorithm, self.buf.encode("ascii")).hexdigest()
+
+    @property
+    def md5sum(self):
+        return self.fingerprint("md5")
+
+    @property
+    def sha1sum(self):
+        return self.fingerprint("sha1")
+
+    @property
+    def sha256sum(self):
+        return self.fingerprint("sha256")
+
 
 class Request(CertificateBase):
     def __init__(self, mixed=None):
