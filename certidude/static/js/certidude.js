@@ -20,13 +20,39 @@ $(document).ready(function() {
                 success: function(authority, status, xhr) {
                     console.info("Got CA:", authority);
 
-                    console.info("Opening EventSource from:", "/api/ca/" + authority.slug);
+                    console.info("Opening EventSource from:", authority.event_channel);
 
-                    var source = new EventSource("/api/" + authority.slug);
+                    var source = new EventSource(authority.event_channel);
 
                     source.onmessage = function(event) {
                         console.log("Received server-sent event:", event);
                     }
+
+                    source.addEventListener("up-client", function(e) {
+                        console.log("Adding security association:" + e.data);
+                        var lease = JSON.parse(e.data);
+                        var $status = $("#signed_certificates [data-dn='" + lease.identity + "'] .status");
+                        $status.html(nunjucks.render('status.html', {
+                            lease: {
+                                address: lease.address,
+                                identity: lease.identity,
+                                acquired: new Date(),
+                                released: null
+                            }}));
+                    });
+
+                    source.addEventListener("down-client", function(e) {
+                        console.log("Removing security association:" + e.data);
+                        var lease = JSON.parse(e.data);
+                        var $status = $("#signed_certificates [data-dn='" + lease.identity + "'] .status");
+                        $status.html(nunjucks.render('status.html', {
+                            lease: {
+                                address: lease.address,
+                                identity: lease.identity,
+                                acquired: null,
+                                released: new Date()
+                            }}));
+                    });
 
                     source.addEventListener("request_deleted", function(e) {
                         console.log("Removing deleted request #" + e.data);
@@ -39,13 +65,13 @@ $(document).ready(function() {
 
                     source.addEventListener("request_signed", function(e) {
                         console.log("Request signed:", e.data);
-                        $("#request_" + e.data).remove();
+                        $("#request_" + e.data).slideUp("normal", function() { $(this).remove(); });
                         // TODO: Insert <li> to signed certs list
                     });
 
                     source.addEventListener("certificate_revoked", function(e) {
                         console.log("Removing revoked certificate #" + e.data);
-                        $("#certificate_" + e.data).remove();
+                        $("#certificate_" + e.data).slideUp("normal", function() { $(this).remove(); });
                     });
 
                     $("#container").html(nunjucks.render('authority.html', { authority: authority, session: session }));
@@ -57,7 +83,7 @@ $(document).ready(function() {
                         success: function(leases, status, xhr) {
                             console.info("Got leases:", leases);
                             for (var j = 0; j < leases.length; j++) {
-                                var $status = $("#signed_certificates [data-dn='" + leases[j].dn + "'] .status");
+                                var $status = $("#signed_certificates [data-dn='" + leases[j].identity + "'] .status");
                                 if (!$status.length) {
                                     console.info("Detected rogue client:", leases[j]);
                                     continue;
@@ -65,7 +91,7 @@ $(document).ready(function() {
                                 $status.html(nunjucks.render('status.html', {
                                     lease: {
                                         address: leases[j].address,
-                                        dn: leases[j].dn,
+                                        identity: leases[j].identity,
                                         acquired: new Date(leases[j].acquired).toLocaleString(),
                                         released: leases[j].released ? new Date(leases[j].released).toLocaleString() : null
                                     }}));

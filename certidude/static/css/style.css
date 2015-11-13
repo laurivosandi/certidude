@@ -42,7 +42,8 @@ button, .button {
     background-color: #eee;
     border-radius: 6px;
     margin: 2px;
-    padding: 4px 8px;
+    padding: 6px 12px;
+    background-position: 6px;
     box-sizing: border-box;
 }
 
@@ -140,3 +141,20 @@ li {
     clear: both;
     border-top: 1px dashed #ccc;
 }
+
+.icon{
+    background-size: 24px;
+    padding-left: 36px;
+    background-repeat: no-repeat;
+    display: block;
+    vertical-align: text-bottom;
+    text-decoration: none;
+}
+
+
+.icon.revoke { background-image: url("../img/iconmonstr-x-mark-5-icon.svg"); }
+.icon.download { background-image: url("../img/iconmonstr-download-12-icon.svg"); }
+.icon.sign { background-image: url("../img/iconmonstr-pen-10-icon.svg"); }
+
+/* Make sure this is the last one */
+.icon.busy{background-image:url("https://software.opensuse.org/assets/ajax-loader-ea46060b6c9f42822a3d58d075c83ea2.gif");}

@@ -76,20 +76,20 @@ def validate_common_name(func):
 
 
 class MyEncoder(json.JSONEncoder):
-    REQUEST_ATTRIBUTES = "signable", "subject", "changed", "common_name", \
+    REQUEST_ATTRIBUTES = "signable", "identity", "changed", "common_name", \
         "organizational_unit", "given_name", "surname", "fqdn", "email_address", \
         "key_type", "key_length", "md5sum", "sha1sum", "sha256sum", "key_usage"
 
-    CERTIFICATE_ATTRIBUTES = "revokable", "subject", "changed", "common_name", \
+    CERTIFICATE_ATTRIBUTES = "revokable", "identity", "changed", "common_name", \
         "organizational_unit", "given_name", "surname", "fqdn", "email_address", \
         "key_type", "key_length", "sha256sum", "serial_number", "key_usage"
 
     def default(self, obj):
         if isinstance(obj, crypto.X509Name):
             try:
-                return "".join(["/%s=%s" % (k.decode("ascii"),v.decode("utf-8")) for k, v in obj.get_components()])
+                return ", ".join(["%s=%s" % (k.decode("ascii"),v.decode("utf-8")) for k, v in obj.get_components()])
             except UnicodeDecodeError: # Work around old buggy pyopenssl
-                return "".join(["/%s=%s" % (k.decode("ascii"),v.decode("iso8859")) for k, v in obj.get_components()])
+                return ", ".join(["%s=%s" % (k.decode("ascii"),v.decode("iso8859")) for k, v in obj.get_components()])
         if isinstance(obj, ipaddress._IPAddressBase):
             return str(obj)
         if isinstance(obj, set):
@@ -110,6 +110,7 @@ class MyEncoder(json.JSONEncoder):
                 if hasattr(obj, key) and getattr(obj, key)])
         if isinstance(obj, CertificateAuthority):
             return dict(
+                event_channel = obj.push_server + "/ev/" + obj.uuid,
                 slug = obj.slug,
                 certificate = obj.certificate,
                 admin_users = obj.admin_users,
@@ -225,11 +226,12 @@ class LeaseResource(CertificateAuthorityBase):
             if remainder:
                 raise ValueError()
             # TODO: Check for duplicate entries?
-            for chunk in chunks:
-                for chunkette in chunk:
-                    key, value = chunkette
-                    dn += "/" + OIDS[key] + "=" + value
-            return str(dn)
+            def generate():
+                for chunk in chunks:
+                    for chunkette in chunk:
+                        key, value = chunkette
+                        yield str(OIDS[key] + "=" + value)
+            return ", ".join(generate())
 
         # BUGBUG
         SQL_LEASES = """
@@ -237,7 +239,7 @@ class LeaseResource(CertificateAuthorityBase):
                 acquired,
                 released,
                 address,
-                identities.data as dn
+                identities.data as identity
             FROM
                 addresses
             RIGHT JOIN
@@ -256,7 +258,7 @@ class LeaseResource(CertificateAuthorityBase):
             row["acquired"] = datetime.utcfromtimestamp(row["acquired"])
             row["released"] = datetime.utcfromtimestamp(row["released"]) if row["released"] else None
             row["address"] = ip_address(bytes(row["address"]))
-            row["dn"] = parse_dn(bytes(row["dn"]))
+            row["identity"] = parse_dn(bytes(row["identity"]))
             yield row
 
 
@@ -270,7 +272,7 @@ class SignedCertificateListResource(CertificateAuthorityBase):
             yield omit(
                 key_type=j.key_type,
                 key_length=j.key_length,
-                subject=j.distinguished_name,
+                identity=j.identity,
                 cn=j.common_name,
                 c=j.country_code,
                 st=j.state_or_county,
@@ -324,7 +326,7 @@ class RequestListResource(CertificateAuthorityBase):
             yield omit(
                 key_type=j.key_type,
                 key_length=j.key_length,
-                subject=j.distinguished_name,
+                identity=j.identity,
                 cn=j.common_name,
                 c=j.country_code,
                 st=j.state_or_county,

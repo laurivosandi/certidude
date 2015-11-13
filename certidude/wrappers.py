@@ -59,8 +59,8 @@ def subject2dn(subject):
     bits = []
     for j in "CN", "GN", "SN", "C", "S", "L", "O", "OU":
         if getattr(subject, j, None):
-            bits.append("/%s=%s" % (j, getattr(subject, j)))
-    return "".join(bits)
+            bits.append("%s=%s" % (j, getattr(subject, j)))
+    return ", ".join(bits)
 
 class CertificateAuthorityConfig(object):
     """
@@ -225,7 +225,7 @@ class CertificateBase:
         return subject2dn(self.issuer)
 
     @property
-    def distinguished_name(self):
+    def identity(self):
         return subject2dn(self.subject)
 
     @property

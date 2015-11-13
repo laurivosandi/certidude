@@ -1,25 +1,25 @@
 <li id="request_{{ j.md5sum }}">
 
-<a class="button" href="/api/{{authority.slug}}/request/{{j.common_name}}/">Fetch</a>
+<a class="button icon download" href="/api/ca/{{authority.slug}}/request/{{j.common_name}}/">Fetch</a>
 {% if j.signable %}
-<button onClick="javascript:$.ajax({url:'/api/{{authority.slug}}/request/{{j.common_name}}/',type:'patch'});">Sign</button>
+<button class="icon sign" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/ca/{{authority.slug}}/request/{{j.common_name}}/',type:'patch'});">Sign</button>
 {% else %}
 <button title="Please use certidude command-line utility to sign unusual requests" disabled>Sign</button>
 {% endif %}
-<button onClick="javascript:$.ajax({url:'/api/{{authority.slug}}/request/{{j.common_name}}/',type:'delete'});">Delete</button>
+<button class="icon revoke" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/ca/{{authority.slug}}/request/{{j.common_name}}/',type:'delete'});">Delete</button>
 
 
 <div class="monospace">
-{% include 'iconmonstr-certificate-15-icon.svg' %}
-{{j.subject}}
+{% include 'img/iconmonstr-certificate-15-icon.svg' %}
+{{j.identity}}
 </div>
 
 {% if j.email_address %}
-<div class="email">{% include 'iconmonstr-email-2-icon.svg' %} {{ j.email_address }}</div>
+<div class="email">{% include 'img/iconmonstr-email-2-icon.svg' %} {{ j.email_address }}</div>
 {% endif %}
 
 <div class="monospace">
-{% include 'iconmonstr-key-2-icon.svg' %}
+{% include 'img/iconmonstr-key-2-icon.svg' %}
 <span title="SHA-1 of public key">
 {{ j.sha256sum }}
 </span>
@@ -30,7 +30,7 @@
 {% set key_usage = j.key_usage %}
 {% if key_usage %}
 <div>
-{% include 'iconmonstr-flag-3-icon.svg' %}
+{% include 'img/iconmonstr-flag-3-icon.svg' %}
 {{j.key_usage}}
 </div>
 {% endif %}

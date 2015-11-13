@@ -7,7 +7,7 @@
 <p>Authority administration is allowed from: {% if authority.admin_subnets %}{% for i in authority.admin_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}
 <p>Authority administration allowed for: {% for i in authority.admin_users %}{{ i }} {% endfor %}</p>
 
-{% set s = authority.certificate.subject %}
+{% set s = authority.certificate.identity %}
 
 <h1>Pending requests</h1>
 
@@ -23,21 +23,21 @@
 
 <ul id="signed_certificates">
     {% for j in authority.signed | sort | reverse %}
-        <li id="certificate_{{ j.sha256sum }}" data-dn="{{ j.subject }}">
-            <a class="button" href="/api/{{authority.slug}}/signed/{{j.subject}}/">Fetch</a>
-            <button onClick="javascript:$.ajax({url:'/api/{{authority.slug}}/signed/{{j.subject.CN}}/',type:'delete'});">Revoke</button>
+        <li id="certificate_{{ j.sha256sum }}" data-dn="{{ j.identity }}">
+            <a class="button icon download" href="/api/ca/{{authority.slug}}/signed/{{j.common_name}}/">Fetch</a>
+            <button class="icon revoke" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/ca/{{authority.slug}}/signed/{{j.common_name}}/',type:'delete'});">Revoke</button>
 
             <div class="monospace">
-            {% include 'iconmonstr-certificate-15-icon.svg' %}
-            {{j.subject}}
+            {% include 'img/iconmonstr-certificate-15-icon.svg' %}
+            {{j.identity}}
             </div>
 
             {% if j.email_address %}
-            <div class="email">{% include 'iconmonstr-email-2-icon.svg' %} {{ j.email_address }}</div>
+            <div class="email">{% include 'img/iconmonstr-email-2-icon.svg' %} {{ j.email_address }}</div>
             {% endif %}
 
             <div class="monospace">
-            {% include 'iconmonstr-key-2-icon.svg' %}
+            {% include 'img/iconmonstr-key-2-icon.svg' %}
             <span title="SHA-256 of public key">
             {{ j.sha256sum }}
             </span>
@@ -46,13 +46,12 @@
             </div>
 
             <div>
-            {% include 'iconmonstr-flag-3-icon.svg' %}
+            {% include 'img/iconmonstr-flag-3-icon.svg' %}
             {{j.key_usage}}
             </div>
 
-
             <div class="status">
-                {% include 'status.html' %}
+            {% include 'status.html' %}
             </div>
         </li>
 	{% endfor %}
@@ -76,7 +75,7 @@ openssl ocsp -issuer authority.pem -CAfile authority.pem -url {{request.url}}/oc
     {% for j in authority.revoked %}
         <li id="certificate_{{ j.sha256sum }}">
             {{j.changed}}
-            {{j.serial_number}} <span class="monospace">{{j.distinguished_name}}</span>
+            {{j.serial_number}} <span class="monospace">{{j.identity}}</span>
         </li>
     {% else %}
         <li>Great job! No certificate signing requests to sign.</li>
