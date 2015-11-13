@@ -49,6 +49,29 @@ $(document).ready(function() {
                     });
 
                     $("#container").html(nunjucks.render('authority.html', { authority: authority, session: session }));
+
+                    $.ajax({
+                        method: "GET",
+                        url: "/api/ca/" + authority.slug + "/lease/",
+                        dataType: "json",
+                        success: function(leases, status, xhr) {
+                            console.info("Got leases:", leases);
+                            for (var j = 0; j < leases.length; j++) {
+                                var $status = $("#signed_certificates [data-dn='" + leases[j].dn + "'] .status");
+                                if (!$status.length) {
+                                    console.info("Detected rogue client:", leases[j]);
+                                    continue;
+                                }
+                                $status.html(nunjucks.render('status.html', {
+                                    lease: {
+                                        address: leases[j].address,
+                                        dn: leases[j].dn,
+                                        acquired: new Date(leases[j].acquired).toLocaleString(),
+                                        released: leases[j].released ? new Date(leases[j].released).toLocaleString() : null
+                                    }}));
+                            }
+                        }
+                    });
                 }
             });
         }

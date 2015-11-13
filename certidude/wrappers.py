@@ -88,7 +88,7 @@ class CertificateAuthorityConfig(object):
         section = "CA_" + slug
 
         dirs = dict([(key, self.get(section, key))
-            for key in ("dir", "certificate", "crl", "certs", "new_certs_dir", "private_key", "revoked_certs_dir", "request_subnets", "autosign_subnets", "admin_subnets", "admin_users", "push_server", "inbox", "outbox")])
+            for key in ("dir", "certificate", "crl", "certs", "new_certs_dir", "private_key", "revoked_certs_dir", "request_subnets", "autosign_subnets", "admin_subnets", "admin_users", "push_server", "database", "inbox", "outbox")])
 
         # Variable expansion, eg $dir
         for key, value in dirs.items():
@@ -433,7 +433,7 @@ class Certificate(CertificateBase):
         return self.signed <= other.signed
 
 class CertificateAuthority(object):
-    def __init__(self, slug, certificate, crl, certs, new_certs_dir, revoked_certs_dir=None, private_key=None, autosign_subnets=None, request_subnets=None, admin_subnets=None, admin_users=None, email_address=None, inbox=None, outbox=None, basic_constraints="CA:FALSE", key_usage="digitalSignature,keyEncipherment", extended_key_usage="clientAuth", certificate_lifetime=5*365, revocation_list_lifetime=1, push_server=None):
+    def __init__(self, slug, certificate, crl, certs, new_certs_dir, revoked_certs_dir=None, private_key=None, autosign_subnets=None, request_subnets=None, admin_subnets=None, admin_users=None, email_address=None, inbox=None, outbox=None, basic_constraints="CA:FALSE", key_usage="digitalSignature,keyEncipherment", extended_key_usage="clientAuth", certificate_lifetime=5*365, revocation_list_lifetime=1, push_server=None, database=None):
 
         import hashlib
         m = hashlib.sha512()
@@ -455,6 +455,8 @@ class CertificateAuthority(object):
         self.certificate = Certificate(open(certificate))
         self.mailer = Mailer(outbox) if outbox else None
         self.push_server = push_server
+        self.database_url = database
+        self._database_pool = None
 
         self.certificate_lifetime = certificate_lifetime
         self.revocation_list_lifetime = revocation_list_lifetime
@@ -473,6 +475,24 @@ class CertificateAuthority(object):
                     self.admin_users.add(user)
             else:
                 self.admin_users = set([j for j in admin_users.split(" ") if j])
+
+    @property
+    def database(self):
+        from urllib.parse import urlparse
+        if not self._database_pool:
+            o = urlparse(self.database_url)
+            if o.scheme == "mysql":
+                import mysql.connector
+                self._database_pool = mysql.connector.pooling.MySQLConnectionPool(
+                    pool_size = 3,
+                    user=o.username,
+                    password=o.password,
+                    host=o.hostname,
+                    database=o.path[1:])
+            else:
+                raise NotImplementedError("Unsupported database scheme %s, currently only mysql://user:pass@host/database is supported" % o.scheme)
+
+        return self._database_pool
 
     def event_publish(self, event_type, event_data):
         """

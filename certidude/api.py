@@ -1,4 +1,5 @@
 import re
+import datetime
 import falcon
 import ipaddress
 import mimetypes
@@ -201,9 +202,68 @@ class SignedCertificateDetailResource(CertificateAuthorityBase):
     def on_delete(self, req, resp, ca, cn, user):
         ca.revoke(cn)
 
+class LeaseResource(CertificateAuthorityBase):
+    @serialize
+    @login_required
+    @pop_certificate_authority
+    @authorize_admin
+    def on_get(self, req, resp, ca, user):
+        from ipaddress import ip_address
+
+        OIDS = {
+            (2, 5, 4,  3) : 'CN',   # common name
+            (2, 5, 4,  6) : 'C',    # country
+            (2, 5, 4,  7) : 'L',    # locality
+            (2, 5, 4,  8) : 'ST',   # stateOrProvince
+            (2, 5, 4, 10) : 'O',    # organization
+            (2, 5, 4, 11) : 'OU',   # organizationalUnit
+        }
+
+        def parse_dn(data):
+            chunks, remainder = decoder.decode(data)
+            dn = ""
+            if remainder:
+                raise ValueError()
+            # TODO: Check for duplicate entries?
+            for chunk in chunks:
+                for chunkette in chunk:
+                    key, value = chunkette
+                    dn += "/" + OIDS[key] + "=" + value
+            return str(dn)
+
+        # BUGBUG
+        SQL_LEASES = """
+            SELECT
+                acquired,
+                released,
+                address,
+                identities.data as dn
+            FROM
+                addresses
+            RIGHT JOIN
+                identities
+            ON
+                identities.id = addresses.identity
+            WHERE
+                addresses.released <> 1
+        """
+        cnx = ca.database.get_connection()
+        cursor = cnx.cursor(dictionary=True)
+        query = (SQL_LEASES)
+        cursor.execute(query)
+
+        for row in cursor:
+            row["acquired"] = datetime.utcfromtimestamp(row["acquired"])
+            row["released"] = datetime.utcfromtimestamp(row["released"]) if row["released"] else None
+            row["address"] = ip_address(bytes(row["address"]))
+            row["dn"] = parse_dn(bytes(row["dn"]))
+            yield row
+
+
 class SignedCertificateListResource(CertificateAuthorityBase):
     @serialize
     @pop_certificate_authority
+    @authorize_admin
     @validate_common_name
     def on_get(self, req, resp, ca):
         for j in authority.get_signed():
@@ -258,6 +318,7 @@ class RequestDetailResource(CertificateAuthorityBase):
 class RequestListResource(CertificateAuthorityBase):
     @serialize
     @pop_certificate_authority
+    @authorize_admin
     def on_get(self, req, resp, ca):
         for j in ca.get_requests():
             yield omit(
@@ -458,6 +519,7 @@ def certidude_app():
     app.add_route("/api/ca/{ca}/signed/", SignedCertificateListResource(config))
     app.add_route("/api/ca/{ca}/request/{cn}/", RequestDetailResource(config))
     app.add_route("/api/ca/{ca}/request/", RequestListResource(config))
+    app.add_route("/api/ca/{ca}/lease/", LeaseResource(config))
     app.add_route("/api/ca/{ca}/", IndexResource(config))
     app.add_route("/api/ca/", AuthorityListResource(config))
     return app

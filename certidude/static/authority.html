@@ -21,9 +21,9 @@
 
 <h1>Signed certificates</h1>
 
-<ul>
+<ul id="signed_certificates">
     {% for j in authority.signed | sort | reverse %}
-        <li id="certificate_{{ j.sha256sum }}">
+        <li id="certificate_{{ j.sha256sum }}" data-dn="{{ j.subject }}">
             <a class="button" href="/api/{{authority.slug}}/signed/{{j.subject}}/">Fetch</a>
             <button onClick="javascript:$.ajax({url:'/api/{{authority.slug}}/signed/{{j.subject.CN}}/',type:'delete'});">Revoke</button>
 
@@ -51,6 +51,9 @@
             </div>
 
 
+            <div class="status">
+                {% include 'status.html' %}
+            </div>
         </li>
 	{% endfor %}
 </ul>

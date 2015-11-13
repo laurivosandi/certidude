@@ -1,0 +1,16 @@
+<svg height="32" width="32">
+    <circle cx="16" cy="16" r="13" stroke="black" stroke-width="3" fill="{% if lease %}{% if lease.released %}green{%else %}red{% endif %}{% else %}yellow{% endif %}" />
+</svg>
+
+<span>
+
+{% if lease %}
+{% if lease.released %}
+Last seen {{ lease.released }} at {{ lease.address }}
+{% else %}
+Online since {{ lease.acquired }} at {{ lease.address }}
+{% endif %}
+{% else %}
+Not seen
+{% endif %}
+</span>
