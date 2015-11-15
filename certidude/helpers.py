@@ -40,10 +40,15 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
     # Set up URL-s
     request_params = set()
     if autosign:
-        request_params.add("autosign=yes")
+        request_params.add("autosign=true")
     if wait:
         request_params.add("wait=forever")
 
+    # Expand ca.example.com to http://ca.example.com/api/
+    if not "/" in url:
+        url += "/api/"
+    if "//" not in url:
+        url = "http://" + url
     if not url.endswith("/"):
         url = url + "/"
 

@@ -52,7 +52,7 @@ SURNAME = None
 EMAIL = None
 
 if USERNAME:
-    EMAIL = USERNAME + "@" + HOSTNAME
+    EMAIL = USERNAME + "@" + FQDN
 
 if os.getuid() >= 1000:
     _, _, _, _, gecos, _, _ = pwd.getpwnam(USERNAME)
@@ -106,14 +106,14 @@ def certidude_spawn(kill, no_interaction):
     ca_loaded = False
     config = load_config()
     for ca in config.all_authorities():
-        socket_path = os.path.join(signer_dir, ca.slug + ".sock")
-        pidfile_path = os.path.join(signer_dir, ca.slug + ".pid")
+        socket_path = os.path.join(signer_dir, ca.common_name + ".sock")
+        pidfile_path = os.path.join(signer_dir, ca.common_name + ".pid")
 
         try:
             with open(pidfile_path) as fh:
                 pid = int(fh.readline())
                 os.kill(pid, 0)
-                click.echo("Found process with PID %d for %s" % (pid, ca.slug))
+                click.echo("Found process with PID %d for %s" % (pid, ca.common_name))
         except (ValueError, ProcessLookupError, FileNotFoundError):
             pid = 0
 
@@ -138,9 +138,9 @@ def certidude_spawn(kill, no_interaction):
             with open(pidfile_path, "w") as fh:
                 fh.write("%d\n" % os.getpid())
 
-            setproctitle("%s spawn %s" % (sys.argv[0], ca.slug))
+            setproctitle("%s spawn %s" % (sys.argv[0], ca.common_name))
             logging.basicConfig(
-                filename="/var/log/certidude-%s.log" % ca.slug,
+                filename="/var/log/certidude-%s.log" % ca.common_name,
                 level=logging.INFO)
             server = SignServer(socket_path, ca.private_key, ca.certificate.path,
                 ca.certificate_lifetime, ca.basic_constraints, ca.key_usage,
@@ -524,15 +524,15 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 
 @click.command("authority", help="Set up Certificate Authority in a directory")
 @click.option("--parent", "-p", help="Parent CA, none by default")
-@click.option("--common-name", "-cn", default=HOSTNAME, help="Common name, hostname by default")
-@click.option("--country", "-c", default="ee", help="Country, Estonia by default")
-@click.option("--state", "-s", default="Harjumaa", help="State or country, Harjumaa by default")
-@click.option("--locality", "-l", default="Tallinn", help="City or locality, Tallinn by default")
+@click.option("--common-name", "-cn", default=FQDN, help="Common name, fully qualified hostname by default")
+@click.option("--country", "-c", default=None, help="Country, none by default")
+@click.option("--state", "-s", default=None, help="State or country, none by default")
+@click.option("--locality", "-l", default=None, help="City or locality, none by default")
 @click.option("--authority-lifetime", default=20*365, help="Authority certificate lifetime in days, 7300 days (20 years) by default")
 @click.option("--certificate-lifetime", default=5*365, help="Certificate lifetime in days, 1825 days (5 years) by default")
 @click.option("--revocation-list-lifetime", default=1, help="Revocation list lifetime in days, 1 day by default")
-@click.option("--organization", "-o", default="Example LLC", help="Company or organization name")
-@click.option("--organizational-unit", "-ou", default="Certification Department")
+@click.option("--organization", "-o", default=None, help="Company or organization name")
+@click.option("--organizational-unit", "-ou", default=None)
 @click.option("--pkcs11", default=False, is_flag=True, help="Use PKCS#11 token instead of files")
 @click.option("--crl-distribution-url", default=None, help="CRL distribution URL")
 @click.option("--ocsp-responder-url", default=None, help="OCSP responder URL")
@@ -540,17 +540,14 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 @click.option("--inbox", default="imap://user:pass@host:port/INBOX", help="Inbound e-mail server")
 @click.option("--outbox", default="smtp://localhost", help="Outbound e-mail server")
 @click.option("--push-server", default="", help="Streaming nginx push server")
-@click.argument("directory")
+@click.option("--directory", default=None, help="Directory for authority files, /var/lib/certidude/<common-name>/ by default")
 def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, crl_distribution_url, ocsp_responder_url, email_address, inbox, outbox, push_server):
 
-    publish_certificate_url = push_server + "/publish/%(request_sha1sum)s"
-    subscribe_certificate_url = push_server + "/subscribe/%(request_sha1sum)s"
+    if not directory:
+        directory = os.path.join("/var/lib/certidude", common_name)
 
-    slug = os.path.basename(directory[:-1] if directory.endswith('/') else directory)
-    if not slug:
-        raise click.ClickException("Please supply proper target path")
-    # Make sure slug is valid
-    if not re.match(r"^[_a-zA-Z0-9]+$", slug):
+    # Make sure common_name is valid
+    if not re.match(r"^[\._a-zA-Z0-9]+$", common_name):
         raise click.ClickException("CA name can contain only alphanumeric and '_' characters")
 
     if os.path.lexists(directory):
@@ -567,7 +564,7 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
         key.generate_key(crypto.TYPE_RSA, 4096)
 
     if not crl_distribution_url:
-        crl_distribution_url = "http://%s/api/%s/revoked/" % (common_name, slug)
+        crl_distribution_url = "http://%s/api/revoked/" % common_name
 
     # File paths
     ca_key = os.path.join(directory, "ca_key.pem")
@@ -579,11 +576,18 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     ca.set_version(2) # This corresponds to X.509v3
     ca.set_serial_number(1)
     ca.get_subject().CN = common_name
-    ca.get_subject().C = country
-    ca.get_subject().ST = state
-    ca.get_subject().L = locality
-    ca.get_subject().O = organization
-    ca.get_subject().OU = organizational_unit
+
+    if country:
+        ca.get_subject().C = country
+    if state:
+        ca.get_subject().ST = state
+    if locality:
+        ca.get_subject().L = locality
+    if organization:
+        ca.get_subject().O = organization
+    if organizational_unit:
+        ca.get_subject().OU = organizational_unit
+
     ca.gmtime_adj_notBefore(0)
     ca.gmtime_adj_notAfter(authority_lifetime * 24 * 60 * 60)
     ca.set_issuer(ca.get_subject())
@@ -621,7 +625,7 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
         raise NotImplementedError()
 
     """
-        ocsp_responder_url = "http://%s/api/%s/ocsp/" % (common_name, slug)
+        ocsp_responder_url = "http://%s/api/ocsp/" % common_name
         authority_info_access = "OCSP;URI:%s" % ocsp_responder_url
         ca.add_extensions([
             crypto.X509Extension(
@@ -661,18 +665,19 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     with open(ca_key, "wb") as fh:
         fh.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
 
-    with open(os.path.join(directory, "openssl.cnf.example"), "w") as fh:
+    ssl_cnf_example = os.path.join(directory, "openssl.cnf.example")
+    with open(ssl_cnf_example, "w") as fh:
         fh.write(env.get_template("openssl.cnf").render(locals()))
 
-    click.echo("You need to copy the contents of the 'openssl.cnf.example'")
+    click.echo("You need to copy the contents of the '%s'" % ssl_cnf_example)
     click.echo("to system-wide OpenSSL configuration file, usually located")
     click.echo("at /etc/ssl/openssl.cnf")
 
     click.echo()
     click.echo("Use following commands to inspect the newly created files:")
     click.echo()
-    click.echo("  openssl crl -inform PEM -text -noout -in %s" % ca_crl)
-    click.echo("  openssl x509 -text -noout -in %s" % ca_crt)
+    click.echo("  openssl crl -inform PEM -text -noout -in %s | less" % ca_crl)
+    click.echo("  openssl x509 -text -noout -in %s | less" % ca_crt)
     click.echo("  openssl rsa -check -in %s" % ca_key)
     click.echo("  openssl verify -CAfile %s %s" % (ca_crt, ca_crt))
     click.echo()
@@ -746,7 +751,7 @@ def certidude_list(ca, verbose, show_key_type, show_extensions, show_path, show_
         if not hide_requests:
             for j in ca.get_requests():
                 if not verbose:
-                    click.echo("s " + j.path + " " + j.distinguished_name)
+                    click.echo("s " + j.path + " " + j.identity)
                     continue
                 click.echo(click.style(j.common_name, fg="blue"))
                 click.echo("=" * len(j.common_name))
@@ -777,11 +782,11 @@ def certidude_list(ca, verbose, show_key_type, show_extensions, show_path, show_
             for j in ca.get_signed():
                 if not verbose:
                     if j.signed < NOW and j.expires > NOW:
-                        click.echo("v " + j.path + " " + j.distinguished_name)
+                        click.echo("v " + j.path + " " + j.identity)
                     elif NOW > j.expires:
-                        click.echo("e " + j.path + " " + j.distinguished_name)
+                        click.echo("e " + j.path + " " + j.identity)
                     else:
-                        click.echo("y " + j.path + " " + j.distinguished_name)
+                        click.echo("y " + j.path + " " + j.identity)
                     continue
 
                 click.echo(click.style(j.common_name, fg="blue") + " " + click.style(j.serial_number_hex, fg="white"))
@@ -803,7 +808,7 @@ def certidude_list(ca, verbose, show_key_type, show_extensions, show_path, show_
         if show_revoked:
             for j in ca.get_revoked():
                 if not verbose:
-                    click.echo("r " + j.path + " " + j.distinguished_name)
+                    click.echo("r " + j.path + " " + j.identity)
                     continue
                 click.echo(click.style(j.common_name, fg="blue") + " " + click.style(j.serial_number_hex, fg="white"))
                 click.echo("="*(len(j.common_name)+60))
@@ -869,7 +874,7 @@ def certidude_sign(common_name, overwrite, lifetime):
             # Sign directly using private key
             cert = ca.sign2(request, overwrite, True, lifetime)
 
-        click.echo("Signed %s" % cert.distinguished_name)
+        click.echo("Signed %s" % cert.identity)
         for key, value, data in cert.extensions:
             click.echo("Added extension %s: %s" % (key, value))
         click.echo()

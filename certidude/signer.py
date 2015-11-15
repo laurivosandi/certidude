@@ -50,10 +50,14 @@ def raw_sign(private_key, ca_cert, request, basic_constraints, lifetime, key_usa
 #            raise ValueError("Country mismatch!")
 
         # Copy attributes from CA
-        cert.get_subject().C  = ca_cert.get_subject().C
-        cert.get_subject().ST  = ca_cert.get_subject().ST
-        cert.get_subject().L  = ca_cert.get_subject().L
-        cert.get_subject().O  = ca_cert.get_subject().O
+        if ca_cert.get_subject().C:
+            cert.get_subject().C  = ca_cert.get_subject().C
+        if ca_cert.get_subject().ST:
+            cert.get_subject().ST  = ca_cert.get_subject().ST
+        if ca_cert.get_subject().L:
+            cert.get_subject().L  = ca_cert.get_subject().L
+        if ca_cert.get_subject().O:
+            cert.get_subject().O  = ca_cert.get_subject().O
 
         # Copy attributes from request
         cert.get_subject().CN = request.get_subject().CN
@@ -198,7 +202,7 @@ class SignServer(asyncore.dispatcher):
 
         # Dropping privileges
         _, _, uid, gid, gecos, root, shell = pwd.getpwnam("nobody")
-        os.chroot("/run/certidude/signer/jail")
+        #os.chroot("/run/certidude/signer/jail")
         os.setgid(gid)
         os.setuid(uid)
 

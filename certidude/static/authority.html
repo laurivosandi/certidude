@@ -1,4 +1,4 @@
-<h1>{{authority.slug}} management</h1>
+<h1>{{authority.common_name}} management</h1>
 
 <p>Hi {{session.username}},</p>
 
@@ -9,51 +9,26 @@
 
 {% set s = authority.certificate.identity %}
 
+
+<input id="search" class="icon search" type="search" placeholder="hostname, IP-address, etc"/>
+
 <h1>Pending requests</h1>
 
-<ul>
-    {% for j in authority.requests %}
+<ul id="pending_requests">
+    {% for request in authority.requests %}
          {% include "request.html" %}
-    {% else %}
-        <li>Great job! No certificate signing requests to sign.</li>
 	{% endfor %}
+    <li class="notify">
+        <p>No certificate signing requests to sign! You can  submit a certificate signing request by:</p>
+        <pre>certidude setup client {{authority.common_name}}</pre>
+    </li>
 </ul>
 
 <h1>Signed certificates</h1>
 
 <ul id="signed_certificates">
-    {% for j in authority.signed | sort | reverse %}
-        <li id="certificate_{{ j.sha256sum }}" data-dn="{{ j.identity }}">
-            <a class="button icon download" href="/api/ca/{{authority.slug}}/signed/{{j.common_name}}/">Fetch</a>
-            <button class="icon revoke" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/ca/{{authority.slug}}/signed/{{j.common_name}}/',type:'delete'});">Revoke</button>
-
-            <div class="monospace">
-            {% include 'img/iconmonstr-certificate-15-icon.svg' %}
-            {{j.identity}}
-            </div>
-
-            {% if j.email_address %}
-            <div class="email">{% include 'img/iconmonstr-email-2-icon.svg' %} {{ j.email_address }}</div>
-            {% endif %}
-
-            <div class="monospace">
-            {% include 'img/iconmonstr-key-2-icon.svg' %}
-            <span title="SHA-256 of public key">
-            {{ j.sha256sum }}
-            </span>
-            {{ j.key_length }}-bit
-            {{ j.key_type }}
-            </div>
-
-            <div>
-            {% include 'img/iconmonstr-flag-3-icon.svg' %}
-            {{j.key_usage}}
-            </div>
-
-            <div class="status">
-            {% include 'status.html' %}
-            </div>
-        </li>
+    {% for certificate in authority.signed | sort | reverse %}
+        {% include "signed.html" %}
 	{% endfor %}
 </ul>
 
@@ -61,7 +36,7 @@
 
 <p>To fetch certificate revocation list:</p>
 <pre>
-curl {{request.url}}/revoked/ | openssl crl -text -noout
+curl {{window.location.href}}api/revoked/ | openssl crl -text -noout
 </pre>
 <!--
 <p>To perform online certificate status request</p>

@@ -1,7 +1,7 @@
 # You have to copy the settings to the system-wide
 # OpenSSL configuration (usually /etc/ssl/openssl.cnf
 
-[CA_{{slug}}]
+[CA_{{common_name}}]
 default_crl_days = {{revocation_list_lifetime}}
 default_days = {{certificate_lifetime}}
 dir = {{directory}}
@@ -18,8 +18,8 @@ crlDistributionPoints = {{crl_distribution_points}}
 {% if email_address %}
 emailAddress = {{email_address}}
 {% endif %}
-x509_extensions = {{slug}}_cert
-policy = policy_{{slug}}
+x509_extensions = {{common_name}}_cert
+policy = policy_{{common_name}}
 
 # Certidude specific stuff, TODO: move to separate section?
 request_subnets = 10.0.0.0/8 192.168.0.0/16 172.168.0.0/16
@@ -28,10 +28,9 @@ admin_subnets = 127.0.0.0/8
 admin_users =
 inbox = {{inbox}}
 outbox = {{outbox}}
-publish_certificate_url = {{publish_certificate_url}}
-subscribe_certificate_url = {{subscribe_certificate_url}}
+push_server = {{push_server}}
 
-[policy_{{slug}}]
+[policy_{{common_name}}]
 countryName = match
 stateOrProvinceName = match
 organizationName = match
@@ -39,7 +38,7 @@ organizationalUnitName = optional
 commonName = supplied
 emailAddress = optional
 
-[{{slug}}_cert]
+[{{common_name}}_cert]
 basicConstraints = CA:FALSE
 keyUsage = nonRepudiation,digitalSignature,keyEncipherment
 extendedKeyUsage = clientAuth

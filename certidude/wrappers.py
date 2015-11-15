@@ -84,8 +84,8 @@ class CertificateAuthorityConfig(object):
         else:
             return default
 
-    def instantiate_authority(self, slug):
-        section = "CA_" + slug
+    def instantiate_authority(self, common_name):
+        section = "CA_" + common_name
 
         dirs = dict([(key, self.get(section, key))
             for key in ("dir", "certificate", "crl", "certs", "new_certs_dir", "private_key", "revoked_certs_dir", "request_subnets", "autosign_subnets", "admin_subnets", "admin_users", "push_server", "database", "inbox", "outbox")])
@@ -105,7 +105,7 @@ class CertificateAuthorityConfig(object):
             dirs["basic_constraints"] = self.get(extensions_section, "basicConstraints")
             dirs["key_usage"] = self.get(extensions_section, "keyUsage")
             dirs["extended_key_usage"] = self.get(extensions_section, "extendedKeyUsage")
-        authority = CertificateAuthority(slug, **dirs)
+        authority = CertificateAuthority(common_name, **dirs)
         return authority
 
 
@@ -129,13 +129,16 @@ class CertificateAuthorityConfig(object):
     def pop_certificate_authority(self):
         def wrapper(func):
             def wrapped(*args, **kwargs):
-                slug = kwargs.pop("ca")
-                kwargs["ca"] = self.instantiate_authority(slug)
+                common_name = kwargs.pop("ca")
+                kwargs["ca"] = self.instantiate_authority(common_name)
                 return func(*args, **kwargs)
             return wrapped
         return wrapper
 
 class CertificateBase:
+    def __repr__(self):
+        return self.buf
+
     @property
     def given_name(self):
         return self.subject.GN
@@ -433,15 +436,14 @@ class Certificate(CertificateBase):
         return self.signed <= other.signed
 
 class CertificateAuthority(object):
-    def __init__(self, slug, certificate, crl, certs, new_certs_dir, revoked_certs_dir=None, private_key=None, autosign_subnets=None, request_subnets=None, admin_subnets=None, admin_users=None, email_address=None, inbox=None, outbox=None, basic_constraints="CA:FALSE", key_usage="digitalSignature,keyEncipherment", extended_key_usage="clientAuth", certificate_lifetime=5*365, revocation_list_lifetime=1, push_server=None, database=None):
+    def __init__(self, common_name, certificate, crl, certs, new_certs_dir, revoked_certs_dir=None, private_key=None, autosign_subnets=None, request_subnets=None, admin_subnets=None, admin_users=None, email_address=None, inbox=None, outbox=None, basic_constraints="CA:FALSE", key_usage="digitalSignature,keyEncipherment", extended_key_usage="clientAuth", certificate_lifetime=5*365, revocation_list_lifetime=1, push_server=None, database=None):
 
         import hashlib
         m = hashlib.sha512()
-        m.update(slug.encode("ascii"))
+        m.update(common_name.encode("ascii"))
         m.update(b"TODO:server-secret-goes-here")
         self.uuid = m.hexdigest()
 
-        self.slug = slug
         self.revocation_list = crl
         self.signed_dir = certs
         self.request_dir = new_certs_dir
@@ -475,6 +477,10 @@ class CertificateAuthority(object):
                     self.admin_users.add(user)
             else:
                 self.admin_users = set([j for j in admin_users.split(" ") if j])
+
+    @property
+    def common_name(self):
+        return self.certificate.common_name
 
     @property
     def database(self):
@@ -530,14 +536,14 @@ class CertificateAuthority(object):
         return buf
 
     def __repr__(self):
-        return "CertificateAuthority(slug=%s)" % repr(self.slug)
+        return "CertificateAuthority(common_name=%s)" % repr(self.common_name)
 
     def get_certificate(self, cn):
         return open(os.path.join(self.signed_dir, cn + ".pem")).read()
 
     def connect_signer(self):
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect("/run/certidude/signer/%s.sock" % self.slug)
+        sock.connect("/run/certidude/signer/%s.sock" % self.common_name)
         return sock
 
     def revoke(self, cn):

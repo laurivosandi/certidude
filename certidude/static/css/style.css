@@ -35,16 +35,34 @@ ul {
     padding: 0;
 }
 
+#pending_requests .notify {
+    display: none;
+}
+
+#pending_requests .notify:only-child {
+    display: block;
+}
+
+
+button, .button, input[type='search'], input[type='text'] {
+    border: 1pt solid #ccc;
+    border-radius: 6px;
+}
+
 button, .button {
     color: #000;
     float: right;
-    border: 1pt solid #ccc;
     background-color: #eee;
-    border-radius: 6px;
     margin: 2px;
     padding: 6px 12px;
     background-position: 6px;
     box-sizing: border-box;
+}
+
+input[type='search'], input[type='text'] {
+    padding: 4px 4px 4px 36px;
+    background-position: 6px;
+    width: 100%;
 }
 
 button:disabled, .button:disabled {
@@ -108,7 +126,7 @@ h2 svg {
     top: 16px;
 }
 
-p, td, footer, li, button {
+p, td, footer, li, button, input {
     font-family: 'PT Sans Narrow';
     font-size: 14pt;
 }
@@ -155,6 +173,7 @@ li {
 .icon.revoke { background-image: url("../img/iconmonstr-x-mark-5-icon.svg"); }
 .icon.download { background-image: url("../img/iconmonstr-download-12-icon.svg"); }
 .icon.sign { background-image: url("../img/iconmonstr-pen-10-icon.svg"); }
+.icon.search { background-image: url("../img/iconmonstr-magnifier-4-icon.svg"); }
 
 /* Make sure this is the last one */
 .icon.busy{background-image:url("https://software.opensuse.org/assets/ajax-loader-ea46060b6c9f42822a3d58d075c83ea2.gif");}

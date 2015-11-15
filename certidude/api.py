@@ -21,22 +21,45 @@ env = Environment(loader=PackageLoader("certidude", "templates"))
 
 RE_HOSTNAME = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])$"
 
+
+OIDS = {
+    (2, 5, 4,  3) : 'CN',   # common name
+    (2, 5, 4,  6) : 'C',    # country
+    (2, 5, 4,  7) : 'L',    # locality
+    (2, 5, 4,  8) : 'ST',   # stateOrProvince
+    (2, 5, 4, 10) : 'O',    # organization
+    (2, 5, 4, 11) : 'OU',   # organizationalUnit
+}
+
+def parse_dn(data):
+    chunks, remainder = decoder.decode(data)
+    dn = ""
+    if remainder:
+        raise ValueError()
+    # TODO: Check for duplicate entries?
+    def generate():
+        for chunk in chunks:
+            for chunkette in chunk:
+                key, value = chunkette
+                yield str(OIDS[key] + "=" + value)
+    return ", ".join(generate())
+
 def omit(**kwargs):
     return dict([(key,value) for (key, value) in kwargs.items() if value])
 
 def event_source(func):
-    def wrapped(self, req, resp, ca, *args, **kwargs):
+    def wrapped(self, req, resp, *args, **kwargs):
         if req.get_header("Accept") == "text/event-stream":
             resp.status = falcon.HTTP_SEE_OTHER
-            resp.location = ca.push_server + "/ev/" + ca.uuid
+            resp.location = req.context.get("ca").push_server + "/ev/" + req.context.get("ca").uuid
             resp.body = "Redirecting to:" + resp.location
             print("Delegating EventSource handling to:", resp.location)
-        return func(self, req, resp, ca, *args, **kwargs)
+        return func(self, req, resp, *args, **kwargs)
     return wrapped
 
 def authorize_admin(func):
     def wrapped(self, req, resp, *args, **kwargs):
-        authority = kwargs.get("ca")
+        authority = req.context.get("ca")
 
         # Parse remote IPv4/IPv6 address
         remote_addr = ipaddress.ip_network(req.env["REMOTE_ADDR"])
@@ -50,19 +73,19 @@ def authorize_admin(func):
             raise falcon.HTTPForbidden("Forbidden", "Remote address %s not whitelisted" % remote_addr)
 
         # Check for username whitelist
-        kerberos_username, kerberos_realm = kwargs.get("user")
+        kerberos_username, kerberos_realm = req.context.get("user")
         if kerberos_username not in authority.admin_users:
             raise falcon.HTTPForbidden("Forbidden", "User %s not whitelisted" % kerberos_username)
 
         # Retain username, TODO: Better abstraction with username, e-mail, sn, gn?
-        kwargs["user"] = kerberos_username
+
         return func(self, req, resp, *args, **kwargs)
     return wrapped
 
 
 def pop_certificate_authority(func):
     def wrapped(self, req, resp, *args, **kwargs):
-        kwargs["ca"] = self.config.instantiate_authority(kwargs["ca"])
+        req.context["ca"] = self.config.instantiate_authority(req.env["HTTP_HOST"])
         return func(self, req, resp, *args, **kwargs)
     return wrapped
 
@@ -111,7 +134,7 @@ class MyEncoder(json.JSONEncoder):
         if isinstance(obj, CertificateAuthority):
             return dict(
                 event_channel = obj.push_server + "/ev/" + obj.uuid,
-                slug = obj.slug,
+                common_name = obj.common_name,
                 certificate = obj.certificate,
                 admin_users = obj.admin_users,
                 autosign_subnets = obj.autosign_subnets,
@@ -137,12 +160,12 @@ def serialize(func):
         resp.set_header("Expires", "0");
         r = func(instance, req, resp, **kwargs)
         if resp.body is None:
-            if not req.client_accepts_json:
-                raise falcon.HTTPUnsupportedMediaType(
-                    "This API only supports the JSON media type.",
-                    href="http://docs.examples.com/api/json")
-            resp.set_header("Content-Type", "application/json")
-            resp.body = json.dumps(r, cls=MyEncoder)
+            if req.get_header("Accept").split(",")[0] == "application/json":
+                resp.set_header("Content-Type", "application/json")
+                resp.append_header("Content-Disposition", "inline")
+                resp.body = json.dumps(r, cls=MyEncoder)
+            else:
+                resp.body = repr(r)
         return r
     return wrapped
 
@@ -162,7 +185,6 @@ def templatize(path):
                     resp.set_header("Content-Type", "application/json")
                     r.pop("req")
                     r.pop("resp")
-                    r.pop("user")
                     resp.body = json.dumps(r, cls=MyEncoder)
                     return r
                 else:
@@ -180,58 +202,38 @@ class CertificateAuthorityBase(object):
 
 class RevocationListResource(CertificateAuthorityBase):
     @pop_certificate_authority
-    def on_get(self, req, resp, ca):
+    def on_get(self, req, resp):
         resp.set_header("Content-Type", "application/x-pkcs7-crl")
-        resp.append_header("Content-Disposition", "attachment; filename=%s.crl" % ca.slug)
-        resp.body = ca.export_crl()
+        resp.append_header("Content-Disposition", "attachment; filename=%s.crl" % req.context.get("ca").common_name)
+        resp.body = req.context.get("ca").export_crl()
 
 
 class SignedCertificateDetailResource(CertificateAuthorityBase):
+    @serialize
     @pop_certificate_authority
     @validate_common_name
-    def on_get(self, req, resp, ca, cn):
-        path = os.path.join(ca.signed_dir, cn + ".pem")
+    def on_get(self, req, resp, cn):
+        path = os.path.join(req.context.get("ca").signed_dir, cn + ".pem")
         if not os.path.exists(path):
             raise falcon.HTTPNotFound()
-        resp.stream = open(path, "rb")
+
         resp.append_header("Content-Disposition", "attachment; filename=%s.crt" % cn)
+        return Certificate(open(path))
 
     @login_required
     @pop_certificate_authority
     @authorize_admin
     @validate_common_name
-    def on_delete(self, req, resp, ca, cn, user):
-        ca.revoke(cn)
+    def on_delete(self, req, resp, cn):
+        req.context.get("ca").revoke(cn)
 
 class LeaseResource(CertificateAuthorityBase):
     @serialize
     @login_required
     @pop_certificate_authority
     @authorize_admin
-    def on_get(self, req, resp, ca, user):
+    def on_get(self, req, resp):
         from ipaddress import ip_address
-
-        OIDS = {
-            (2, 5, 4,  3) : 'CN',   # common name
-            (2, 5, 4,  6) : 'C',    # country
-            (2, 5, 4,  7) : 'L',    # locality
-            (2, 5, 4,  8) : 'ST',   # stateOrProvince
-            (2, 5, 4, 10) : 'O',    # organization
-            (2, 5, 4, 11) : 'OU',   # organizationalUnit
-        }
-
-        def parse_dn(data):
-            chunks, remainder = decoder.decode(data)
-            dn = ""
-            if remainder:
-                raise ValueError()
-            # TODO: Check for duplicate entries?
-            def generate():
-                for chunk in chunks:
-                    for chunkette in chunk:
-                        key, value = chunkette
-                        yield str(OIDS[key] + "=" + value)
-            return ", ".join(generate())
 
         # BUGBUG
         SQL_LEASES = """
@@ -249,17 +251,18 @@ class LeaseResource(CertificateAuthorityBase):
             WHERE
                 addresses.released <> 1
         """
-        cnx = ca.database.get_connection()
-        cursor = cnx.cursor(dictionary=True)
+        cnx = req.context.get("ca").database.get_connection()
+        cursor = cnx.cursor()
         query = (SQL_LEASES)
         cursor.execute(query)
 
-        for row in cursor:
-            row["acquired"] = datetime.utcfromtimestamp(row["acquired"])
-            row["released"] = datetime.utcfromtimestamp(row["released"]) if row["released"] else None
-            row["address"] = ip_address(bytes(row["address"]))
-            row["identity"] = parse_dn(bytes(row["identity"]))
-            yield row
+        for acquired, released, address, identity in cursor:
+            yield {
+                "acquired": datetime.utcfromtimestamp(acquired),
+                "released": datetime.utcfromtimestamp(released) if released else None,
+                "address":  ip_address(bytes(address)),
+                "identity": parse_dn(bytes(identity))
+            }
 
 
 class SignedCertificateListResource(CertificateAuthorityBase):
@@ -267,7 +270,7 @@ class SignedCertificateListResource(CertificateAuthorityBase):
     @pop_certificate_authority
     @authorize_admin
     @validate_common_name
-    def on_get(self, req, resp, ca):
+    def on_get(self, req, resp):
         for j in authority.get_signed():
             yield omit(
                 key_type=j.key_type,
@@ -283,29 +286,31 @@ class SignedCertificateListResource(CertificateAuthorityBase):
 
 
 class RequestDetailResource(CertificateAuthorityBase):
+    @serialize
     @pop_certificate_authority
     @validate_common_name
-    def on_get(self, req, resp, ca, cn):
+    def on_get(self, req, resp, cn):
         """
         Fetch certificate signing request as PEM
         """
-        path = os.path.join(ca.request_dir, cn + ".pem")
+        path = os.path.join(req.context.get("ca").request_dir, cn + ".pem")
         if not os.path.exists(path):
             raise falcon.HTTPNotFound()
-        resp.stream = open(path, "rb")
+
         resp.append_header("Content-Type", "application/x-x509-user-cert")
         resp.append_header("Content-Disposition", "attachment; filename=%s.csr" % cn)
+        return Request(open(path))
 
     @login_required
     @pop_certificate_authority
     @authorize_admin
     @validate_common_name
-    def on_patch(self, req, resp, ca, cn, user):
+    def on_patch(self, req, resp, cn):
         """
         Sign a certificate signing request
         """
-        csr = ca.get_request(cn)
-        cert = ca.sign(csr, overwrite=True, delete=True)
+        csr = req.context.get("ca").get_request(cn)
+        cert = req.context.get("ca").sign(csr, overwrite=True, delete=True)
         os.unlink(csr.path)
         resp.body = "Certificate successfully signed"
         resp.status = falcon.HTTP_201
@@ -314,15 +319,16 @@ class RequestDetailResource(CertificateAuthorityBase):
     @login_required
     @pop_certificate_authority
     @authorize_admin
-    def on_delete(self, req, resp, ca, cn, user):
-        ca.delete_request(cn)
+    def on_delete(self, req, resp, cn):
+        req.context.get("ca").delete_request(cn)
+
 
 class RequestListResource(CertificateAuthorityBase):
     @serialize
     @pop_certificate_authority
     @authorize_admin
-    def on_get(self, req, resp, ca):
-        for j in ca.get_requests():
+    def on_get(self, req, resp):
+        for j in req.context.get("ca").get_requests():
             yield omit(
                 key_type=j.key_type,
                 key_length=j.key_length,
@@ -336,12 +342,13 @@ class RequestListResource(CertificateAuthorityBase):
                 fingerprint=j.fingerprint())
 
     @pop_certificate_authority
-    def on_post(self, req, resp, ca):
+    def on_post(self, req, resp):
         """
         Submit certificate signing request (CSR) in PEM format
         """
         # Parse remote IPv4/IPv6 address
         remote_addr = ipaddress.ip_network(req.env["REMOTE_ADDR"])
+        ca = req.context.get("ca")
 
         # Check for CSR submission whitelist
         if ca.request_subnets:
@@ -415,12 +422,11 @@ class RequestListResource(CertificateAuthorityBase):
             resp.status = falcon.HTTP_202
 
 
-
 class CertificateStatusResource(CertificateAuthorityBase):
     """
     openssl ocsp -issuer CAcert_class1.pem -serial 0x<serial no in hex> -url http://localhost -CAfile cacert_both.pem
     """
-    def on_post(self, req, resp, ca):
+    def on_post(self, req, resp):
         ocsp_request = req.stream.read(req.content_length)
         for component in decoder.decode(ocsp_request):
             click.echo(component)
@@ -430,10 +436,10 @@ class CertificateStatusResource(CertificateAuthorityBase):
 
 class CertificateAuthorityResource(CertificateAuthorityBase):
     @pop_certificate_authority
-    def on_get(self, req, resp, ca):
-        path = os.path.join(ca.certificate.path)
+    def on_get(self, req, resp):
+        path = os.path.join(req.context.get("ca").certificate.path)
         resp.stream = open(path, "rb")
-        resp.append_header("Content-Disposition", "attachment; filename=%s.crt" % ca.slug)
+        resp.append_header("Content-Disposition", "attachment; filename=%s.crt" % req.context.get("ca").common_name)
 
 class IndexResource(CertificateAuthorityBase):
     @serialize
@@ -441,45 +447,95 @@ class IndexResource(CertificateAuthorityBase):
     @pop_certificate_authority
     @authorize_admin
     @event_source
-    def on_get(self, req, resp, ca, user):
-        return ca
+    def on_get(self, req, resp):
+        return req.context.get("ca")
 
-class AuthorityListResource(CertificateAuthorityBase):
+class SessionResource(CertificateAuthorityBase):
     @serialize
     @login_required
-    def on_get(self, req, resp, user):
+    def on_get(self, req, resp):
         return dict(
             authorities=(self.config.ca_list), # TODO: Check if user is CA admin
-            username=user[0]
+            username=req.context.get("user")[0]
         )
+
+def address_to_identity(cnx, addr):
+    """
+    Translate currently online client's IP-address to distinguished name
+    """
+
+    SQL_LEASES = """
+        SELECT
+            acquired,
+            released,
+            identities.data as identity
+        FROM
+            addresses
+        RIGHT JOIN
+            identities
+        ON
+            identities.id = addresses.identity
+        WHERE
+            address = %s AND
+            released IS NOT NULL
+    """
+
+    cursor = cnx.cursor()
+    query = (SQL_LEASES)
+    import struct
+    cursor.execute(query, (struct.pack("!L", int(addr)),))
+
+    for acquired, released, identity in cursor:
+        return {
+            "acquired": datetime.utcfromtimestamp(acquired),
+            "identity": parse_dn(bytes(identity))
+        }
+    return None
+
+
+class WhoisResource(CertificateAuthorityBase):
+    @serialize
+    @pop_certificate_authority
+    def on_get(self, req, resp):
+        identity = address_to_identity(
+            req.context.get("ca").database.get_connection(),
+            ipaddress.ip_address(req.get_param("address") or req.env["REMOTE_ADDR"])
+        )
+
+        if identity:
+            return identity
+        else:
+            resp.status = falcon.HTTP_403
+            resp.body = "Failed to look up node %s" % req.env["REMOTE_ADDR"]
+
 
 class ApplicationConfigurationResource(CertificateAuthorityBase):
     @pop_certificate_authority
     @validate_common_name
-    def on_get(self, req, resp, ca, cn):
+    def on_get(self, req, resp, cn):
         ctx = dict(
             cn = cn,
-            certificate = ca.get_certificate(cn),
-            ca_certificate = open(ca.certificate.path, "r").read())
+            certificate = req.context.get("ca").get_certificate(cn),
+            ca_certificate = open(req.context.get("ca").certificate.path, "r").read())
         resp.append_header("Content-Type", "application/ovpn")
         resp.append_header("Content-Disposition", "attachment; filename=%s.ovpn" % cn)
-        resp.body = Template(open("/etc/openvpn/%s.template" % ca.slug).read()).render(ctx)
+        resp.body = Template(open("/etc/openvpn/%s.template" % req.context.get("ca").common_name).read()).render(ctx)
 
     @login_required
     @pop_certificate_authority
     @authorize_admin
     @validate_common_name
-    def on_put(self, req, resp, user, ca, cn=None):
-        pkey_buf, req_buf, cert_buf = ca.create_bundle(cn)
+    def on_put(self, req, resp, cn=None):
+        pkey_buf, req_buf, cert_buf = req.context.get("ca").create_bundle(cn)
 
         ctx = dict(
             private_key = pkey_buf,
             certificate = cert_buf,
-            ca_certificate = ca.certificate.dump())
+            ca_certificate = req.context.get("ca").certificate.dump())
 
         resp.append_header("Content-Type", "application/ovpn")
         resp.append_header("Content-Disposition", "attachment; filename=%s.ovpn" % cn)
-        resp.body = Template(open("/etc/openvpn/%s.template" % ca.slug).read()).render(ctx)
+        resp.body = Template(open("/etc/openvpn/%s.template" % req.context.get("ca").common_name).read()).render(ctx)
 
 
 class StaticResource(object):
@@ -513,15 +569,20 @@ def certidude_app():
     config = CertificateAuthorityConfig()
 
     app = falcon.API()
-    app.add_route("/api/ca/{ca}/ocsp/", CertificateStatusResource(config))
-    app.add_route("/api/ca/{ca}/signed/{cn}/openvpn", ApplicationConfigurationResource(config))
-    app.add_route("/api/ca/{ca}/certificate/", CertificateAuthorityResource(config))
-    app.add_route("/api/ca/{ca}/revoked/", RevocationListResource(config))
-    app.add_route("/api/ca/{ca}/signed/{cn}/", SignedCertificateDetailResource(config))
-    app.add_route("/api/ca/{ca}/signed/", SignedCertificateListResource(config))
-    app.add_route("/api/ca/{ca}/request/{cn}/", RequestDetailResource(config))
-    app.add_route("/api/ca/{ca}/request/", RequestListResource(config))
-    app.add_route("/api/ca/{ca}/lease/", LeaseResource(config))
-    app.add_route("/api/ca/{ca}/", IndexResource(config))
-    app.add_route("/api/ca/", AuthorityListResource(config))
+
+    # Certificate authority API calls
+    app.add_route("/api/ocsp/", CertificateStatusResource(config))
+    app.add_route("/api/signed/{cn}/openvpn", ApplicationConfigurationResource(config))
+    app.add_route("/api/certificate/", CertificateAuthorityResource(config))
+    app.add_route("/api/revoked/", RevocationListResource(config))
+    app.add_route("/api/signed/{cn}/", SignedCertificateDetailResource(config))
+    app.add_route("/api/signed/", SignedCertificateListResource(config))
+    app.add_route("/api/request/{cn}/", RequestDetailResource(config))
+    app.add_route("/api/request/", RequestListResource(config))
+    app.add_route("/api/", IndexResource(config))
+    app.add_route("/api/session/", SessionResource(config))
+
+    # Gateway API calls, should this be moved to separate project?
+    app.add_route("/api/lease/", LeaseResource(config))
+    app.add_route("/api/whois/", WhoisResource(config))
     return app

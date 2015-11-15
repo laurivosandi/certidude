@@ -34,35 +34,35 @@ def login_required(func):
 
         if not authorization:
             resp.append_header("WWW-Authenticate", "Negotiate")
-            raise falcon.HTTPUnauthorized("Unauthorized", "No Kerberos ticket offered?")
+            raise falcon.HTTPUnauthorized("Unauthorized", "No Kerberos ticket offered, are you sure you've logged in with domain user account?")
 
         token = ''.join(authorization.split()[1:])
 
         try:
             result, context = kerberos.authGSSServerInit("HTTP@" + FQDN)
         except kerberos.GSSError as ex:
-            raise falcon.HTTPForbidden("Forbidden", "Authentication System Failure: %s(%s)" % (ex[0][0], ex[1][0],))
+            raise falcon.HTTPForbidden("Forbidden", "Authentication System Failure: %s(%s)" % (ex.args[0][0], ex.args[1][0],))
 
         try:
             result = kerberos.authGSSServerStep(context, token)
         except kerberos.GSSError as ex:
+            s = str(dir(ex))
             kerberos.authGSSServerClean(context)
-            raise falcon.HTTPForbidden("Forbidden", "Bad credentials: %s(%s)" % (ex[0][0], ex[1][0],))
+            raise falcon.HTTPForbidden("Forbidden", "Bad credentials: %s (%s)" % (ex.args[0][0], ex.args[1][0]))
         except kerberos.KrbError as ex:
             kerberos.authGSSServerClean(context)
-            raise falcon.HTTPForbidden("Forbidden", "Bad credentials: %s" % (ex[0],))
+            raise falcon.HTTPForbidden("Forbidden", "Bad credentials: %s" % (ex.args[0],))
 
-        kerberos_user = kerberos.authGSSServerUserName(context).split("@")
+        req.context["user"] = kerberos.authGSSServerUserName(context).split("@")
 
         try:
             # BUGBUG: https://github.com/02strich/pykerberos/issues/6
             #kerberos.authGSSServerClean(context)
             pass
         except kerberos.GSSError as ex:
-            raise error.LoginFailed('Authentication System Failure %s(%s)' % (ex[0][0], ex[1][0],))
-            
+            raise error.LoginFailed('Authentication System Failure %s(%s)' % (ex.args[0][0], ex.args[1][0],))
+
         if result == kerberos.AUTH_GSS_COMPLETE:
-            kwargs["user"] = kerberos_user
             return func(resource, req, resp, *args, **kwargs)
         elif result == kerberos.AUTH_GSS_CONTINUE:
             raise falcon.HTTPUnauthorized("Unauthorized", "Tried GSSAPI")

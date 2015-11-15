@@ -1,0 +1,31 @@
+<li id="certificate_{{ certificate.sha256sum }}" data-dn="{{ certificate.identity }}" class="filterable">
+    <a class="button icon download" href="/api/signed/{{certificate.common_name}}/">Fetch</a>
+    <button class="icon revoke" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/signed/{{certificate.common_name}}/',type:'delete'});">Revoke</button>
+
+    <div class="monospace">
+    {% include 'img/iconmonstr-certificate-15-icon.svg' %}
+    {{certificate.identity}}
+    </div>
+
+    {% if certificate.email_address %}
+    <div class="email">{% include 'img/iconmonstr-email-2-icon.svg' %} {{ certificate.email_address }}</div>
+    {% endif %}
+
+    <div class="monospace">
+    {% include 'img/iconmonstr-key-2-icon.svg' %}
+    <span title="SHA-256 of public key">
+    {{ certificate.sha256sum }}
+    </span>
+    {{ certificate.key_length }}-bit
+    {{ certificate.key_type }}
+    </div>
+
+    <div>
+    {% include 'img/iconmonstr-flag-3-icon.svg' %}
+    {{certificate.key_usage}}
+    </div>
+
+    <div class="status">
+    {% include 'status.html' %}
+    </div>
+</li>

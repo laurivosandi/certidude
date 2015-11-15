@@ -3,8 +3,16 @@ $(document).ready(function() {
 
     $.ajax({
         method: "GET",
-        url: "/api/ca/",
+        url: "/api/session/",
         dataType: "json",
+        error: function(response) {
+            if (response.responseJSON) {
+                var msg = response.responseJSON
+            } else {
+                var msg = { title: "Error " + response.status, description: response.statusText }
+            }
+            $("#container").html(nunjucks.render('error.html', { message: msg }));
+        },
         success: function(session, status, xhr) {
             console.info("Loaded CA list:", session);
 
@@ -15,7 +23,7 @@ $(document).ready(function() {
 
             $.ajax({
                 method: "GET",
-                url: "/api/ca/" + session.authorities[0],
+                url: "/api/",
                 dataType: "json",
                 success: function(authority, status, xhr) {
                     console.info("Got CA:", authority);
@@ -61,12 +69,33 @@ $(document).ready(function() {
 
                     source.addEventListener("request_submitted", function(e) {
                         console.log("Request submitted:", e.data);
+                        $.ajax({
+                            method: "GET",
+                            url: "/api/request/lauri-c720p/",
+                            dataType: "json",
+                            success: function(request, status, xhr) {
+                                console.info(request);
+                                $("#pending_requests").prepend(
+                                    nunjucks.render('request.html', { request: request }));
+                            }
+                        });
+
                     });
 
                     source.addEventListener("request_signed", function(e) {
                         console.log("Request signed:", e.data);
                         $("#request_" + e.data).slideUp("normal", function() { $(this).remove(); });
-                        // TODO: Insert <li> to signed certs list
+
+                        $.ajax({
+                            method: "GET",
+                            url: "/api/signed/lauri-c720p/",
+                            dataType: "json",
+                            success: function(certificate, status, xhr) {
+                                console.info(certificate);
+                                $("#signed_certificates").prepend(
+                                    nunjucks.render('signed.html', { certificate: certificate }));
+                            }
+                        });
                     });
 
                     source.addEventListener("certificate_revoked", function(e) {
@@ -74,11 +103,11 @@ $(document).ready(function() {
                         $("#certificate_" + e.data).slideUp("normal", function() { $(this).remove(); });
                     });
 
-                    $("#container").html(nunjucks.render('authority.html', { authority: authority, session: session }));
+                    $("#container").html(nunjucks.render('authority.html', { authority: authority, session: session, window: window }));
 
                     $.ajax({
                         method: "GET",
-                        url: "/api/ca/" + authority.slug + "/lease/",
+                        url: "/api/lease/",
                         dataType: "json",
                         success: function(leases, status, xhr) {
                             console.info("Got leases:", leases);
@@ -96,6 +125,18 @@ $(document).ready(function() {
                                         released: leases[j].released ? new Date(leases[j].released).toLocaleString() : null
                                     }}));
                             }
+
+                            /* Set up search box */
+                            $("#search").on("keyup", function() {
+                                var q = $("#search").val().toLowerCase();
+                                $(".filterable").each(function(i, e) {
+                                    if ($(e).attr("data-dn").toLowerCase().indexOf(q) >= 0) {
+                                        $(e).show();
+                                    } else {
+                                        $(e).hide();
+                                    }
+                                });
+                            });
                         }
                     });
                 }

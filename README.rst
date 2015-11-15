@@ -83,11 +83,20 @@ Create a system user for ``certidude``:
 Setting up CA
 --------------
 
-Certidude can set up CA relatively easily:
+First make sure the machine used for CA has fully qualified
+domain name set up properly.
+You can check it with:
+
+  hostname -f
+
+The command should return ca.example.co
+
+Certidude can set up CA relatively easily, following will set up
+CA in /var/lib/certidude/hostname.domain:
 
 .. code:: bash
 
-    certidude setup authority /path/to/directory
+    certidude setup authority
 
 Tweak command-line options until you meet your requirements and
 then insert generated section to your /etc/ssl/openssl.cnf
@@ -112,7 +121,7 @@ Use following command to request a certificate on a machine:
 
 .. code::
 
-    certidude setup client http://certidude-hostname-or-ip:perhaps-port/api/ca-name/
+    certidude setup client ca.example.com
 
 Use following to list signing requests, certificates and revoked certificates:
 
@@ -185,20 +194,26 @@ configure the site in /etc/nginx/sites-available.d/certidude:
         listen 80 default_server;
         listen [::]:80 default_server ipv6only=on;
 
-        location ~ /event/publish/(.*) {
-            allow 127.0.0.1; # Allow publishing only from this IP address
+        location /pub {
+            allow 127.0.0.1; # Allow publishing only from CA machine
             push_stream_publisher admin;
-            push_stream_channels_path $1;
+            push_stream_channels_path $arg_id;
         }
 
-        location ~ /event/subscribe/(.*) {
+        location ~ "^/lp/(.*)" {
             push_stream_channels_path $1;
             push_stream_subscriber long-polling;
         }
 
+        location ~ "^/ev/(.*)" {
+            push_stream_channels_path $1;
+            push_stream_subscriber eventsource;
+        }
+
         location / {
-            include uwsgi_params;
-            uwsgi_pass certidude_api;
+            proxy_pass       http://ca.koodur.com/;
+            proxy_set_header Host      $host;
+            proxy_set_header X-Real-IP $remote_addr;
         }
     }
 
@@ -239,8 +254,7 @@ Also adjust ``/etc/nginx/nginx.conf``:
 
 In your CA ssl.cnf make sure Certidude is aware of your nginx setup:
 
-    publish_certificate_url = http://push.example.com/event/publish/%(request_sha1sum)s
-    subscribe_certificate_url = http://push.example.com/event/subscribe/%(request_sha1sum)s
+    push_server = http://push.example.com/
 
 Restart the services:
 
@@ -338,7 +352,7 @@ Create ``/etc/NetworkManager/dispatcher.d/certidude`` with following content:
 
     case "$2" in
         up)
-            LANG=C.UTF-8 /usr/local/bin/certidude setup strongswan networkmanager http://ca.example.org/api/laptops/ gateway.example.org
+            LANG=C.UTF-8 /usr/local/bin/certidude setup strongswan networkmanager ca.example.com gateway.example.com
         ;;
     esac
 
