@@ -211,9 +211,8 @@ configure the site in /etc/nginx/sites-available.d/certidude:
         }
 
         location / {
-            proxy_pass       http://ca.koodur.com/;
-            proxy_set_header Host      $host;
-            proxy_set_header X-Real-IP $remote_addr;
+            include uwsgi_params;
+            uwsgi_pass certidude_api;
         }
     }
 
