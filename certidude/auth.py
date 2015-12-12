@@ -1,6 +1,7 @@
 
 import click
 import falcon
+import ipaddress
 import kerberos
 import os
 import re
@@ -69,4 +70,29 @@ def login_required(func):
         else:
             raise falcon.HTTPForbidden("Forbidden", "Tried GSSAPI")
 
+    return wrapped
+
+
+def authorize_admin(func):
+    def wrapped(self, req, resp, *args, **kwargs):
+        from certidude import config
+        # Parse remote IPv4/IPv6 address
+        remote_addr = ipaddress.ip_network(req.env["REMOTE_ADDR"])
+
+        # Check for administration subnet whitelist
+        print("Comparing:", config.ADMIN_SUBNETS, "To:", remote_addr)
+        for subnet in config.ADMIN_SUBNETS:
+            if subnet.overlaps(remote_addr):
+                break
+        else:
+            raise falcon.HTTPForbidden("Forbidden", "Remote address %s not whitelisted" % remote_addr)
+
+        # Check for username whitelist
+        kerberos_username, kerberos_realm = req.context.get("user")
+        if kerberos_username not in config.ADMIN_USERS:
+            raise falcon.HTTPForbidden("Forbidden", "User %s not whitelisted" % kerberos_username)
+
+        # Retain username, TODO: Better abstraction with username, e-mail, sn, gn?
+
+        return func(self, req, resp, *args, **kwargs)
     return wrapped

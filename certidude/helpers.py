@@ -2,34 +2,9 @@
 import click
 import os
 import urllib.request
-from certidude.wrappers import Certificate, Request
+from certidude import config
 from OpenSSL import crypto
 
-def expand_paths():
-    """
-    Prefix '..._path' keyword arguments of target function with 'directory' keyword argument
-    and create the directory if necessary
-
-    TODO: Move to separate file
-    """
-    def wrapper(func):
-        def wrapped(**arguments):
-            d = arguments.get("directory")
-            for key, value in arguments.items():
-                if key.endswith("_path"):
-                    if d:
-                        value = os.path.join(d, value)
-                    value = os.path.realpath(value)
-                    parent = os.path.dirname(value)
-                    if not os.path.exists(parent):
-                        click.echo("Making directory %s for %s" % (repr(parent), repr(key)))
-                        os.makedirs(parent)
-                    elif not os.path.isdir(parent):
-                        raise Exception("Path %s is not directory!" % parent)
-                    arguments[key] = value
-            return func(**arguments)
-        return wrapped
-    return wrapper
 
 
 def certidude_request_certificate(url, key_path, request_path, certificate_path, authority_path, common_name, org_unit, email_address=None, given_name=None, surname=None, autosign=False, wait=False, key_usage=None, extended_key_usage=None, ip_address=None, dns=None):

@@ -1,59 +1,62 @@
-<h1>{{authority.common_name}} management</h1>
 
 <p>Hi {{session.username}},</p>
 
-<p>Request submission is allowed from: {% if authority.request_subnets %}{% for i in authority.request_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}</p>
-<p>Autosign is allowed from: {% if authority.autosign_subnets %}{% for i in authority.autosign_subnets %}{{ i }} {% endfor %}{% else %}nowhere{% endif %}</p>
-<p>Authority administration is allowed from: {% if authority.admin_subnets %}{% for i in authority.admin_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}
-<p>Authority administration allowed for: {% for i in authority.admin_users %}{{ i }} {% endfor %}</p>
+<p>Request submission is allowed from: {% if session.request_subnets %}{% for i in session.request_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}</p>
+<p>Autosign is allowed from: {% if session.autosign_subnets %}{% for i in session.autosign_subnets %}{{ i }} {% endfor %}{% else %}nowhere{% endif %}</p>
+<p>Authority administration is allowed from: {% if session.admin_subnets %}{% for i in session.admin_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}
+<p>Authority administration allowed for: {% for i in session.admin_users %}{{ i }} {% endfor %}</p>
 
-{% set s = authority.certificate.identity %}
+{% set s = session.certificate.identity %}
 
 
-<input id="search" class="icon search" type="search" placeholder="hostname, IP-address, etc"/>
 
-<h1>Pending requests</h1>
 
-<ul id="pending_requests">
-    {% for request in authority.requests %}
-         {% include "request.html" %}
-	{% endfor %}
-    <li class="notify">
-        <p>No certificate signing requests to sign! You can  submit a certificate signing request by:</p>
-        <pre>certidude setup client {{authority.common_name}}</pre>
-    </li>
-</ul>
+<div id="requests">
+    <h1>Pending requests</h1>
 
-<h1>Signed certificates</h1>
-
-<ul id="signed_certificates">
-    {% for certificate in authority.signed | sort | reverse %}
-        {% include "signed.html" %}
-	{% endfor %}
-</ul>
-
-<h1>Revoked certificates</h1>
-
-<p>To fetch certificate revocation list:</p>
-<pre>
-curl {{window.location.href}}api/revoked/ | openssl crl -text -noout
-</pre>
-<!--
-<p>To perform online certificate status request</p>
-
-<pre>
-curl {{request.url}}/certificate/ > authority.pem
-openssl ocsp -issuer authority.pem -CAfile authority.pem -url {{request.url}}/ocsp/ -serial 0x
-</pre>
--->
-<ul>
-    {% for j in authority.revoked %}
-        <li id="certificate_{{ j.sha256sum }}">
-            {{j.changed}}
-            {{j.serial_number}} <span class="monospace">{{j.identity}}</span>
+    <ul id="pending_requests">
+        {% for request in session.requests %}
+             {% include "request.html" %}
+	    {% endfor %}
+        <li class="notify">
+            <p>No certificate signing requests to sign! You can  submit a certificate signing request by:</p>
+            <pre>certidude setup client {{session.common_name}}</pre>
         </li>
-    {% else %}
-        <li>Great job! No certificate signing requests to sign.</li>
-	{% endfor %}
-</ul>
+    </ul>
+</div>
 
+
+<div id="signed">
+    <h1>Signed certificates</h1>
+    <ul id="signed_certificates">
+        {% for certificate in session.signed | sort | reverse %}
+            {% include "signed.html" %}
+	    {% endfor %}
+    </ul>
+</div>
+
+<div id="revoked">
+    <h1>Revoked certificates</h1>
+    <p>To fetch certificate revocation list:</p>
+    <pre>
+    curl {{window.location.href}}api/revoked/ | openssl crl -text -noout
+    </pre>
+    <!--
+    <p>To perform online certificate status request</p>
+
+    <pre>
+    curl {{request.url}}/certificate/ > session.pem
+    openssl ocsp -issuer session.pem -CAfile session.pem -url {{request.url}}/ocsp/ -serial 0x
+    </pre>
+    -->
+    <ul>
+        {% for j in session.revoked %}
+            <li id="certificate_{{ j.sha256sum }}">
+                {{j.changed}}
+                {{j.serial_number}} <span class="monospace">{{j.identity}}</span>
+            </li>
+        {% else %}
+            <li>Great job! No certificate signing requests to sign.</li>
+	    {% endfor %}
+    </ul>
+</div>

@@ -94,9 +94,7 @@ html,body {
 }
 
 body {
-    background: #222;
-    background-image: url('../img/free_hexa_pattern_cc0_by_black_light_studio.png');
-    background-position: center;
+    background: #fff;
 }
 
 .comment {
@@ -142,22 +140,29 @@ pre {
     margin: 0 0;
 }
 
-#container {
-    max-width: 60em;
-    margin: 1em auto;
-    background: #fff;
-    padding: 1em;
-    border-style: solid;
-    border-width: 2px;
-    border-color: #aaa;
-    border-radius: 10px;
+
+.container {
+    max-width: 960px;
+    margin: 0 auto;
 }
 
-li {
+#container li {
     margin: 4px 0;
     padding: 4px 0;
     clear: both;
     border-top: 1px dashed #ccc;
+}
+
+#menu {
+    background-color: #444;
+}
+
+#menu li {
+    color: #fff;
+    border: none;
+    display: inline;
+    margin: 1mm 5mm 1mm 0;
+    line-height: 200%;
 }
 
 .icon{
