@@ -73,7 +73,7 @@ def login_required(func):
             raise error.LoginFailed('Authentication System Failure %s(%s)' % (ex.args[0][0], ex.args[1][0],))
 
         if result == kerberos.AUTH_GSS_COMPLETE:
-            logger.debug("Succesfully authenticated user %s for %s from %s", user, req.env["PATH_INFO"], req.env["REMOTE_ADDR"])
+            logger.debug("Succesfully authenticated user %s for %s from %s", req.context["user"], req.env["PATH_INFO"], req.env["REMOTE_ADDR"])
             return func(resource, req, resp, *args, **kwargs)
         elif result == kerberos.AUTH_GSS_CONTINUE:
             # TODO: logger.error
@@ -97,12 +97,12 @@ def authorize_admin(func):
             if subnet.overlaps(remote_addr):
                 break
         else:
-            logger.info("Rejected access to administrative call %s by %s from %s, source address not whitelisted", req.env["PATH_INFO"], user, req.env["REMOTE_ADDR"])
+            logger.info("Rejected access to administrative call %s by %s from %s, source address not whitelisted", req.env["PATH_INFO"], req.context["user"], req.env["REMOTE_ADDR"])
             raise falcon.HTTPForbidden("Forbidden", "Remote address %s not whitelisted" % remote_addr)
 
         # Check for username whitelist
         if req.context.get("user") not in config.ADMIN_USERS:
-            logger.info("Rejected access to administrative call %s by %s from %s, user not whitelisted", req.env["PATH_INFO"], user, req.env["REMOTE_ADDR"])
+            logger.info("Rejected access to administrative call %s by %s from %s, user not whitelisted", req.env["PATH_INFO"], req.context["user"], req.env["REMOTE_ADDR"])
             raise falcon.HTTPForbidden("Forbidden", "User %s not whitelisted" % req.context.get("user"))
 
         # Retain username, TODO: Better abstraction with username, e-mail, sn, gn?
