@@ -1,12 +1,18 @@
 
 import click
+import json
 import urllib.request
 from certidude import config
+
 
 def publish(event_type, event_data):
     """
     Publish event on push server
     """
+    if not isinstance(event_data, str):
+        from certidude.decorators import MyEncoder
+        event_data = json.dumps(event_data, cls=MyEncoder)
+
     url = config.PUSH_PUBLISH % config.PUSH_TOKEN
     click.echo("Posting event %s %s at %s, waiting for response..." % (repr(event_type), repr(event_data), repr(url)))
     notification = urllib.request.Request(
@@ -25,4 +31,7 @@ def publish(event_type, event_data):
             raise
     else:
         print("Push server returned:", response.code, body)
+    response.close()
+
+
 

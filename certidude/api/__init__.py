@@ -35,7 +35,7 @@ class SessionResource(object):
     @event_source
     def on_get(self, req, resp):
         return dict(
-            username=req.context.get("user")[0],
+            username=req.context.get("user"),
             event_channel = config.PUSH_EVENT_SOURCE % config.PUSH_TOKEN,
             autosign_subnets = config.AUTOSIGN_SUBNETS,
             request_subnets = config.REQUEST_SUBNETS,
@@ -78,6 +78,7 @@ def certidude_app():
     from .request import RequestListResource, RequestDetailResource
     from .lease import LeaseResource
     from .whois import WhoisResource
+    from .log import LogResource
 
     app = falcon.API()
 
@@ -89,10 +90,51 @@ def certidude_app():
     app.add_route("/api/signed/", SignedCertificateListResource())
     app.add_route("/api/request/{cn}/", RequestDetailResource())
     app.add_route("/api/request/", RequestListResource())
+    app.add_route("/api/log/", LogResource())
     app.add_route("/api/", SessionResource())
 
     # Gateway API calls, should this be moved to separate project?
     app.add_route("/api/lease/", LeaseResource())
     app.add_route("/api/whois/", WhoisResource())
+
+    """
+    Set up logging
+    """
+
+    from certidude import config
+    from certidude.mysqllog import MySQLLogHandler
+    from datetime import datetime
+    import logging
+    import socket
+    import json
+
+
+    class PushLogHandler(logging.Handler):
+        def emit(self, record):
+            from certidude.push import publish
+            print("EVENT HAPPENED:", record.created)
+            publish("log-entry", dict(
+                created = datetime.fromtimestamp(record.created),
+                message = record.msg % record.args,
+                severity = record.levelname.lower()))
+
+    sql_handler = MySQLLogHandler(config.DATABASE_POOL)
+    push_handler = PushLogHandler()
+
+    for facility in "api", "cli":
+        logger = logging.getLogger(facility)
+        logger.setLevel(logging.DEBUG)
+        logger.addHandler(sql_handler)
+        logger.addHandler(push_handler)
+
+
+    logging.getLogger("cli").info("Started Certidude at %s", socket.getaddrinfo(socket.gethostname(), 0, flags=socket.AI_CANONNAME)[0][3])
+
+    import atexit
+
+    def exit_handler():
+        logging.getLogger("cli").info("Shutting down Certidude")
+
+    atexit.register(exit_handler)
 
     return app

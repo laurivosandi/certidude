@@ -66,7 +66,7 @@ def store_request(buf, overwrite=False):
             raise FileExistsError("Request already exists")
     else:
         with open(request_path + ".part", "wb") as fh:
-            fh.write(buf)
+            fh.write(buf.encode("ascii"))
         os.rename(request_path + ".part", request_path)
 
     return Request(open(request_path))

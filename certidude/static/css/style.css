@@ -75,17 +75,12 @@ button:disabled, .button:disabled {
 
 footer {
     display: block;
-    color: #fff;
     text-align: center;
 }
 
 a {
     text-decoration: none;
     color: #44c;
-}
-
-footer a {
-    color: #aaf;
 }
 
 html,body {
@@ -143,6 +138,7 @@ pre {
 
 .container {
     max-width: 960px;
+    padding: 0 1em;
     margin: 0 auto;
 }
 
@@ -173,6 +169,19 @@ pre {
     vertical-align: text-bottom;
     text-decoration: none;
 }
+
+li span.icon {
+    background-size: 32px;
+    padding-left: 42px;
+    padding-top: 2px;
+    padding-bottom: 2px;
+}
+
+
+.icon.critical { background-image: url("../img/iconmonstr-error-4-icon.svg"); }
+.icon.error { background-image: url("../img/iconmonstr-error-4-icon.svg"); }
+.icon.warning { background-image: url("../img/iconmonstr-warning-6-icon.svg"); }
+.icon.info { background-image: url("../img/iconmonstr-info-6-icon.svg"); }
 
 
 .icon.revoke { background-image: url("../img/iconmonstr-x-mark-5-icon.svg"); }

@@ -67,7 +67,8 @@ To install Certidude:
 
 .. code:: bash
 
-    apt-get install -y python3 python3-pip python3-dev python3-mysql.connector cython3 build-essential libffi-dev libssl-dev libkrb5-dev
+    apt-get install -y python3 python3-pip python3-dev cython3 build-essential libffi-dev libssl-dev libkrb5-dev
+    pip3 install --allow-external mysql-connector-python  mysql-connector-python
     pip3 install certidude
 
 Make sure you're running PyOpenSSL 0.15+ and netifaces 0.10.4+ from PyPI,

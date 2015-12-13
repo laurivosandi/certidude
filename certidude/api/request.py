@@ -1,12 +1,15 @@
 
 import click
 import falcon
+import logging
 import ipaddress
 import os
 from certidude import config, authority, helpers, push
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize
 from certidude.wrappers import Request, Certificate
+
+logger = logging.getLogger("api")
 
 class RequestListResource(object):
     @serialize
@@ -27,13 +30,14 @@ class RequestListResource(object):
                 if subnet.overlaps(remote_addr):
                     break
             else:
+               logger.warning("Attempted to submit signing request from non-whitelisted address %s", req.env["REMOTE_ADDR"])
                raise falcon.HTTPForbidden("Forbidden", "IP address %s not whitelisted" % remote_addr)
 
         if req.get_header("Content-Type") != "application/pkcs10":
             raise falcon.HTTPUnsupportedMediaType(
                 "This API call accepts only application/pkcs10 content type")
 
-        body = req.stream.read(req.content_length)
+        body = req.stream.read(req.content_length).decode("ascii")
         csr = Request(body)
 
         # Check if this request has been already signed and return corresponding certificte if it has been signed
@@ -65,6 +69,7 @@ class RequestListResource(object):
         try:
             csr = authority.store_request(body)
         except FileExistsError:
+            logger.warning("Rejected signing request with overlapping common name from %s", req.env["REMOTE_ADDR"])
             raise falcon.HTTPConflict(
                 "CSR with such CN already exists",
                 "Will not overwrite existing certificate signing request, explicitly delete CSR and try again")
@@ -77,9 +82,11 @@ class RequestListResource(object):
             click.echo("Redirecting to: %s"  % url)
             resp.status = falcon.HTTP_SEE_OTHER
             resp.set_header("Location", url)
+            logger.warning("Redirecting signing request from %s to %s", req.env["REMOTE_ADDR"], url)
         else:
             # Request was accepted, but not processed
             resp.status = falcon.HTTP_202
+            logger.info("Signing request from %s stored", req.env["REMOTE_ADDR"])
 
 
 class RequestDetailResource(object):
@@ -108,6 +115,7 @@ class RequestDetailResource(object):
         resp.body = "Certificate successfully signed"
         resp.status = falcon.HTTP_201
         resp.location = os.path.join(req.relative_uri, "..", "..", "signed", cn)
+        logger.info("Signing request %s signed by %s from %s", csr.common_name, req.context["user"], req.env["REMOTE_ADDR"])
 
     @login_required
     @authorize_admin
@@ -116,4 +124,5 @@ class RequestDetailResource(object):
             authority.delete_request(cn)
         except FileNotFoundError:
             resp.body = "No certificate CN=%s found" % cn
+            logger.warning("User %s attempted to delete non-existant signing request %s from %s", req.context["user"], cn, req.env["REMOTE_ADDR"])
             raise falcon.HTTPNotFound()

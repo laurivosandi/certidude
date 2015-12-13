@@ -3,6 +3,7 @@ import click
 import configparser
 import ipaddress
 import os
+import socket
 import string
 from random import choice
 
@@ -23,6 +24,8 @@ AUTHORITY_CERTIFICATE_PATH = cp.get("authority", "certificate_path")
 REQUESTS_DIR = cp.get("authority", "requests_dir")
 SIGNED_DIR = cp.get("authority", "signed_dir")
 REVOKED_DIR = cp.get("authority", "revoked_dir")
+
+#LOG_DATA = cp.get("logging", "database")
 
 CERTIFICATE_BASIC_CONSTRAINTS = "CA:FALSE"
 CERTIFICATE_KEY_USAGE_FLAGS = "nonRepudiation,digitalSignature,keyEncipherment"
@@ -51,7 +54,7 @@ o = urlparse(cp.get("authority", "database"))
 if o.scheme == "mysql":
     import mysql.connector
     DATABASE_POOL = mysql.connector.pooling.MySQLConnectionPool(
-        pool_size = 3,
+        pool_size = 32,
         user=o.username,
         password=o.password,
         host=o.hostname,

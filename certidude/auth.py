@@ -3,9 +3,12 @@ import click
 import falcon
 import ipaddress
 import kerberos
+import logging
 import os
 import re
 import socket
+
+logger = logging.getLogger("api")
 
 # Vanilla Kerberos provides only username.
 # AD also embeds PAC (Privilege Attribute Certificate), which
@@ -30,11 +33,12 @@ else:
     click.echo("Kerberos enabled, service principal is HTTP/%s" % FQDN)
 
 def login_required(func):
-    def wrapped(resource, req, resp, *args, **kwargs):
+    def authenticate(resource, req, resp, *args, **kwargs):
         authorization = req.get_header("Authorization")
 
         if not authorization:
             resp.append_header("WWW-Authenticate", "Negotiate")
+            logger.debug("No Kerberos ticket offered while attempting to access %s from %s", req.env["PATH_INFO"], req.env["REMOTE_ADDR"])
             raise falcon.HTTPUnauthorized("Unauthorized", "No Kerberos ticket offered, are you sure you've logged in with domain user account?")
 
         token = ''.join(authorization.split()[1:])
@@ -42,6 +46,7 @@ def login_required(func):
         try:
             result, context = kerberos.authGSSServerInit("HTTP@" + FQDN)
         except kerberos.GSSError as ex:
+            # TODO: logger.error
             raise falcon.HTTPForbidden("Forbidden", "Authentication System Failure: %s(%s)" % (ex.args[0][0], ex.args[1][0],))
 
         try:
@@ -49,28 +54,35 @@ def login_required(func):
         except kerberos.GSSError as ex:
             s = str(dir(ex))
             kerberos.authGSSServerClean(context)
+            # TODO: logger.error
             raise falcon.HTTPForbidden("Forbidden", "Bad credentials: %s (%s)" % (ex.args[0][0], ex.args[1][0]))
         except kerberos.KrbError as ex:
             kerberos.authGSSServerClean(context)
+            # TODO: logger.error
             raise falcon.HTTPForbidden("Forbidden", "Bad credentials: %s" % (ex.args[0],))
 
-        req.context["user"] = kerberos.authGSSServerUserName(context).split("@")
+        user = kerberos.authGSSServerUserName(context)
+        req.context["user"], req.context["user_realm"] = user.split("@")
 
         try:
             # BUGBUG: https://github.com/02strich/pykerberos/issues/6
             #kerberos.authGSSServerClean(context)
             pass
         except kerberos.GSSError as ex:
+            # TODO: logger.error
             raise error.LoginFailed('Authentication System Failure %s(%s)' % (ex.args[0][0], ex.args[1][0],))
 
         if result == kerberos.AUTH_GSS_COMPLETE:
+            logger.debug("Succesfully authenticated user %s for %s from %s", user, req.env["PATH_INFO"], req.env["REMOTE_ADDR"])
             return func(resource, req, resp, *args, **kwargs)
         elif result == kerberos.AUTH_GSS_CONTINUE:
+            # TODO: logger.error
             raise falcon.HTTPUnauthorized("Unauthorized", "Tried GSSAPI")
         else:
+            # TODO: logger.error
             raise falcon.HTTPForbidden("Forbidden", "Tried GSSAPI")
 
-    return wrapped
+    return authenticate
 
 
 def authorize_admin(func):
@@ -85,12 +97,13 @@ def authorize_admin(func):
             if subnet.overlaps(remote_addr):
                 break
         else:
+            logger.info("Rejected access to administrative call %s by %s from %s, source address not whitelisted", req.env["PATH_INFO"], user, req.env["REMOTE_ADDR"])
             raise falcon.HTTPForbidden("Forbidden", "Remote address %s not whitelisted" % remote_addr)
 
         # Check for username whitelist
-        kerberos_username, kerberos_realm = req.context.get("user")
-        if kerberos_username not in config.ADMIN_USERS:
-            raise falcon.HTTPForbidden("Forbidden", "User %s not whitelisted" % kerberos_username)
+        if req.context.get("user") not in config.ADMIN_USERS:
+            logger.info("Rejected access to administrative call %s by %s from %s, user not whitelisted", req.env["PATH_INFO"], user, req.env["REMOTE_ADDR"])
+            raise falcon.HTTPForbidden("Forbidden", "User %s not whitelisted" % req.context.get("user"))
 
         # Retain username, TODO: Better abstraction with username, e-mail, sn, gn?
 

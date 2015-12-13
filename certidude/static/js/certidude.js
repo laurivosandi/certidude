@@ -23,6 +23,20 @@ $(document).ready(function() {
                 console.log("Received server-sent event:", event);
             }
 
+            source.addEventListener("log-entry", function(e) {
+                var entry = JSON.parse(e.data);
+                console.info("Received log entry:", entry, "gonna prepend:", $("#log_level_" + entry.severity).prop("checked"));
+                if ($("#log_level_" + entry.severity).prop("checked")) {
+                    $("#log_entries").prepend(nunjucks.render("logentry.html", {
+                        entry: {
+                            created: new Date(entry.created).toLocaleString(),
+                            message: entry.message,
+                            severity: entry.severity
+                        }
+                    }));
+                }
+            });
+
             source.addEventListener("up-client", function(e) {
                 console.log("Adding security association:" + e.data);
                 var lease = JSON.parse(e.data);
@@ -91,6 +105,27 @@ $(document).ready(function() {
             });
 
             $("#container").html(nunjucks.render('authority.html', { session: session, window: window }));
+
+
+            $.ajax({
+                method: "GET",
+                url: "/api/log/",
+                dataType: "json",
+                success:function(entries, status, xhr) {
+                    console.info("Got", entries.length, "log entries");
+                    for (var j = 0; j < entries.length; j++) {
+                        if ($("#log_level_" + entries[j].severity).prop("checked")) {
+                            $("#log_entries").append(nunjucks.render("logentry.html", {
+                                entry: {
+                                    created: new Date(entries[j].created).toLocaleString("et-EE"),
+                                    message: entries[j].message,
+                                    severity: entries[j].severity
+                                }
+                            }));
+                        }
+                    }
+                }
+            });
 
             $.ajax({
                 method: "GET",
