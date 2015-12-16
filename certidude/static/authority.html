@@ -1,18 +1,18 @@
 
+<section id="about">
 <p>Hi {{session.username}},</p>
 
 <p>Request submission is allowed from: {% if session.request_subnets %}{% for i in session.request_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}</p>
 <p>Autosign is allowed from: {% if session.autosign_subnets %}{% for i in session.autosign_subnets %}{{ i }} {% endfor %}{% else %}nowhere{% endif %}</p>
 <p>Authority administration is allowed from: {% if session.admin_subnets %}{% for i in session.admin_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}
 <p>Authority administration allowed for: {% for i in session.admin_users %}{{ i }} {% endfor %}</p>
-
+</section>
 {% set s = session.certificate.identity %}
 
 
-
-
-<div id="requests">
+<section id="requests">
     <h1>Pending requests</h1>
+
 
     <ul id="pending_requests">
         {% for request in session.requests %}
@@ -23,19 +23,20 @@
             <pre>certidude setup client {{session.common_name}}</pre>
         </li>
     </ul>
-</div>
+</section>
 
 
-<div id="signed">
+<section id="signed">
     <h1>Signed certificates</h1>
+    <input id="search" type="search" class="icon search">
     <ul id="signed_certificates">
         {% for certificate in session.signed | sort | reverse %}
             {% include "signed.html" %}
 	    {% endfor %}
     </ul>
-</div>
+</section>
 
-<div id="log">
+<section id="log">
     <h1>Log</h1>
     <p>
         <input id="log_level_critical" type="checkbox" checked/> <label for="log_level_critical">Critical</label>
@@ -46,9 +47,9 @@
     </p>
     <ul id="log_entries">
     </ul>
-</div>
+</section>
 
-<div id="revoked">
+<section id="revoked">
     <h1>Revoked certificates</h1>
     <p>To fetch certificate revocation list:</p>
     <pre>
@@ -72,4 +73,4 @@
             <li>Great job! No certificate signing requests to sign.</li>
 	    {% endfor %}
     </ul>
-</div>
+</section>

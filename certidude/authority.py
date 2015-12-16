@@ -29,7 +29,7 @@ def publish_certificate(func):
             click.echo("Publishing certificate at %s, waiting for response..." % url)
             response = urllib.request.urlopen(notification)
             response.read()
-            push.publish("request_signed", csr.common_name)
+            push.publish("request-signed", csr.common_name)
         return cert
     return wrapped
 
@@ -93,7 +93,7 @@ def revoke_certificate(common_name):
     cert = get_signed(common_name)
     revoked_filename = os.path.join(config.REVOKED_DIR, "%s.pem" % cert.serial_number)
     os.rename(cert.path, revoked_filename)
-    push.publish("certificate_revoked", cert.fingerprint())
+    push.publish("certificate-revoked", cert.fingerprint())
 
 
 def list_requests(directory=config.REQUESTS_DIR):
@@ -141,7 +141,7 @@ def delete_request(common_name):
     os.unlink(path)
 
     # Publish event at CA channel
-    push.publish("request_deleted", request_sha1sum)
+    push.publish("request-deleted", request_sha1sum)
 
     # Write empty certificate to long-polling URL
     url = config.PUSH_PUBLISH % request_sha1sum

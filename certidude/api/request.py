@@ -73,7 +73,7 @@ class RequestListResource(object):
             raise falcon.HTTPConflict(
                 "CSR with such CN already exists",
                 "Will not overwrite existing certificate signing request, explicitly delete CSR and try again")
-        push.publish("request_submitted", csr.common_name)
+        push.publish("request-submitted", csr.common_name)
 
         # Wait the certificate to be signed if waiting is requested
         if req.get_param("wait"):

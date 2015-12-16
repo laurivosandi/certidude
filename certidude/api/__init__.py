@@ -79,6 +79,7 @@ def certidude_app():
     from .lease import LeaseResource
     from .whois import WhoisResource
     from .log import LogResource
+    from .tag import TagResource, TagDetailResource
 
     app = falcon.API()
 
@@ -91,6 +92,8 @@ def certidude_app():
     app.add_route("/api/request/{cn}/", RequestDetailResource())
     app.add_route("/api/request/", RequestListResource())
     app.add_route("/api/log/", LogResource())
+    app.add_route("/api/tag/", TagResource())
+    app.add_route("/api/tag/{identifier}/", TagDetailResource())
     app.add_route("/api/", SessionResource())
 
     # Gateway API calls, should this be moved to separate project?
@@ -128,12 +131,13 @@ def certidude_app():
         logger.addHandler(push_handler)
 
 
-    logging.getLogger("cli").info("Started Certidude at %s", socket.getaddrinfo(socket.gethostname(), 0, flags=socket.AI_CANONNAME)[0][3])
+    logging.getLogger("cli").debug("Started Certidude at %s",
+        socket.getaddrinfo(socket.gethostname(), 0, flags=socket.AI_CANONNAME)[0][3])
 
     import atexit
 
     def exit_handler():
-        logging.getLogger("cli").info("Shutting down Certidude")
+        logging.getLogger("cli").debug("Shutting down Certidude")
 
     atexit.register(exit_handler)
 

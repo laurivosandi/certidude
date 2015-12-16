@@ -1,8 +1,10 @@
 
 import falcon
 import ipaddress
+from datetime import datetime
 from certidude import config
 from certidude.decorators import serialize
+from certidude.api.lease import parse_dn
 
 def address_to_identity(cnx, addr):
     """
@@ -10,19 +12,19 @@ def address_to_identity(cnx, addr):
     """
 
     SQL_LEASES = """
-        SELECT
+        select
             acquired,
             released,
             identities.data as identity
-        FROM
+        from
             addresses
-        RIGHT JOIN
+        right join
             identities
-        ON
+        on
             identities.id = addresses.identity
-        WHERE
-            address = %s AND
-            released IS NOT NULL
+        where
+            address = %s and
+            released is not null
     """
 
     cursor = cnx.cursor()
@@ -31,6 +33,7 @@ def address_to_identity(cnx, addr):
 
     for acquired, released, identity in cursor:
         return {
+            "address": addr,
             "acquired": datetime.utcfromtimestamp(acquired),
             "identity": parse_dn(bytes(identity))
         }

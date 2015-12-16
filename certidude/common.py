@@ -1,4 +1,7 @@
 
+import os
+import click
+
 def expand_paths():
     """
     Prefix '..._path' keyword arguments of target function with 'directory' keyword argument

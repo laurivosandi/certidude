@@ -3,7 +3,6 @@ import hashlib
 import re
 import click
 import io
-from certidude import push
 from Crypto.Util import asn1
 from OpenSSL import crypto
 from datetime import datetime

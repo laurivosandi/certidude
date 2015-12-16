@@ -1,4 +1,4 @@
-<li id="certificate_{{ certificate.sha256sum }}" data-dn="{{ certificate.identity }}" class="filterable">
+<li id="certificate_{{ certificate.sha256sum }}" data-dn="{{ certificate.identity }}" data-cn="{{ certificate.common_name }}" class="filterable">
     <a class="button icon download" href="/api/signed/{{certificate.common_name}}/">Fetch</a>
     <button class="icon revoke" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/signed/{{certificate.common_name}}/',type:'delete'});">Revoke</button>
 
@@ -23,6 +23,15 @@
     <div>
     {% include 'img/iconmonstr-flag-3-icon.svg' %}
     {{certificate.key_usage}}
+    </div>
+
+    <div class="tags">
+      <select class="icon tag" data-cn="{{ certificate.common_name }}" onChange="onNewTagClicked();">
+        <option value="">Add tag...</option>
+        <option value="location">Location</option>
+        <option value="phone">Phone</option>
+        <option value="room">Room</option>
+      </select>
     </div>
 
     <div class="status">

@@ -13,7 +13,6 @@ import signal
 import socket
 import subprocess
 import sys
-from certidude import authority
 from certidude.signer import SignServer
 from certidude.common import expand_paths
 from datetime import datetime
@@ -165,7 +164,7 @@ def certidude_setup_client(quiet, **kwargs):
 
 @click.command("server", help="Set up OpenVPN server")
 @click.argument("url")
-@click.option("--common-name", "-cn", default=HOSTNAME, help="Common name, %s by default" % HOSTNAME)
+@click.option("--common-name", "-cn", default=FQDN, help="Common name, %s by default" % FQDN)
 @click.option("--org-unit", "-ou", help="Organizational unit")
 @click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, '%s' by default" % EMAIL)
 @click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="OpenVPN subnet, 192.168.33.0/24 by default")
@@ -252,7 +251,7 @@ def certidude_setup_openvpn_server(url, config, subnet, route, email_address, co
 @click.option("--authority-path", "-a", default="ca.crt", help="Certificate authority certificate path, ca.crt relative to --dir by default")
 @expand_paths()
 def certidude_setup_openvpn_client(url, config, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, proto, remote):
-
+    from certidude.helpers import certidude_request_certificate
     retval = certidude_request_certificate(
         url,
         key_path,
@@ -280,7 +279,7 @@ def certidude_setup_openvpn_client(url, config, email_address, common_name, org_
 
 @click.command("server", help="Set up strongSwan server")
 @click.argument("url")
-@click.option("--common-name", "-cn", default=HOSTNAME, help="Common name, %s by default" % HOSTNAME)
+@click.option("--common-name", "-cn", default=FQDN, help="Common name, %s by default" % FQDN)
 @click.option("--org-unit", "-ou", help="Organizational unit")
 @click.option("--fqdn", "-f", default=FQDN, help="Fully qualified hostname associated with the certificate")
 @click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, %s by default" % EMAIL)
@@ -302,13 +301,17 @@ def certidude_setup_openvpn_client(url, config, email_address, common_name, org_
 @click.option("--authority-path", "-ca", default="cacerts/ca.pem", help="Certificate authority certificate path, cacerts/ca.pem by default")
 @expand_paths()
 def certidude_setup_strongswan_server(url, config, secrets, subnet, route, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, local, fqdn):
+    if "." not in common_name:
+        raise ValueError("Hostname has to be fully qualified!")
+    if not local:
+        raise ValueError("Please specify local IP address")
 
     if not os.path.exists(certificate_path):
         click.echo("As strongSwan server certificate needs specific key usage extensions please")
         click.echo("use following command to sign on Certidude server instead of web interface:")
         click.echo()
         click.echo("  certidude sign %s" % common_name)
-
+    from certidude.helpers import certidude_request_certificate
     retval = certidude_request_certificate(
         url,
         key_path,
@@ -368,7 +371,7 @@ def certidude_setup_strongswan_server(url, config, secrets, subnet, route, email
 @click.option("--authority-path", "-ca", default="cacerts/ca.pem", help="Certificate authority certificate path, cacerts/ca.pem by default")
 @expand_paths()
 def certidude_setup_strongswan_client(url, config, secrets, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, remote, auto, dpdaction):
-
+    from certidude.helpers import certidude_request_certificate
     retval = certidude_request_certificate(
         url,
         key_path,
@@ -409,7 +412,7 @@ def certidude_setup_strongswan_client(url, config, secrets, email_address, commo
 @click.option("--authority-path", "-ca", default="cacerts/ca.pem", help="Certificate authority certificate path, cacerts/ca.pem by default")
 @expand_paths()
 def certidude_setup_strongswan_networkmanager(url, email_address, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, remote):
-
+    from certidude.helpers import certidude_request_certificate
     retval = certidude_request_certificate(
         url,
         key_path,
@@ -685,6 +688,8 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
     #   y - not valid yet
     #   r - revoked
 
+    from certidude import authority
+
     from pycountry import countries
     def dump_common(j):
 
@@ -796,6 +801,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
 @click.option("--overwrite", "-o", default=False, is_flag=True, help="Revoke valid certificate with same CN")
 @click.option("--lifetime", "-l", help="Lifetime")
 def certidude_sign(common_name, overwrite, lifetime):
+    from certidude import authority
     request = authority.get_request(common_name)
     if request.signable:
         # Sign via signer process

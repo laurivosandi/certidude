@@ -2,10 +2,8 @@
 import click
 import os
 import urllib.request
-from certidude import config
+from certidude.wrappers import Certificate, Request
 from OpenSSL import crypto
-
-
 
 def certidude_request_certificate(url, key_path, request_path, certificate_path, authority_path, common_name, org_unit, email_address=None, given_name=None, surname=None, autosign=False, wait=False, key_usage=None, extended_key_usage=None, ip_address=None, dns=None):
     """

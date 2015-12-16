@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. 
+You may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->
+
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px"
+	 width="32px" height="32px" viewBox="0 0 512 512" enable-background="new 0 0 512 512" xml:space="preserve">
+<path id="mobile-phone-6-icon" d="M139.59,131.775c-13.807,0-25,11.197-25,25.01V436.99c0,13.812,11.193,25.01,25,25.01h150.49
+	c13.807,0,25-11.198,25-25.01V156.766c0-13.802-11.186-24.99-24.98-24.99H139.59z M179.832,416.514h-30.996v-24.51h30.996V416.514z
+	 M179.832,372.203h-30.996v-24.51h30.996V372.203z M230.334,416.514h-30.996v-24.51h30.996V416.514z M230.334,372.203h-30.996
+	v-24.51h30.996V372.203z M280.836,416.514H249.84v-24.51h30.996V416.514z M280.836,372.203H249.84v-24.51h30.996V372.203z
+	 M280.836,312.887h-132V183.226h132V312.887z M283.451,111.408c13.445-0.01,26.9,5.113,37.164,15.369s15.4,23.699,15.41,37.147
+	h22.121c-0.012-19.113-7.312-38.231-21.898-52.805c-14.588-14.573-33.691-21.854-52.797-21.842V111.408z M283.451,72.682
+	c23.354-0.015,46.691,8.882,64.52,26.696c17.828,17.812,26.75,41.187,26.766,64.547h22.674c-0.02-29.166-11.16-58.358-33.418-80.597
+	C341.734,61.089,312.605,49.982,283.451,50V72.682z"/>
+</svg>
