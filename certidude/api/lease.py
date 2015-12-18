@@ -37,19 +37,22 @@ class LeaseResource(object):
 
         # BUGBUG
         SQL_LEASES = """
-            SELECT
+            select
                 acquired,
                 released,
                 address,
                 identities.data as identity
-            FROM
+            from
                 addresses
-            RIGHT JOIN
+            right join
                 identities
-            ON
+            on
                 identities.id = addresses.identity
-            WHERE
+            where
                 addresses.released <> 1
+            order by
+                addresses.id
+            desc
         """
         cnx = config.DATABASE_POOL.get_connection()
         cursor = cnx.cursor()
