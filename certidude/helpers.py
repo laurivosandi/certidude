@@ -122,6 +122,7 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
             submission = urllib.request.Request(request_url, buf)
             submission.add_header("User-Agent", "Certidude")
             submission.add_header("Content-Type", "application/pkcs10")
+            submission.add_header("Accept", "application/x-x509-user-cert")
 
             click.echo("Submitting to %s, waiting for response..." % request_url)
             try:
