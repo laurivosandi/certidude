@@ -214,6 +214,7 @@ select {
 .icon.phone { background-image: url("../img/iconmonstr-mobile-phone-6-icon.svg"); }
 .icon.location { background-image: url("../img/iconmonstr-compass-7-icon.svg"); }
 .icon.room { background-image: url("../img/iconmonstr-home-4-icon.svg"); }
+.icon.serial { background-image: url("../img/iconmonstr-barcode-4-icon.svg"); }
 
 /* Make sure this is the last one */
 .icon.busy{background-image:url("https://software.opensuse.org/assets/ajax-loader-ea46060b6c9f42822a3d58d075c83ea2.gif");}
