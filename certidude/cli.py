@@ -628,6 +628,9 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
 
     ca.sign(key, "sha256")
 
+    _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
+    os.setegid(gid)
+
     os.umask(0o027)
     if not os.path.exists(directory):
         os.makedirs(directory)
