@@ -165,8 +165,6 @@ Otherwise manually configure ``uwsgi`` application in ``/etc/uwsgi/apps-availabl
     uid = certidude
     gid = certidude
     plugins = python34
-    pidfile = /run/certidude/api/uwsgi.pid
-    socket = /run/certidude/api/uwsgi.sock
     chdir = /tmp
     module = certidude.wsgi
     callable = app
@@ -189,7 +187,7 @@ configure the site in /etc/nginx/sites-available.d/certidude:
 .. code::
 
     upstream certidude_api {
-        server unix:///run/certidude/api/uwsgi.sock;
+        server unix:///run/uwsgi/app/certidude/socket;
     }
 
     server {
