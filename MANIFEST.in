@@ -1,4 +1,5 @@
 include README.rst
+include certidude/templates/*.sh
 include certidude/templates/*.html
 include certidude/templates/*.svg
 include certidude/templates/*.ovpn
@@ -7,4 +8,6 @@ include certidude/templates/*.conf
 include certidude/templates/*.ini
 include certidude/static/js/*.js
 include certidude/static/css/*.css
+include certidude/static/fonts/*.woff2
+include certidude/static/img/*.svg
 include certidude/static/*.html

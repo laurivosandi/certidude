@@ -14,6 +14,7 @@ setup(
     url = "http://github.com/laurivosandi/certidude",
     packages=[
         "certidude",
+        "certidude.api"
     ],
     long_description=open("README.rst").read(),
     install_requires=[
