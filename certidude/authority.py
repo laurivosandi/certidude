@@ -114,16 +114,16 @@ def list_revoked(directory=config.REVOKED_DIR):
             yield Certificate(open(os.path.join(directory, filename)))
 
 
-def export_crl(self):
+def export_crl():
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.connect(config.SIGNER_SOCKET_PATH)
     sock.send(b"export-crl\n")
-    for filename in os.listdir(self.revoked_dir):
+    for filename in os.listdir(config.REVOKED_DIR):
         if not filename.endswith(".pem"):
             continue
         serial_number = filename[:-4]
         # TODO: Assert serial against regex
-        revoked_path = os.path.join(self.revoked_dir, filename)
+        revoked_path = os.path.join(config.REVOKED_DIR, filename)
         # TODO: Skip expired certificates
         s = os.stat(revoked_path)
         sock.send(("%s:%d\n" % (serial_number, s.st_ctime)).encode("ascii"))
