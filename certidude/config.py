@@ -8,7 +8,7 @@ import string
 from random import choice
 
 cp = configparser.ConfigParser()
-cp.read("/etc/certidude.conf")
+cp.read("/etc/certidude/server.conf")
 
 ADMIN_USERS = set([j for j in  cp.get("authorization", "admin_users").split(" ") if j])
 ADMIN_SUBNETS = set([ipaddress.ip_network(j) for j in cp.get("authorization", "admin_subnets").split(" ") if j])
@@ -47,7 +47,6 @@ except configparser.NoOptionError:
     PUSH_EVENT_SOURCE = PUSH_SERVER + "/ev/%s"
     PUSH_LONG_POLL = PUSH_SERVER + "/lp/%s"
     PUSH_PUBLISH = PUSH_SERVER + "/pub?id=%s"
-
 
 from urllib.parse import urlparse
 o = urlparse(cp.get("authority", "database"))

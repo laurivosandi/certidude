@@ -69,6 +69,9 @@ def certidude_spawn(kill, no_interaction):
     """
     from certidude import config
 
+    _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
+    os.setgid(gid)
+
     # Check whether we have privileges
     os.umask(0o027)
     uid = os.getuid()
@@ -472,7 +475,7 @@ def certidude_setup_strongswan_networkmanager(url, email_address, common_name, o
 @click.option("--username", default="certidude", help="Service user account, created if necessary, 'certidude' by default")
 @click.option("--hostname", default=HOSTNAME, help="nginx hostname, '%s' by default" % HOSTNAME)
 @click.option("--static-path", default=os.path.join(os.path.dirname(__file__), "static"), help="Static files")
-@click.option("--kerberos-keytab", default="/etc/certidude.keytab", help="Specify Kerberos keytab")
+@click.option("--kerberos-keytab", default="/etc/certidude/server.keytab", help="Specify Kerberos keytab")
 @click.option("--nginx-config", "-n",
     default="/etc/nginx/nginx.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
@@ -540,6 +543,10 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     if os.path.lexists(directory):
         raise click.ClickException("Output directory {} already exists.".format(directory))
 
+    certidude_conf = os.path.join("/etc/certidude/server.conf")
+    if os.path.exists(certidude_conf):
+        raise click.ClickException("Configuration file %s already exists" % certidude_conf)
+
     click.echo("CA configuration files are saved to: {}".format(directory))
 
     click.echo("Generating 4096-bit RSA key...")
@@ -589,6 +596,10 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
             True,
             b"keyCertSign, cRLSign"),
         crypto.X509Extension(
+            b"extendedKeyUsage",
+            True,
+            b"serverAuth,1.3.6.1.5.5.8.2.2"),
+        crypto.X509Extension(
             b"subjectKeyIdentifier",
             False,
             b"hash",
@@ -605,6 +616,12 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
             b"subjectAltName",
             False,
             subject_alt_name.encode("ascii"))
+    ])
+    ca.add_extensions([
+        crypto.X509Extension(
+            b"subjectAltName",
+            True,
+            ("DNS:%s" % common_name).encode("ascii"))
     ])
 
     if ocsp_responder_url:
@@ -628,32 +645,39 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
 
     ca.sign(key, "sha256")
 
+    _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
+    os.setgid(gid)
+
+    # Create authority directory with 750 permissions
     os.umask(0o027)
     if not os.path.exists(directory):
         os.makedirs(directory)
 
+    # Create subdirectories with 770 permissions
     os.umask(0o007)
-
     for subdir in ("signed", "requests", "revoked"):
         if not os.path.exists(os.path.join(directory, subdir)):
             os.mkdir(os.path.join(directory, subdir))
+
+    # Create CRL and serial file with 644 permissions
+    os.umask(0o133)
     with open(ca_crl, "wb") as fh:
         crl = crypto.CRL()
         fh.write(crl.export(ca, key, days=revocation_list_lifetime))
     with open(os.path.join(directory, "serial"), "w") as fh:
         fh.write("1")
 
-    os.umask(0o027)
+    # Set permission bits to 640
+    os.umask(0o137)
+    with open(certidude_conf, "w") as fh:
+        fh.write(env.get_template("certidude.conf").render(locals()))
     with open(ca_crt, "wb") as fh:
         fh.write(crypto.dump_certificate(crypto.FILETYPE_PEM, ca))
 
-    os.umask(0o077)
+    # Set permission bits to 600
+    os.umask(0o177)
     with open(ca_key, "wb") as fh:
         fh.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
-
-    certidude_conf = os.path.join("/etc/certidude.conf")
-    with open(certidude_conf, "w") as fh:
-        fh.write(env.get_template("certidude.conf").render(locals()))
 
     click.echo()
     click.echo("Use following commands to inspect the newly created files:")
@@ -665,7 +689,7 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     click.echo()
     click.echo("Use following to launch privilege isolated signer processes:")
     click.echo()
-    click.echo("  certidude spawn")
+    click.echo("  certidude spawn -k")
     click.echo()
     click.echo("Use following command to serve CA read-only:")
     click.echo()

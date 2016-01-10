@@ -8,7 +8,7 @@
 {% if lease.released %}
 Last seen {{ lease.released }} at {{ lease.address }}
 {% else %}
-Online since {{ lease.acquired }} at {{ lease.address }}
+Online since {{ lease.acquired }} at <a target="{{ lease.address }}" href="http://{{ lease.address }}">{{ lease.address }}</a>
 {% endif %}
 {% else %}
 Not seen

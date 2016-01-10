@@ -97,7 +97,7 @@ def raw_sign(private_key, ca_cert, request, basic_constraints, lifetime, key_usa
                     extended_key_usage.encode("ascii"))])
 
         # Set certificate lifetime
-        cert.gmtime_adj_notBefore(0)
+        cert.gmtime_adj_notBefore(-3600)
         cert.gmtime_adj_notAfter(lifetime * 24 * 60 * 60)
 
         # Generate serial from 0x10000000000000000000 to 0xffffffffffffffffffff

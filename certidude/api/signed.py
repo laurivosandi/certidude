@@ -28,6 +28,9 @@ class SignedCertificateListResource(object):
 class SignedCertificateDetailResource(object):
     @serialize
     def on_get(self, req, resp, cn):
+        # Compensate for NTP lag
+        from time import sleep
+        sleep(5)
         try:
             logger.info("Served certificate %s to %s", cn, req.env["REMOTE_ADDR"])
             resp.set_header("Content-Disposition", "attachment; filename=%s.crt" % cn)

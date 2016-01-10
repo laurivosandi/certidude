@@ -80,6 +80,7 @@ def certidude_app():
     from .whois import WhoisResource
     from .log import LogResource
     from .tag import TagResource, TagDetailResource
+    from .cfg import ConfigResource, ScriptResource
 
     app = falcon.API()
 
@@ -94,6 +95,8 @@ def certidude_app():
     app.add_route("/api/log/", LogResource())
     app.add_route("/api/tag/", TagResource())
     app.add_route("/api/tag/{identifier}/", TagDetailResource())
+    app.add_route("/api/config/", ConfigResource())
+    app.add_route("/api/script/", ScriptResource())
     app.add_route("/api/", SessionResource())
 
     # Gateway API calls, should this be moved to separate project?
@@ -115,7 +118,6 @@ def certidude_app():
     class PushLogHandler(logging.Handler):
         def emit(self, record):
             from certidude.push import publish
-            print("EVENT HAPPENED:", record.created)
             publish("log-entry", dict(
                 created = datetime.fromtimestamp(record.created),
                 message = record.msg % record.args,

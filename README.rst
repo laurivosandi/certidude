@@ -95,16 +95,14 @@ You can check it with:
 The command should return ca.example.co
 
 Certidude can set up CA relatively easily, following will set up
-CA in /var/lib/certidude/hostname.domain:
+CA in /var/lib/certidude/hostname.domain.tld:
 
 .. code:: bash
 
     certidude setup authority
 
-Tweak command-line options until you meet your requirements and
-then insert generated section to your /etc/ssl/openssl.cnf
-
-Spawn the signer process:
+Tweak the configuration in /etc/certidude/server.conf until you meet your requirements and
+spawn the signer process:
 
 .. code:: bash
 
@@ -126,13 +124,13 @@ Use following command to request a certificate on a machine:
 
     certidude setup client ca.example.com
 
-Use following to list signing requests, certificates and revoked certificates:
+Use following to list signing requests, certificates and revoked certificates on server:
 
 .. code::
 
     certidude list
 
-Use web interface or following to sign a certificate on Certidude server:
+Use web interface or following to sign a certificate on server:
 
 .. code::
 
@@ -173,7 +171,7 @@ Otherwise manually configure ``uwsgi`` application in ``/etc/uwsgi/apps-availabl
     buffer-size = 32768
     env = LANG=C.UTF-8
     env = LC_ALL=C.UTF-8
-    env = KRB5_KTNAME=/etc/certidude.keytab
+    env = KRB5_KTNAME=/etc/certidude/server.keytab
 
 Also enable the application:
 
@@ -298,7 +296,7 @@ Set up Kerberos keytab for the web service:
 
 .. code:: bash
 
-    KRB5_KTNAME=FILE:/etc/certidude.keytab net ads keytab add HTTP -U Administrator
+    KRB5_KTNAME=FILE:/etc/certidude/server.keytab net ads keytab add HTTP -U Administrator
 
 
 Setting up authorization

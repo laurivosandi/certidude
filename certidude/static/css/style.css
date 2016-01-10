@@ -216,5 +216,8 @@ select {
 .icon.room { background-image: url("../img/iconmonstr-home-4-icon.svg"); }
 .icon.serial { background-image: url("../img/iconmonstr-barcode-4-icon.svg"); }
 
+.icon.wireless { background-image: url("../img/iconmonstr-wireless-6-icon.svg"); }
+.icon.password { background-image: url("../img/iconmonstr-lock-3-icon.svg"); }
+
 /* Make sure this is the last one */
 .icon.busy{background-image:url("https://software.opensuse.org/assets/ajax-loader-ea46060b6c9f42822a3d58d075c83ea2.gif");}

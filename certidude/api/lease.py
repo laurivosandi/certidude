@@ -54,8 +54,8 @@ class LeaseResource(object):
                 addresses.id
             desc
         """
-        cnx = config.DATABASE_POOL.get_connection()
-        cursor = cnx.cursor()
+        conn = config.DATABASE_POOL.get_connection()
+        cursor = conn.cursor()
         cursor.execute(SQL_LEASES)
 
         for acquired, released, address, identity in cursor:
@@ -66,3 +66,5 @@ class LeaseResource(object):
                 "identity": parse_dn(bytes(identity))
             }
 
+        cursor.close()
+        conn.close()

@@ -1,0 +1,31 @@
+
+<h1>Create a rule</h1>
+<p>
+
+    <datalist id="tag_autocomplete">
+
+    </datalist>
+
+     <span>Filter</span>
+      <select id="tags_autocomplete"></select>
+      attaches attribute
+      <select>
+        {% include 'tagtypes.html' %}
+      </select>
+      <span contenteditable>something</span>
+      <button>Add rule</button>
+</p>
+
+{% for grouper, items in configuration | groupby('tag_id') %}
+
+<h1>Filter {{ items[0].match_key }} is {{ items[0].match_value }}</h1>
+<ul>
+
+{% for item in items %}
+    <li>Attach {{ item.key }} attribute {{ item.value }}</li>
+{% endfor %}
+</ul>
+
+{% endfor %}
+
+

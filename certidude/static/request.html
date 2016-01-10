@@ -1,4 +1,4 @@
-<li id="request_{{ request.sha256sum }}" class="filterable">
+<li id="request_{{ request.common_name }}" class="filterable">
 
 <a class="button icon download" href="/api/request/{{request.common_name}}/">Fetch</a>
 {% if request.signable %}

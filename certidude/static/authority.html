@@ -52,9 +52,7 @@
 <section id="revoked">
     <h1>Revoked certificates</h1>
     <p>To fetch certificate revocation list:</p>
-    <pre>
-    curl {{window.location.href}}api/revoked/ | openssl crl -text -noout
-    </pre>
+    <pre>curl {{window.location.href}}api/revoked/ | openssl crl -text -noout</pre>
     <!--
     <p>To perform online certificate status request</p>
 
@@ -73,4 +71,7 @@
             <li>Great job! No certificate signing requests to sign.</li>
 	    {% endfor %}
     </ul>
+</section>
+
+<section id="config">
 </section>

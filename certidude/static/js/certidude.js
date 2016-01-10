@@ -15,6 +15,7 @@ function onTagClicked() {
             url: "/api/tag/" + $(this).attr("data-id"),
             dataType: "json",
             data: {
+                key: $(this).attr("data-key"),
                 value: updated
             }
         });
@@ -38,6 +39,11 @@ function onNewTagClicked() {
             key: key
         }
     });
+}
+
+function onTagFilterChanged() {
+    var key = $(event.target).val();
+    console.info("New key is:", key);
 }
 
 function onLogEntry (e) {
@@ -128,7 +134,7 @@ function onTagAdded(e) {
         dataType: "json",
         success: function(tag, status, xhr) {
             // TODO: Deduplicate
-            $tag = $("<span id=\"tag_" + tag.id + "\" class=\"" + tag.key + " icon tag\" data-id=\""+tag.id+"\">" + tag.value + "</span>");
+            $tag = $("<span id=\"tag_" + tag.id + "\" title=\"" + tag.key + "=" + tag.value + "\" class=\"" + tag.key.replace(/\./g, " ") + " icon tag\" data-id=\""+tag.id+"\" data-key=\"" + tag.key + "\">" + tag.value + "</span>");
             $tags = $("#signed_certificates [data-cn='" + tag.cn + "'] .tags").prepend(" ");
             $tags = $("#signed_certificates [data-cn='" + tag.cn + "'] .tags").prepend($tag);
             $tag.click(onTagClicked);
@@ -202,29 +208,6 @@ $(document).ready(function() {
             });
 
             /**
-             * Fetch log entries
-             */
-            $.ajax({
-                method: "GET",
-                url: "/api/log/",
-                dataType: "json",
-                success:function(entries, status, xhr) {
-                    console.info("Got", entries.length, "log entries");
-                    for (var j = 0; j < entries.length; j++) {
-                        if ($("#log_level_" + entries[j].severity).prop("checked")) {
-                            $("#log_entries").append(nunjucks.render("logentry.html", {
-                                entry: {
-                                    created: new Date(entries[j].created).toLocaleString("et-EE"),
-                                    message: entries[j].message,
-                                    severity: entries[j].severity
-                                }
-                            }));
-                        }
-                    }
-                }
-            });
-
-            /**
              * Set up search bar
               */
             $(window).on("search", function() {
@@ -248,22 +231,35 @@ $(document).ready(function() {
 
             });
 
-            /**
-             * Fetch tags for certificates
-             */
+
+
             $.ajax({
                 method: "GET",
-                url: "/api/tag/",
+                url: "/api/config/",
                 dataType: "json",
-                success:function(tags, status, xhr) {
-                    console.info("Got", tags.length, "tags");
-                    for (var j = 0; j < tags.length; j++) {
-                        // TODO: Deduplicate
-                        $tag = $("<span id=\"tag_" + tags[j].id + "\" class=\"" + tags[j].key + " icon tag\" data-id=\""+tags[j].id+"\">" + tags[j].value + "</span>");
-                        $tags = $("#signed_certificates [data-cn='" + tags[j].cn + "'] .tags").prepend(" ");
-                        $tags = $("#signed_certificates [data-cn='" + tags[j].cn + "'] .tags").prepend($tag);
-                        $tag.click(onTagClicked);
-                    }
+                success: function(configuration, status, xhr) {
+                    console.info("Appending " + configuration.length + " configuration items");
+                    $("#config").html(nunjucks.render('configuration.html', { configuration:configuration}));
+                    /**
+                     * Fetch tags for certificates
+                     */
+                    $.ajax({
+                        method: "GET",
+                        url: "/api/tag/",
+                        dataType: "json",
+                        success:function(tags, status, xhr) {
+                            console.info("Got", tags.length, "tags");
+                            for (var j = 0; j < tags.length; j++) {
+                                // TODO: Deduplicate
+                                $tag = $("<span id=\"tag_" + tags[j].id + "\"  title=\"" + tags[j].key + "=" + tags[j].value + "\" class=\"" + tags[j].key.replace(/\./g, " ") + " icon tag\" data-id=\""+tags[j].id+"\" data-key=\"" + tags[j].key + "\">" + tags[j].value + "</span>");
+                                console.info("Inserting tag", tags[j], $tag);
+                                $tags = $("#signed_certificates [data-cn='" + tags[j].cn + "'] .tags").prepend(" ");
+                                $tags = $("#signed_certificates [data-cn='" + tags[j].cn + "'] .tags").prepend($tag);
+                                $tag.click(onTagClicked);
+                                $("#tags_autocomplete").prepend("<option value=\"" + tags[j].id + "\">" + tags[j].key + "='" + tags[j].value + "'</option>");
+                            }
+                        }
+                    });
                 }
             });
 
@@ -291,6 +287,29 @@ $(document).ready(function() {
                             }}));
                     }
 
+                }
+            });
+            return;
+            /**
+             * Fetch log entries
+             */
+            $.ajax({
+                method: "GET",
+                url: "/api/log/",
+                dataType: "json",
+                success:function(entries, status, xhr) {
+                    console.info("Got", entries.length, "log entries");
+                    for (var j = 0; j < entries.length; j++) {
+                        if ($("#log_level_" + entries[j].severity).prop("checked")) {
+                            $("#log_entries").append(nunjucks.render("logentry.html", {
+                                entry: {
+                                    created: new Date(entries[j].created).toLocaleString("et-EE"),
+                                    message: entries[j].message,
+                                    severity: entries[j].severity
+                                }
+                            }));
+                        }
+                    }
                 }
             });
         }

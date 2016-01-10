@@ -11,6 +11,8 @@
     <div class="email">{% include 'img/iconmonstr-email-2-icon.svg' %} {{ certificate.email_address }}</div>
     {% endif %}
 
+    {#
+
     <div class="monospace">
     {% include 'img/iconmonstr-key-2-icon.svg' %}
     <span title="SHA-256 of public key">
@@ -25,13 +27,12 @@
     {{certificate.key_usage}}
     </div>
 
+    #}
+
     <div class="tags">
       <select class="icon tag" data-cn="{{ certificate.common_name }}" onChange="onNewTagClicked();">
         <option value="">Add tag...</option>
-        <option value="location">Location</option>
-        <option value="phone">Phone</option>
-        <option value="room">Room</option>
-        <option value="serial">Product serial</option>
+        {% include 'tagtypes.html' %}
       </select>
     </div>
 
