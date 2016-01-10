@@ -180,7 +180,7 @@ Also enable the application:
     ln -s ../apps-available/certidude.ini /etc/uwsgi/apps-enabled/certidude.ini
 
 We support `nginx-push-stream-module <https://github.com/wandenberg/nginx-push-stream-module>`_,
-configure the site in /etc/nginx/sites-available.d/certidude:
+configure the site in /etc/nginx/sites-available/certidude:
 
 .. code::
 
@@ -192,7 +192,14 @@ configure the site in /etc/nginx/sites-available.d/certidude:
         server_name localhost;
         listen 80 default_server;
         listen [::]:80 default_server ipv6only=on;
+        root /usr/local/lib/python3.4/dist-packages/certidude/static;
 
+        location /api/ {
+            include uwsgi_params;
+            uwsgi_pass certidude_api;
+        }
+
+        # Add following three if you wish to enable push server on this machine
         location /pub {
             allow 127.0.0.1; # Allow publishing only from CA machine
             push_stream_publisher admin;
@@ -208,18 +215,13 @@ configure the site in /etc/nginx/sites-available.d/certidude:
             push_stream_channels_path $1;
             push_stream_subscriber eventsource;
         }
-
-        location / {
-            include uwsgi_params;
-            uwsgi_pass certidude_api;
-        }
     }
 
 Enable the site:
 
 .. code:: bash
 
-    ln -s ../sites-available.d/certidude.ini /etc/nginx/sites-enabled.d/certidude
+    ln -s ../sites-available/certidude /etc/nginx/sites-enabled/certidude
 
 Also adjust ``/etc/nginx/nginx.conf``:
 
