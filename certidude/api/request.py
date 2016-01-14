@@ -68,12 +68,17 @@ class RequestListResource(object):
         # Attempt to save the request otherwise
         try:
             csr = authority.store_request(body)
-        except FileExistsError:
+        except authority.RequestExists:
+            # We should stil redirect client to long poll URL below
+            pass
+        except authority.DuplicateCommonNameError:
+            # TODO: Certificate renewal
             logger.warning("Rejected signing request with overlapping common name from %s", req.env["REMOTE_ADDR"])
             raise falcon.HTTPConflict(
                 "CSR with such CN already exists",
                 "Will not overwrite existing certificate signing request, explicitly delete CSR and try again")
-        push.publish("request-submitted", csr.common_name)
+        else:
+            push.publish("request-submitted", csr.common_name)
 
         # Wait the certificate to be signed if waiting is requested
         if req.get_param("wait"):

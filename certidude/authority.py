@@ -15,6 +15,12 @@ RE_HOSTNAME = "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0
 # https://jamielinux.com/docs/openssl-certificate-authority/
 # http://pycopia.googlecode.com/svn/trunk/net/pycopia/ssl/certs.py
 
+class RequestExists(Exception):
+    pass
+
+class DuplicateCommonNameError(Exception):
+    pass
+
 def publish_certificate(func):
     # TODO: Implement e-mail and nginx notifications using hooks
     def wrapped(csr, *args, **kwargs):
@@ -61,9 +67,10 @@ def store_request(buf, overwrite=False):
 
     # If there is cert, check if it's the same
     if os.path.exists(request_path):
-        if open(request_path).read() != buf:
-            print("Request already exists, not creating new request")
-            raise FileExistsError("Request already exists")
+        if open(request_path).read() == buf:
+            raise RequestExists("Request already exists")
+        else:
+            raise DuplicateCommonNameError("Another request with same common name already exists")
     else:
         with open(request_path + ".part", "w") as fh:
             fh.write(buf)
