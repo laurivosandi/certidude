@@ -61,12 +61,12 @@ def store_request(buf, overwrite=False):
 
     # If there is cert, check if it's the same
     if os.path.exists(request_path):
-        if open(request_path, "rb").read() != buf:
+        if open(request_path).read() != buf:
             print("Request already exists, not creating new request")
             raise FileExistsError("Request already exists")
     else:
-        with open(request_path + ".part", "wb") as fh:
-            fh.write(buf.encode("ascii"))
+        with open(request_path + ".part", "w") as fh:
+            fh.write(buf)
         os.rename(request_path + ".part", request_path)
 
     return Request(open(request_path))
