@@ -9,6 +9,7 @@ import logging
 import os
 import pwd
 import re
+import requests
 import signal
 import socket
 import subprocess
@@ -22,6 +23,7 @@ from jinja2 import Environment, PackageLoader
 from time import sleep
 from setproctitle import setproctitle
 from OpenSSL import crypto
+
 
 env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
 
@@ -60,12 +62,162 @@ if os.getuid() >= 1000:
         FIRST_NAME = gecos
 
 
-@click.command("spawn", help="Run privilege isolated signer process")
+@click.command("request", help="Run processes for requesting certificates and configuring services")
+@click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
+def certidude_spawn_request(fork):
+    from certidude.helpers import certidude_request_certificate
+    from configparser import ConfigParser
+
+    clients = ConfigParser()
+    clients.readfp(open("/etc/certidude/client.conf"))
+
+    services = ConfigParser()
+    services.readfp(open("/etc/certidude/services.conf"))
+
+    # Process directories
+    run_dir = "/run/certidude"
+
+    # Prepare signer PID-s directory
+    if not os.path.exists(run_dir):
+        click.echo("Creating: %s" % run_dir)
+        os.makedirs(run_dir)
+
+    for certificate in clients.sections():
+        if clients.get(certificate, "managed") != "true":
+            continue
+
+        pid_path = os.path.join(run_dir, certificate + ".pid")
+
+        try:
+            with open(pid_path) as fh:
+                pid = int(fh.readline())
+                os.kill(pid, signal.SIGTERM)
+                click.echo("Terminated process %d" % pid)
+            os.unlink(pid_path)
+        except (ValueError, ProcessLookupError, FileNotFoundError):
+            pass
+
+        if fork:
+            child_pid = os.fork()
+        else:
+            child_pid = None
+
+        if child_pid:
+            click.echo("Spawned certificate request process with PID %d" % (child_pid))
+            continue
+
+        with open(pid_path, "w") as fh:
+            fh.write("%d\n" % os.getpid())
+        setproctitle("certidude spawn request %s" % certificate)
+        retries = 30
+        while retries > 0:
+            try:
+                certidude_request_certificate(
+                    clients.get(certificate, "server"),
+                    clients.get(certificate, "key_path"),
+                    clients.get(certificate, "request_path"),
+                    clients.get(certificate, "certificate_path"),
+                    clients.get(certificate, "authority_path"),
+                    socket.gethostname(),
+                    None,
+                    autosign=True,
+                    wait=True)
+                break
+            except requests.exceptions.Timeout:
+                retries -= 1
+                continue
+
+        for endpoint in services.sections():
+            if services.get(endpoint, "certificate") != certificate:
+                continue
+
+            csummer = hashlib.sha1()
+            csummer.update(endpoint.encode("ascii"))
+            csum = csummer.hexdigest()
+            uuid = csum[:8] + "-" + csum[8:12] + "-" + csum[12:16] + "-" + csum[16:20] + "-" + csum[20:32]
+
+            # Set up IPsec via NetworkManager
+            if services.get(endpoint, "service") == "network-manager/strongswan":
+
+                config = configparser.ConfigParser()
+                config.add_section("connection")
+                config.add_section("vpn")
+                config.add_section("ipv4")
+
+                config.set("connection", "id", endpoint)
+                config.set("connection", "uuid", uuid)
+                config.set("connection", "type", "vpn")
+
+                config.set("vpn", "service-type", "org.freedesktop.NetworkManager.strongswan")
+                config.set("vpn", "userkey", clients.get(certificate, "key_path"))
+                config.set("vpn", "usercert", clients.get(certificate, "certificate_path"))
+                config.set("vpn", "encap", "no")
+                config.set("vpn", "address", services.get(endpoint, "remote"))
+                config.set("vpn", "virtual", "yes")
+                config.set("vpn", "method", "key")
+                config.set("vpn", "certificate", clients.get(certificate, "authority_path"))
+                config.set("vpn", "ipcomp", "no")
+
+                config.set("ipv4", "method", "auto")
+
+                # Add routes, may need some more tweaking
+                for index, subnet in enumerate(services.get(endpoint, "route").split(","), start=1):
+                    config.set("ipv4", "route%d" % index, subnet)
+
+                # Prevent creation of files with liberal permissions
+                os.umask(0o177)
+
+                # Write keyfile
+                with open(os.path.join("/etc/NetworkManager/system-connections", endpoint), "w") as configfile:
+                    config.write(configfile)
+                continue
+
+            # Set up IPsec via /etc/ipsec.conf
+            if services.get(endpoint, "service") == "strongswan":
+                from ipsecparse import loads
+                config = loads(open('/etc/ipsec.conf').read())
+                config["conn", endpoint] = dict(
+                    leftsourceip="%config",
+                    left="%defaultroute",
+                    leftcert=clients.get(certificate, "certificate_path"),
+                    rightid="%any",
+                    right=services.get(endpoint, "remote"),
+                    rightsubnet=services.get(endpoint, "route"),
+                    keyexchange="ikev2",
+                    keyingtries="300",
+                    dpdaction="restart",
+                    closeaction="restart",
+                    auto="start")
+                with open("/etc/ipsec.conf.part", "w") as fh:
+                    fh.write(config.dumps())
+                os.rename("/etc/ipsec.conf.part", "/etc/ipsec.conf")
+
+                # Regenerate /etc/ipsec.secrets
+                with open("/etc/ipsec.secrets.part", "w") as fh:
+                    for filename in os.listdir("/etc/ipsec.d/private"):
+                        if not filename.endswith(".pem"):
+                            continue
+                        fh.write(": RSA /etc/ipsec.d/private/%s\n" % filename)
+                os.rename("/etc/ipsec.secrets.part", "/etc/ipsec.secrets")
+
+                # Attempt to reload config or start if it's not running
+                if os.system("ipsec update") == 130:
+                    os.system("ipsec start")
+                continue
+
+
+
+            # TODO: OpenVPN, Puppet, OpenLDAP, intranet HTTPS, <insert awesomeness here>
+
+        os.unlink(pid_path)
+
+
+@click.command("signer", help="Run privilege isolated signer process")
 @click.option("-k", "--kill", default=False, is_flag=True, help="Kill previous instance")
 @click.option("-n", "--no-interaction", default=True, is_flag=True, help="Don't load password protected keys")
-def certidude_spawn(kill, no_interaction):
+def certidude_spawn_signer(kill, no_interaction):
     """
-    Spawn processes for signers
+    Spawn privilege isolated signer process
     """
     from certidude import config
 
@@ -80,7 +232,6 @@ def certidude_spawn(kill, no_interaction):
 
     # Process directories
     run_dir = "/run/certidude"
-    chroot_dir = os.path.join(run_dir, "jail")
 
     # Prepare signer PID-s directory
     if not os.path.exists(run_dir):
@@ -92,14 +243,12 @@ def certidude_spawn(kill, no_interaction):
     "".encode("charmap")
 
     # Prepare chroot directories
+    chroot_dir = os.path.join(run_dir, "jail")
     if not os.path.exists(os.path.join(chroot_dir, "dev")):
         os.makedirs(os.path.join(chroot_dir, "dev"))
     if not os.path.exists(os.path.join(chroot_dir, "dev", "urandom")):
         # TODO: use os.mknod instead
         os.system("mknod -m 444 %s c 1 9" % os.path.join(chroot_dir, "dev", "urandom"))
-
-    ca_loaded = False
-
 
     try:
         with open(config.SIGNER_PID_PATH) as fh:
@@ -122,26 +271,27 @@ def certidude_spawn(kill, no_interaction):
 
     child_pid = os.fork()
 
-    if child_pid == 0:
-        with open(config.SIGNER_PID_PATH, "w") as fh:
-            fh.write("%d\n" % os.getpid())
-
-#        setproctitle("%s spawn %s" % (sys.argv[0], ca.common_name))
-        logging.basicConfig(
-            filename="/var/log/signer.log",
-            level=logging.INFO)
-        server = SignServer(
-            config.SIGNER_SOCKET_PATH,
-            config.AUTHORITY_PRIVATE_KEY_PATH,
-            config.AUTHORITY_CERTIFICATE_PATH,
-            config.CERTIFICATE_LIFETIME,
-            config.CERTIFICATE_BASIC_CONSTRAINTS,
-            config.CERTIFICATE_KEY_USAGE_FLAGS,
-            config.CERTIFICATE_EXTENDED_KEY_USAGE_FLAGS,
-            config.REVOCATION_LIST_LIFETIME)
-        asyncore.loop()
-    else:
+    if child_pid:
         click.echo("Spawned certidude signer process with PID %d at %s" % (child_pid, config.SIGNER_SOCKET_PATH))
+        return
+
+    setproctitle("certidude spawn signer" % section)
+    with open(config.SIGNER_PID_PATH, "w") as fh:
+        fh.write("%d\n" % os.getpid())
+    logging.basicConfig(
+        filename="/var/log/signer.log",
+        level=logging.INFO)
+    server = SignServer(
+        config.SIGNER_SOCKET_PATH,
+        config.AUTHORITY_PRIVATE_KEY_PATH,
+        config.AUTHORITY_CERTIFICATE_PATH,
+        config.CERTIFICATE_LIFETIME,
+        config.CERTIFICATE_BASIC_CONSTRAINTS,
+        config.CERTIFICATE_KEY_USAGE_FLAGS,
+        config.CERTIFICATE_EXTENDED_KEY_USAGE_FLAGS,
+        config.REVOCATION_LIST_LIFETIME)
+    asyncore.loop()
+
 
 
 @click.command("client", help="Setup X.509 certificates for application")
@@ -894,6 +1044,9 @@ def certidude_setup_openvpn(): pass
 @click.group("setup", help="Getting started section")
 def certidude_setup(): pass
 
+@click.group("spawn", help="Spawn helper processes")
+def certidude_spawn(): pass
+
 @click.group()
 def entry_point(): pass
 
@@ -907,6 +1060,8 @@ certidude_setup.add_command(certidude_setup_openvpn)
 certidude_setup.add_command(certidude_setup_strongswan)
 certidude_setup.add_command(certidude_setup_client)
 certidude_setup.add_command(certidude_setup_production)
+certidude_spawn.add_command(certidude_spawn_request)
+certidude_spawn.add_command(certidude_spawn_signer)
 entry_point.add_command(certidude_setup)
 entry_point.add_command(certidude_serve)
 entry_point.add_command(certidude_spawn)
