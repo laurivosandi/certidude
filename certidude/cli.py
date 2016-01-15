@@ -62,9 +62,9 @@ if os.getuid() >= 1000:
         FIRST_NAME = gecos
 
 
-@click.command("request", help="Run processes for requesting certificates and configuring services")
+@click.command("spawn", help="Run processes for requesting certificates and configuring services")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
-def certidude_spawn_request(fork):
+def certidude_request_spawn(fork):
     from certidude.helpers import certidude_request_certificate
     from configparser import ConfigParser
 
@@ -108,7 +108,7 @@ def certidude_spawn_request(fork):
 
         with open(pid_path, "w") as fh:
             fh.write("%d\n" % os.getpid())
-        setproctitle("certidude spawn request %s" % certificate)
+        setproctitle("certidude request spawn %s" % certificate)
         retries = 30
         while retries > 0:
             try:
@@ -212,10 +212,10 @@ def certidude_spawn_request(fork):
         os.unlink(pid_path)
 
 
-@click.command("signer", help="Run privilege isolated signer process")
+@click.command("spawn", help="Run privilege isolated signer process")
 @click.option("-k", "--kill", default=False, is_flag=True, help="Kill previous instance")
 @click.option("-n", "--no-interaction", default=True, is_flag=True, help="Don't load password protected keys")
-def certidude_spawn_signer(kill, no_interaction):
+def certidude_signer_spawn(kill, no_interaction):
     """
     Spawn privilege isolated signer process
     """
@@ -275,7 +275,7 @@ def certidude_spawn_signer(kill, no_interaction):
         click.echo("Spawned certidude signer process with PID %d at %s" % (child_pid, config.SIGNER_SOCKET_PATH))
         return
 
-    setproctitle("certidude spawn signer" % section)
+    setproctitle("certidude signer spawn")
     with open(config.SIGNER_PID_PATH, "w") as fh:
         fh.write("%d\n" % os.getpid())
     logging.basicConfig(
@@ -839,7 +839,7 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     click.echo()
     click.echo("Use following to launch privilege isolated signer processes:")
     click.echo()
-    click.echo("  certidude spawn -k")
+    click.echo("  certidude signer spawn -k")
     click.echo()
     click.echo("Use following command to serve CA read-only:")
     click.echo()
@@ -1044,8 +1044,11 @@ def certidude_setup_openvpn(): pass
 @click.group("setup", help="Getting started section")
 def certidude_setup(): pass
 
-@click.group("spawn", help="Spawn helper processes")
-def certidude_spawn(): pass
+@click.group("signer", help="Signer process management")
+def certidude_signer(): pass
+
+@click.group("request", help="CSR process management")
+def certidude_request(): pass
 
 @click.group()
 def entry_point(): pass
@@ -1060,10 +1063,11 @@ certidude_setup.add_command(certidude_setup_openvpn)
 certidude_setup.add_command(certidude_setup_strongswan)
 certidude_setup.add_command(certidude_setup_client)
 certidude_setup.add_command(certidude_setup_production)
-certidude_spawn.add_command(certidude_spawn_request)
-certidude_spawn.add_command(certidude_spawn_signer)
+certidude_request.add_command(certidude_request_spawn)
+certidude_signer.add_command(certidude_signer_spawn)
 entry_point.add_command(certidude_setup)
 entry_point.add_command(certidude_serve)
-entry_point.add_command(certidude_spawn)
+entry_point.add_command(certidude_signer)
+entry_point.add_command(certidude_request)
 entry_point.add_command(certidude_sign)
 entry_point.add_command(certidude_list)

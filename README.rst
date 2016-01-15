@@ -106,7 +106,7 @@ spawn the signer process:
 
 .. code:: bash
 
-    certidude spawn
+    certidude signer spawn
 
 Finally serve the certificate authority via web:
 
