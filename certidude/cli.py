@@ -82,11 +82,11 @@ def certidude_request_spawn(fork):
         click.echo("Creating: %s" % run_dir)
         os.makedirs(run_dir)
 
-    for certificate in clients.sections():
-        if clients.get(certificate, "managed") != "true":
+    for server in clients.sections():
+        if clients.get(server, "managed") != "true":
             continue
 
-        pid_path = os.path.join(run_dir, certificate + ".pid")
+        pid_path = os.path.join(run_dir, server + ".pid")
 
         try:
             with open(pid_path) as fh:
@@ -108,16 +108,16 @@ def certidude_request_spawn(fork):
 
         with open(pid_path, "w") as fh:
             fh.write("%d\n" % os.getpid())
-        setproctitle("certidude request spawn %s" % certificate)
+        setproctitle("certidude request spawn %s" % server)
         retries = 30
         while retries > 0:
             try:
                 certidude_request_certificate(
-                    clients.get(certificate, "server"),
-                    clients.get(certificate, "key_path"),
-                    clients.get(certificate, "request_path"),
-                    clients.get(certificate, "certificate_path"),
-                    clients.get(certificate, "authority_path"),
+                    server
+                    clients.get(server, "key_path"),
+                    clients.get(server, "request_path"),
+                    clients.get(server, "certificate_path"),
+                    clients.get(server, "authority_path"),
                     socket.gethostname(),
                     None,
                     autosign=True,
@@ -128,7 +128,7 @@ def certidude_request_spawn(fork):
                 continue
 
         for endpoint in services.sections():
-            if services.get(endpoint, "certificate") != certificate:
+            if services.get(endpoint, "authority") != server:
                 continue
 
             csummer = hashlib.sha1()
@@ -149,13 +149,13 @@ def certidude_request_spawn(fork):
                 config.set("connection", "type", "vpn")
 
                 config.set("vpn", "service-type", "org.freedesktop.NetworkManager.strongswan")
-                config.set("vpn", "userkey", clients.get(certificate, "key_path"))
-                config.set("vpn", "usercert", clients.get(certificate, "certificate_path"))
+                config.set("vpn", "userkey", clients.get(server, "key_path"))
+                config.set("vpn", "usercert", clients.get(server, "certificate_path"))
                 config.set("vpn", "encap", "no")
                 config.set("vpn", "address", services.get(endpoint, "remote"))
                 config.set("vpn", "virtual", "yes")
                 config.set("vpn", "method", "key")
-                config.set("vpn", "certificate", clients.get(certificate, "authority_path"))
+                config.set("vpn", "certificate", clients.get(server, "authority_path"))
                 config.set("vpn", "ipcomp", "no")
 
                 config.set("ipv4", "method", "auto")
@@ -179,7 +179,7 @@ def certidude_request_spawn(fork):
                 config["conn", endpoint] = dict(
                     leftsourceip="%config",
                     left="%defaultroute",
-                    leftcert=clients.get(certificate, "certificate_path"),
+                    leftcert=clients.get(server, "certificate_path"),
                     rightid="%any",
                     right=services.get(endpoint, "remote"),
                     rightsubnet=services.get(endpoint, "route"),
