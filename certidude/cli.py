@@ -113,7 +113,7 @@ def certidude_request_spawn(fork):
         while retries > 0:
             try:
                 certidude_request_certificate(
-                    server
+                    server,
                     clients.get(server, "key_path"),
                     clients.get(server, "request_path"),
                     clients.get(server, "certificate_path"),
