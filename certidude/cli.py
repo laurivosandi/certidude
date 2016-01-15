@@ -161,8 +161,9 @@ def certidude_request_spawn(fork):
                 config.set("ipv4", "method", "auto")
 
                 # Add routes, may need some more tweaking
-                for index, subnet in enumerate(services.get(endpoint, "route").split(","), start=1):
-                    config.set("ipv4", "route%d" % index, subnet)
+                if services.has_option(endpoint, "route"):
+                    for index, subnet in enumerate(services.get(endpoint, "route").split(","), start=1):
+                        config.set("ipv4", "route%d" % index, subnet)
 
                 # Prevent creation of files with liberal permissions
                 os.umask(0o177)
