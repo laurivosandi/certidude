@@ -32,11 +32,11 @@
     <div class="tags">
       <select class="icon tag" data-cn="{{ certificate.common_name }}" onChange="onNewTagClicked();">
         <option value="">Add tag...</option>
-        {% include 'tagtypes.html' %}
+        {% include 'views/tagtypes.html' %}
       </select>
     </div>
 
     <div class="status">
-    {% include 'status.html' %}
+    {% include 'views/status.html' %}
     </div>
 </li>

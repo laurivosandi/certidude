@@ -367,3 +367,34 @@ the dispatcher invokes ``certidude`` in order to generate RSA keys,
 submit CSR, fetch signed certificate,
 create NetworkManager configuration for the VPN connection and
 finally to bring up the VPN tunnel as well.
+
+
+Development
+-----------
+
+Clone the repository:
+
+.. code:: bash
+
+    git clone https://github.com/laurivosandi/certidude
+    cd certidude
+
+To generate templates:
+
+.. code:: bash
+
+    apt-get install npm nodejs
+    npm install nunjucks
+    nunjucks-precompile --include "\\.html$" --include "\\.svg" certidude/static/ > certidude/static/js/templates.js
+
+To run from source tree:
+
+.. code:: bash
+
+    PYTHONPATH=. KRB5_KTNAME=/etc/certidude/server.keytab LANG=C.UTF-8 python3 misc/certidude
+
+To install the package from the source:
+
+.. code:: bash
+
+    python3 setup.py  install --single-version-externally-managed --root /

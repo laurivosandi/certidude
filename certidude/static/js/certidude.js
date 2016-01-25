@@ -50,7 +50,7 @@ function onLogEntry (e) {
     var entry = JSON.parse(e.data);
     if ($("#log_level_" + entry.severity).prop("checked")) {
         console.info("Received log entry:", entry);
-        $("#log_entries").prepend(nunjucks.render("logentry.html", {
+        $("#log_entries").prepend(nunjucks.render("views/logentry.html", {
             entry: {
                 created: new Date(entry.created).toLocaleString(),
                 message: entry.message,
@@ -69,7 +69,7 @@ function onRequestSubmitted(e) {
         success: function(request, status, xhr) {
             console.info(request);
             $("#pending_requests").prepend(
-                nunjucks.render('request.html', { request: request }));
+                nunjucks.render('views/request.html', { request: request }));
         }
     });
 }
@@ -83,7 +83,7 @@ function onClientUp(e) {
     console.log("Adding security association:" + e.data);
     var lease = JSON.parse(e.data);
     var $status = $("#signed_certificates [data-dn='" + lease.identity + "'] .status");
-    $status.html(nunjucks.render('status.html', {
+    $status.html(nunjucks.render('views/status.html', {
         lease: {
             address: lease.address,
             identity: lease.identity,
@@ -96,7 +96,7 @@ function onClientDown(e) {
     console.log("Removing security association:" + e.data);
     var lease = JSON.parse(e.data);
     var $status = $("#signed_certificates [data-dn='" + lease.identity + "'] .status");
-    $status.html(nunjucks.render('status.html', {
+    $status.html(nunjucks.render('views/status.html', {
         lease: {
             address: lease.address,
             identity: lease.identity,
@@ -116,7 +116,7 @@ function onRequestSigned(e) {
         success: function(certificate, status, xhr) {
             console.info(certificate);
             $("#signed_certificates").prepend(
-                nunjucks.render('signed.html', { certificate: certificate }));
+                nunjucks.render('views/signed.html', { certificate: certificate }));
         }
     });
 }
@@ -172,7 +172,7 @@ $(document).ready(function() {
             } else {
                 var msg = { title: "Error " + response.status, description: response.statusText }
             }
-            $("#container").html(nunjucks.render('error.html', { message: msg }));
+            $("#container").html(nunjucks.render('views/error.html', { message: msg }));
         },
         success: function(session, status, xhr) {
             console.info("Opening EventSource from:", session.event_channel);
@@ -197,7 +197,7 @@ $(document).ready(function() {
             /**
              * Render authority views
              **/
-            $("#container").html(nunjucks.render('authority.html', { session: session, window: window }));
+            $("#container").html(nunjucks.render('views/authority.html', { session: session, window: window }));
             console.info("Swtiching to requests section");
             $("section").hide();
             $("section#requests").show();
@@ -239,7 +239,7 @@ $(document).ready(function() {
                 dataType: "json",
                 success: function(configuration, status, xhr) {
                     console.info("Appending " + configuration.length + " configuration items");
-                    $("#config").html(nunjucks.render('configuration.html', { configuration:configuration}));
+                    $("#config").html(nunjucks.render('views/configuration.html', { configuration:configuration}));
                     /**
                      * Fetch tags for certificates
                      */
@@ -278,7 +278,7 @@ $(document).ready(function() {
                             console.info("Detected rogue client:", leases[j]);
                             continue;
                         }
-                        $status.html(nunjucks.render('status.html', {
+                        $status.html(nunjucks.render('views/status.html', {
                             lease: {
                                 address: leases[j].address,
                                 identity: leases[j].identity,
@@ -301,7 +301,7 @@ $(document).ready(function() {
                     console.info("Got", entries.length, "log entries");
                     for (var j = 0; j < entries.length; j++) {
                         if ($("#log_level_" + entries[j].severity).prop("checked")) {
-                            $("#log_entries").append(nunjucks.render("logentry.html", {
+                            $("#log_entries").append(nunjucks.render("views/logentry.html", {
                                 entry: {
                                     created: new Date(entries[j].created).toLocaleString("et-EE"),
                                     message: entries[j].message,

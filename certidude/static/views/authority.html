@@ -16,7 +16,7 @@
 
     <ul id="pending_requests">
         {% for request in session.requests %}
-             {% include "request.html" %}
+             {% include "views/request.html" %}
 	    {% endfor %}
         <li class="notify">
             <p>No certificate signing requests to sign! You can  submit a certificate signing request by:</p>
@@ -31,7 +31,7 @@
     <input id="search" type="search" class="icon search">
     <ul id="signed_certificates">
         {% for certificate in session.signed | sort | reverse %}
-            {% include "signed.html" %}
+            {% include "views/signed.html" %}
 	    {% endfor %}
     </ul>
 </section>
