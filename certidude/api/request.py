@@ -4,7 +4,7 @@ import falcon
 import logging
 import ipaddress
 import os
-from certidude import config, authority, helpers, push
+from certidude import config, authority, helpers, push, errors
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize
 from certidude.wrappers import Request, Certificate
@@ -68,10 +68,10 @@ class RequestListResource(object):
         # Attempt to save the request otherwise
         try:
             csr = authority.store_request(body)
-        except authority.RequestExists:
+        except errors.RequestExists:
             # We should stil redirect client to long poll URL below
             pass
-        except authority.DuplicateCommonNameError:
+        except errors.DuplicateCommonNameError:
             # TODO: Certificate renewal
             logger.warning("Rejected signing request with overlapping common name from %s", req.env["REMOTE_ADDR"])
             raise falcon.HTTPConflict(
