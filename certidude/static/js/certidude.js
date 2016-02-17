@@ -281,6 +281,7 @@ $(document).ready(function() {
                         $status.html(nunjucks.render('views/status.html', {
                             lease: {
                                 address: leases[j].address,
+                                age: (new Date() - new Date(leases[j].released)) / 1000,
                                 identity: leases[j].identity,
                                 acquired: new Date(leases[j].acquired).toLocaleString(),
                                 released: leases[j].released ? new Date(leases[j].released).toLocaleString() : null

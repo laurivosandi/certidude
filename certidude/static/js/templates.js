@@ -1070,17 +1070,24 @@ var parentTemplate = null;
 output += "<svg height=\"32\" width=\"32\">\n    <circle cx=\"16\" cy=\"16\" r=\"13\" stroke=\"black\" stroke-width=\"3\" fill=\"";
 if(runtime.contextOrFrameLookup(context, frame, "lease")) {
 if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "lease")),"released")) {
-output += "red";
+if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "lease")),"age") > 1209600) {
+output += "#D6083B";
 ;
 }
 else {
-output += "green";
+output += "#0072CF";
 ;
 }
 ;
 }
 else {
-output += "yellow";
+output += "#55A51C";
+;
+}
+;
+}
+else {
+output += "#F3BD48";
 ;
 }
 output += "\" />\n</svg>\n\n<span>\n\n";

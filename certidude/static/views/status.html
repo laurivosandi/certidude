@@ -1,5 +1,5 @@
 <svg height="32" width="32">
-    <circle cx="16" cy="16" r="13" stroke="black" stroke-width="3" fill="{% if lease %}{% if lease.released %}red{%else %}green{% endif %}{% else %}yellow{% endif %}" />
+    <circle cx="16" cy="16" r="13" stroke="black" stroke-width="3" fill="{% if lease %}{% if lease.released %}{% if lease.age > 1209600 %}#D6083B{% else %}#0072CF{% endif %}{%else %}#55A51C{% endif %}{% else %}#F3BD48{% endif %}" />
 </svg>
 
 <span>
