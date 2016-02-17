@@ -18,7 +18,7 @@ def publish(event_type, event_data):
     notification = urllib.request.Request(
         url,
         event_data.encode("utf-8"),
-        {"Event-ID": b"TODO", "Event-Type":event_type.encode("ascii")})
+        {"X-EventSource-Event":event_type.encode("ascii")})
     notification.add_header("User-Agent", "Certidude API")
 
     try:
@@ -28,10 +28,10 @@ def publish(event_type, event_data):
         if err.code == 404:
             print("No subscribers on the channel")
         else:
-            raise
+            print("Failed to submit event, %s" % err)
     else:
         print("Push server returned:", response.code, body)
-    response.close()
+        response.close()
 
 
 
