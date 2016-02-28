@@ -1,7 +1,7 @@
 
 import click
 import json
-import urllib.request
+import requests
 from certidude import config
 
 
@@ -13,25 +13,9 @@ def publish(event_type, event_data):
         from certidude.decorators import MyEncoder
         event_data = json.dumps(event_data, cls=MyEncoder)
 
-    url = config.PUSH_PUBLISH % config.PUSH_TOKEN
-    click.echo("Posting event %s %s at %s, waiting for response..." % (repr(event_type), repr(event_data), repr(url)))
-    notification = urllib.request.Request(
-        url,
-        event_data.encode("utf-8"),
-        {"X-EventSource-Event":event_type.encode("ascii")})
-    notification.add_header("User-Agent", "Certidude API")
-
-    try:
-        response = urllib.request.urlopen(notification)
-        body = response.read()
-    except urllib.error.HTTPError as err:
-        if err.code == 404:
-            print("No subscribers on the channel")
-        else:
-            print("Failed to submit event, %s" % err)
-    else:
-        print("Push server returned:", response.code, body)
-        response.close()
-
+    notification = requests.post(
+        config.PUSH_PUBLISH % config.PUSH_TOKEN,
+        data=event_data,
+        headers={"X-EventSource-Event": event_type, "User-Agent": "Certidude API"})
 
 

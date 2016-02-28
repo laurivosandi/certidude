@@ -123,18 +123,19 @@ def certidude_app():
                 message = record.msg % record.args,
                 severity = record.levelname.lower()))
 
-    sql_handler = MySQLLogHandler(config.DATABASE_POOL)
+    if config.DATABASE_POOL:
+        sql_handler = MySQLLogHandler(config.DATABASE_POOL)
     push_handler = PushLogHandler()
 
     for facility in "api", "cli":
         logger = logging.getLogger(facility)
         logger.setLevel(logging.DEBUG)
-        logger.addHandler(sql_handler)
+        if config.DATABASE_POOL:
+            logger.addHandler(sql_handler)
         logger.addHandler(push_handler)
 
 
-    logging.getLogger("cli").debug("Started Certidude at %s",
-        socket.getaddrinfo(socket.gethostname(), 0, flags=socket.AI_CANONNAME)[0][3])
+    logging.getLogger("cli").debug("Started Certidude at %s", config.FQDN)
 
     import atexit
 

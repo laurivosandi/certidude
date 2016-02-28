@@ -22,7 +22,7 @@ class RequestListResource(object):
         Submit certificate signing request (CSR) in PEM format
         """
         # Parse remote IPv4/IPv6 address
-        remote_addr = ipaddress.ip_network(req.env["REMOTE_ADDR"])
+        remote_addr = ipaddress.ip_network(req.env["REMOTE_ADDR"].decode("utf-8"))
 
         # Check for CSR submission whitelist
         if config.REQUEST_SUBNETS:
@@ -30,7 +30,7 @@ class RequestListResource(object):
                 if subnet.overlaps(remote_addr):
                     break
             else:
-               logger.warning("Attempted to submit signing request from non-whitelisted address %s", req.env["REMOTE_ADDR"])
+               logger.warning("Attempted to submit signing request from non-whitelisted address %s", remote_addr)
                raise falcon.HTTPForbidden("Forbidden", "IP address %s not whitelisted" % remote_addr)
 
         if req.get_header("Content-Type") != "application/pkcs10":

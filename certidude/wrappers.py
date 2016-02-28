@@ -199,7 +199,7 @@ class Request(CertificateBase):
         self.path = NotImplemented
         self.created = NotImplemented
 
-        if isinstance(mixed, io.TextIOWrapper):
+        if isinstance(mixed, file):
             self.path = mixed.name
             _, _, _, _, _, _, _, _, mtime, _ = os.stat(self.path)
             self.created = datetime.fromtimestamp(mtime)
@@ -248,7 +248,7 @@ class Certificate(CertificateBase):
         self.path = NotImplemented
         self.changed = NotImplemented
 
-        if isinstance(mixed, io.TextIOWrapper):
+        if isinstance(mixed, file):
             self.path = mixed.name
             _, _, _, _, _, _, _, _, mtime, _ = os.stat(self.path)
             self.changed = datetime.fromtimestamp(mtime)

@@ -23,7 +23,8 @@ from jinja2 import Environment, PackageLoader
 from time import sleep
 from setproctitle import setproctitle
 from OpenSSL import crypto
-
+from future.standard_library import install_aliases
+install_aliases()
 
 env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
 
@@ -44,7 +45,7 @@ assert hasattr(crypto.X509Req(), "get_extensions"), "You're running too old vers
 
 # Parse command-line argument defaults from environment
 HOSTNAME = socket.gethostname()
-FQDN = socket.getaddrinfo(HOSTNAME, 0, flags=socket.AI_CANONNAME)[0][3]
+FQDN = socket.getaddrinfo(HOSTNAME, 0, socket.AF_INET, 0, 0, socket.AI_CANONNAME)[0][3]
 USERNAME = os.environ.get("USER")
 NOW = datetime.utcnow().replace(tzinfo=None)
 FIRST_NAME = None
@@ -66,9 +67,8 @@ if os.getuid() >= 1000:
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 def certidude_request_spawn(fork):
     from certidude.helpers import certidude_request_certificate
-    from configparser import ConfigParser
 
-    clients = ConfigParser()
+    clients = configparser.ConfigParser()
     clients.readfp(open("/etc/certidude/client.conf"))
 
     services = ConfigParser()

@@ -1,3 +1,4 @@
+# encoding: utf-8
 
 import falcon
 import ipaddress
@@ -41,8 +42,6 @@ class MyEncoder(json.JSONEncoder):
             return obj.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         if isinstance(obj, date):
             return obj.strftime("%Y-%m-%d")
-        if isinstance(obj, map):
-            return tuple(obj)
         if isinstance(obj, types.GeneratorType):
             return tuple(obj)
         if isinstance(obj, Request):

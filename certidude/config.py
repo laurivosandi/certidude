@@ -1,14 +1,18 @@
 
 import click
+import codecs
 import configparser
 import ipaddress
 import os
 import socket
 import string
 from random import choice
+from urllib.parse import urlparse
+
+FQDN = socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, 0, 0, socket.AI_CANONNAME)[0][3]
 
 cp = configparser.ConfigParser()
-cp.read("/etc/certidude/server.conf")
+cp.readfp(codecs.open("/etc/certidude/server.conf", "r", "utf8"))
 
 ADMIN_USERS = set([j for j in  cp.get("authorization", "admin_users").split(" ") if j])
 ADMIN_SUBNETS = set([ipaddress.ip_network(j) for j in cp.get("authorization", "admin_subnets").split(" ") if j])
@@ -43,14 +47,16 @@ try:
     PUSH_LONG_POLL = cp.get("push", "long_poll")
     PUSH_PUBLISH = cp.get("push", "publish")
 except configparser.NoOptionError:
-    PUSH_SERVER = cp.get("push", "server")
+    PUSH_SERVER = cp.get("push", "server") or "http://localhost"
     PUSH_EVENT_SOURCE = PUSH_SERVER + "/ev/%s"
     PUSH_LONG_POLL = PUSH_SERVER + "/lp/%s"
     PUSH_PUBLISH = PUSH_SERVER + "/pub?id=%s"
 
-from urllib.parse import urlparse
-o = urlparse(cp.get("authority", "database"))
-if o.scheme == "mysql":
+o = urlparse(cp.get("authority", "database") if cp.has_option("authority", "database") else "")
+
+if not o.scheme:
+    DATABASE_POOL = None
+elif o.scheme == "mysql":
     import mysql.connector
     DATABASE_POOL = mysql.connector.pooling.MySQLConnectionPool(
         pool_size = 32,

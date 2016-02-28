@@ -3,7 +3,7 @@ import click
 import os
 import re
 import socket
-import urllib.request
+import requests
 from OpenSSL import crypto
 from certidude import config, push
 from certidude.wrappers import Certificate, Request
@@ -24,12 +24,9 @@ def publish_certificate(func):
 
         if config.PUSH_PUBLISH:
             url = config.PUSH_PUBLISH % csr.fingerprint()
-            notification = urllib.request.Request(url, cert.dump().encode("ascii"))
-            notification.add_header("User-Agent", "Certidude API")
-            notification.add_header("Content-Type", "application/x-x509-user-cert")
-            click.echo("Publishing certificate at %s, waiting for response..." % url)
-            response = urllib.request.urlopen(notification)
-            response.read()
+            click.echo("Publishing certificate at %s ..." % url)
+            requests.post(url, data=cert.dump(),
+                headers={"User-Agent": "Certidude API", "Content-Type": "application/x-x509-user-cert"})
             push.publish("request-signed", csr.common_name)
         return cert
     return wrapped
@@ -146,22 +143,8 @@ def delete_request(common_name):
     push.publish("request-deleted", request_sha1sum)
 
     # Write empty certificate to long-polling URL
-    url = config.PUSH_PUBLISH % request_sha1sum
-    click.echo("POST-ing empty certificate at %s, waiting for response..." % url)
-    publisher = urllib.request.Request(url, b"-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n")
-    publisher.add_header("User-Agent", "Certidude API")
-
-    try:
-        response = urllib.request.urlopen(publisher)
-        body = response.read()
-    except urllib.error.HTTPError as err:
-        if err.code == 404:
-            print("No subscribers on the channel")
-        else:
-            raise
-    else:
-        print("Push server returned:", response.code, body)
-
+    requests.delete(config.PUSH_PUBLISH % request_sha1sum,
+        headers={"User-Agent": "Certidude API"})
 
 @publish_certificate
 def sign(req, overwrite=False, delete=True):

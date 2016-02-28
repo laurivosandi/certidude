@@ -18,7 +18,7 @@ logger = logging.getLogger("api")
 # address eg via LDAP, hence to keep things simple
 # we simply use Kerberos to authenticate.
 
-FQDN = socket.getaddrinfo(socket.gethostname(), 0, flags=socket.AI_CANONNAME)[0][3]
+FQDN = socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, 0, 0, socket.AI_CANONNAME)[0][3]
 
 if not os.getenv("KRB5_KTNAME"):
     click.echo("Kerberos keytab not specified, set environment variable 'KRB5_KTNAME'", err=True)
@@ -89,7 +89,7 @@ def authorize_admin(func):
     def wrapped(self, req, resp, *args, **kwargs):
         from certidude import config
         # Parse remote IPv4/IPv6 address
-        remote_addr = ipaddress.ip_network(req.env["REMOTE_ADDR"])
+        remote_addr = ipaddress.ip_network(req.env["REMOTE_ADDR"].decode("utf-8"))
 
         # Check for administration subnet whitelist
         print("Comparing:", config.ADMIN_SUBNETS, "To:", remote_addr)
@@ -97,12 +97,12 @@ def authorize_admin(func):
             if subnet.overlaps(remote_addr):
                 break
         else:
-            logger.info("Rejected access to administrative call %s by %s from %s, source address not whitelisted", req.env["PATH_INFO"], req.context["user"], req.env["REMOTE_ADDR"])
+            logger.info("Rejected access to administrative call %s by %s from %s, source address not whitelisted", req.env["PATH_INFO"], req.context["user"], remote_addr)
             raise falcon.HTTPForbidden("Forbidden", "Remote address %s not whitelisted" % remote_addr)
 
         # Check for username whitelist
         if req.context.get("user") not in config.ADMIN_USERS:
-            logger.info("Rejected access to administrative call %s by %s from %s, user not whitelisted", req.env["PATH_INFO"], req.context["user"], req.env["REMOTE_ADDR"])
+            logger.info("Rejected access to administrative call %s by %s from %s, user not whitelisted", req.env["PATH_INFO"], req.context["user"], remote_addr)
             raise falcon.HTTPForbidden("Forbidden", "User %s not whitelisted" % req.context.get("user"))
 
         # Retain username, TODO: Better abstraction with username, e-mail, sn, gn?

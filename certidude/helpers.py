@@ -2,7 +2,6 @@
 import click
 import os
 import requests
-import urllib.request
 from certidude import errors
 from certidude.wrappers import Certificate, Request
 from OpenSSL import crypto
@@ -123,12 +122,11 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
         return
     if submission.status_code == requests.codes.conflict:
         raise errors.DuplicateCommonNameError("Different signing request with same CN is already present on server, server refuses to overwrite")
-    else:
-        submission.raise_for_status()
-
-    if submission.text == '-----BEGIN CERTIFICATE-----\n-----END CERTIFICATE-----\n':
+    elif submission.status_code == requests.codes.gone:
         # Should the client retry or disable request submission?
         raise ValueError("Server refused to sign the request") # TODO: Raise proper exception
+    else:
+        submission.raise_for_status()
 
     try:
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, submission.text)
