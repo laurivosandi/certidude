@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import socket
+from certidude import config
 
 logger = logging.getLogger("api")
 
@@ -20,20 +21,47 @@ logger = logging.getLogger("api")
 
 FQDN = socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, 0, 0, socket.AI_CANONNAME)[0][3]
 
-if not os.getenv("KRB5_KTNAME"):
-    click.echo("Kerberos keytab not specified, set environment variable 'KRB5_KTNAME'", err=True)
-    exit(250)
+if config.AUTHENTICATION_BACKEND == "kerberos":
+    if not os.getenv("KRB5_KTNAME"):
+        click.echo("Kerberos keytab not specified, set environment variable 'KRB5_KTNAME'", err=True)
+        exit(250)
 
-try:
-    principal = kerberos.getServerPrincipalDetails("HTTP", FQDN)
-except kerberos.KrbError as exc:
-    click.echo("Failed to initialize Kerberos, reason: %s" % exc, err=True)
-    exit(249)
+    try:
+        principal = kerberos.getServerPrincipalDetails("HTTP", FQDN)
+    except kerberos.KrbError as exc:
+        click.echo("Failed to initialize Kerberos, reason: %s" % exc, err=True)
+        exit(249)
+    else:
+        click.echo("Kerberos enabled, service principal is HTTP/%s" % FQDN)
 else:
-    click.echo("Kerberos enabled, service principal is HTTP/%s" % FQDN)
+    NotImplemented
 
 def login_required(func):
-    def authenticate(resource, req, resp, *args, **kwargs):
+    def pam_authenticate(resource, req, resp, *args, **kwargs):
+        """
+        Authenticate against PAM with WWW Basic Auth credentials
+        """
+        authorization = req.get_header("Authorization")
+        if not authorization:
+            resp.append_header("WWW-Authenticate", "Basic")
+            raise falcon.HTTPUnauthorized("Forbidden", "Please authenticate")
+
+        if not authorization.startswith("Basic "):
+            raise falcon.HTTPForbidden("Forbidden", "Bad header: %s" % authorization)
+
+        from base64 import b64decode
+        basic, token = authorization.split(" ", 1)
+        user, passwd = b64decode(token).split(":", 1)
+
+        import simplepam
+        if not simplepam.authenticate(user, passwd, "sshd"):
+            raise falcon.HTTPForbidden("Forbidden", "Invalid password")
+
+        req.context["user"] = user
+        return func(resource, req, resp, *args, **kwargs)
+
+
+    def kerberos_authenticate(resource, req, resp, *args, **kwargs):
         authorization = req.get_header("Authorization")
 
         if not authorization:
@@ -82,7 +110,12 @@ def login_required(func):
             # TODO: logger.error
             raise falcon.HTTPForbidden("Forbidden", "Tried GSSAPI")
 
-    return authenticate
+    if config.AUTHENTICATION_BACKEND == "kerberos":
+        return kerberos_authenticate
+    elif config.AUTHENTICATION_BACKEND == "pam":
+        return pam_authenticate
+    else:
+        NotImplemented
 
 
 def authorize_admin(func):

@@ -14,6 +14,9 @@ FQDN = socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, 0, 0, socket.
 cp = configparser.ConfigParser()
 cp.readfp(codecs.open("/etc/certidude/server.conf", "r", "utf8"))
 
+AUTHENTICATION_BACKEND = cp.get("authentication", "backend") # kerberos, pam
+AUTHORIZATION_BACKEND = cp.get("authorization", "backend") # whitelist, ldap, pam
+
 ADMIN_USERS = set([j for j in  cp.get("authorization", "admin_users").split(" ") if j])
 ADMIN_SUBNETS = set([ipaddress.ip_network(j) for j in cp.get("authorization", "admin_subnets").split(" ") if j])
 AUTOSIGN_SUBNETS = set([ipaddress.ip_network(j) for j in cp.get("authorization", "autosign_subnets").split(" ") if j])

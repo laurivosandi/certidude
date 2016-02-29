@@ -1006,6 +1006,7 @@ def certidude_serve(user, port, listen, enable_signature):
     from wsgiref.simple_server import make_server, WSGIServer
     from socketserver import ThreadingMixIn
     from certidude.api import certidude_app, StaticResource
+    from certidude import config
 
     class ThreadingWSGIServer(ThreadingMixIn, WSGIServer):
         pass
@@ -1024,13 +1025,26 @@ def certidude_serve(user, port, listen, enable_signature):
         from jinja2.debug import make_traceback as _make_traceback
         "".encode("charmap")
 
+        if config.AUTHENTICATION_BACKEND == "pam":
+            # PAM needs access to /etc/shadow
+            import grp
+            name, passwd, gid, mem = grp.getgrnam("shadow")
+            click.echo("Adding current user to shadow group due to PAM authentication backend")
+            os.setgroups([gid])
+        else:
+            os.setgroups([])
+
         _, _, uid, gid, gecos, root, shell = pwd.getpwnam(user)
         if uid == 0:
             click.echo("Please specify unprivileged user")
             exit(254)
-        click.echo("Switching to user %s (uid=%d, gid=%d)" % (user, uid, gid))
+
         os.setgid(gid)
         os.setuid(uid)
+
+        click.echo("Switched to user %s (uid=%d, gid=%d); member of groups %s" %
+            (user, uid, gid, ", ".join([str(j) for j in os.getgroups()])))
+
         os.umask(0o007)
     elif os.getuid() == 0:
         click.echo("Warning: running as root, this is not recommended!")
