@@ -23,8 +23,6 @@ from jinja2 import Environment, PackageLoader
 from time import sleep
 from setproctitle import setproctitle
 from OpenSSL import crypto
-from future.standard_library import install_aliases
-install_aliases()
 
 env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
 

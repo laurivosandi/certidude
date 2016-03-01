@@ -146,6 +146,31 @@ def delete_request(common_name):
     requests.delete(config.PUSH_PUBLISH % request_sha1sum,
         headers={"User-Agent": "Certidude API"})
 
+def generate_p12_bundle(common_name):
+    # Construct private key
+    click.echo("Generating 4096-bit RSA key...")
+    key = crypto.PKey()
+    key.generate_key(crypto.TYPE_RSA, 512)
+
+    # Construct CSR
+    csr = crypto.X509Req()
+    csr.set_version(2) # Corresponds to X.509v3
+    csr.set_pubkey(key)
+    csr.get_subject().CN = common_name
+    buf = crypto.dump_certificate_request(crypto.FILETYPE_PEM, csr).decode("utf-8")
+
+    # Sign CSR
+    cert = sign(Request(buf), overwrite=True)
+
+    # Generate P12
+    ca_certs = crypto.load_certificate(crypto.FILETYPE_PEM, open(config.AUTHORITY_CERTIFICATE_PATH).read()),
+    p12 = crypto.PKCS12()
+    p12.set_privatekey( key )
+    p12.set_certificate( cert._obj )
+    p12.set_ca_certificates( ca_certs )
+    return p12.export()
+
+
 @publish_certificate
 def sign(req, overwrite=False, delete=True):
     """
