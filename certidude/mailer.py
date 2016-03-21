@@ -1,104 +1,90 @@
 
 import os
 import smtplib
-from time import sleep
+from markdown import markdown
 from jinja2 import Environment, PackageLoader
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
 from urllib.parse import urlparse
 
-class Mailer(object):
-    def __init__(self, url):
-        scheme, netloc, path, params, query, fragment = urlparse(url)
-        scheme = scheme.lower()
+env = Environment(loader=PackageLoader("certidude", "templates/mail"))
 
-        if path:
-            raise ValueError("Path for URL not supported")
-        if params:
-            raise ValueError("Parameters for URL not supported")
-        if query:
-            raise ValueError("Query for URL not supported")
-        if fragment:
-            raise ValueError("Fragment for URL not supported")
+def send(recipients, template, attachments=(), **context):
+    from certidude import authority, config
+    if not config.OUTBOX:
+        # Mailbox disabled, don't send e-mail
+        return
+
+    if not recipients:
+        raise ValueError("No e-mail recipients specified!")
+
+    scheme, netloc, path, params, query, fragment = urlparse(config.OUTBOX)
+    scheme = scheme.lower()
+
+    if path:
+        raise ValueError("Path for URL not supported")
+    if params:
+        raise ValueError("Parameters for URL not supported")
+    if query:
+        raise ValueError("Query for URL not supported")
+    if fragment:
+        raise ValueError("Fragment for URL not supported")
 
 
-        self.username = None
-        self.password = ""
+    username = None
+    password = ""
 
-        if scheme == "smtp":
-            self.secure = False
-            self.port = 25
-        elif scheme == "smtps":
-            self.secure = True
-            self.port = 465
+    if scheme == "smtp":
+        secure = False
+        port = 25
+    elif scheme == "smtps":
+        secure = True
+        port = 465
+    else:
+        raise ValueError("Unknown scheme '%s', currently SMTP and SMTPS are only supported" % scheme)
+
+    if "@" in netloc:
+        credentials, netloc = netloc.split("@")
+
+        if ":" in credentials:
+            username, password = credentials.split(":")
         else:
-            raise ValueError("Unknown scheme '%s', currently SMTP and SMTPS are only supported" % scheme)
+            username = credentials
 
-        if "@" in netloc:
-            credentials, netloc = netloc.split("@")
-
-            if ":" in credentials:
-                self.username, self.password = credentials.split(":")
-            else:
-                self.username = credentials
-
-        if ":" in netloc:
-            self.server, port_str = netloc.split(":")
-            self.port = int(port_str)
-        else:
-            self.server = netloc
-
-        self.env = Environment(loader=PackageLoader("certidude", "email_templates"))
-        self.conn = None
-
-    def reconnect(self):
-        # Gmail employs some sort of IPS
-        # https://accounts.google.com/DisplayUnlockCaptcha
-        print("Connecting to:", self.server, self.port)
-        self.conn = smtplib.SMTP(self.server, self.port)
-        if self.secure:
-            self.conn.starttls()
-        if self.username and self.password:
-            self.conn.login(self.username, self.password)
-
-    def enqueue(self, sender, recipients, subject, template, **context):
-        self.send(sender, recipients, subject, template, **context)
+    if ":" in netloc:
+        server, port_str = netloc.split(":")
+        port = int(port_str)
+    else:
+        server = netloc
 
 
-    def send(self, sender, recipients, subject, template, **context):
+    subject, text = env.get_template(template).render(context).split("\n\n", 1)
+    html = markdown(text)
 
-        recipients = [j for j in recipients if j]
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = authority.certificate.email_address
+    msg["To"] = recipients
 
-        if not recipients:
-            print("No recipients to send e-mail to!")
-            return
-        print("Sending e-mail to:", recipients, "body follows:")
+    part1 = MIMEText(text, "plain")
+    part2 = MIMEText(html, "html")
 
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = subject
-        msg["From"] = sender
-        msg["To"] = ", ".join(recipients)
+    msg.attach(part1)
+    msg.attach(part2)
 
-        text = self.env.get_template(template + ".txt").render(context)
-        html = self.env.get_template(template + ".html").render(context)
+    for attachment in attachments:
+        part = MIMEBase(*attachment.content_type.split("/"))
+        part.add_header('Content-Disposition', 'attachment', filename=attachment.suggested_filename)
+        part.set_payload(attachment.dump())
+        msg.attach(part)
 
-        print(text)
+    # Gmail employs some sort of IPS
+    # https://accounts.google.com/DisplayUnlockCaptcha
+    conn = smtplib.SMTP(server, port)
+    if secure:
+        conn.starttls()
+    if username and password:
+        conn.login(username, password)
 
-        part1 = MIMEText(text, "plain")
-        part2 = MIMEText(html, "html")
-
-        msg.attach(part1)
-        msg.attach(part2)
-
-        backoff = 1
-        while True:
-            try:
-                if not self.conn:
-                    self.reconnect()
-                self.conn.sendmail(sender, recipients, msg.as_string())
-                return
-            except smtplib.SMTPServerDisconnected:
-                print("Connection to %s unexpectedly closed, probably TCP timeout, backing off for %d second" % (self.server, backoff))
-                self.reconnect()
-                backoff = backoff * 2
-                sleep(backoff)
+    conn.sendmail(authority.certificate.email_address, recipients, msg.as_string())

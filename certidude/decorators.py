@@ -1,13 +1,39 @@
-# encoding: utf-8
-
 import falcon
 import ipaddress
 import json
+import logging
 import re
 import types
 from datetime import date, time, datetime
 from OpenSSL import crypto
 from certidude.wrappers import Request, Certificate
+from urllib.parse import urlparse
+
+logger = logging.getLogger("api")
+
+def csrf_protection(func):
+    """
+    Protect resource from common CSRF attacks by checking user agent and referrer
+    """
+    def wrapped(self, req, resp, *args, **kwargs):
+        # Assume curl and python-requests are used intentionally
+        if req.user_agent.startswith("curl/") or req.user_agent.startswith("python-requests/"):
+            return func(self, req, resp, *args, **kwargs)
+
+        # For everything else assert referrer
+        referrer = req.headers.get("REFERER")
+        if referrer:
+            scheme, netloc, path, params, query, fragment = urlparse(referrer)
+            if netloc == req.host:
+                return func(self, req, resp, *args, **kwargs)
+
+        # Kaboom!
+        logger.warning("Prevented clickbait from '%s' with user agent '%s'",
+            referrer or "-", req.user_agent)
+        raise falcon.HTTPUnauthorized("Forbidden",
+            "No suitable UA or referrer provided, cross-site scripting disabled")
+    return wrapped
+
 
 def event_source(func):
     def wrapped(self, req, resp, *args, **kwargs):
@@ -15,7 +41,6 @@ def event_source(func):
             resp.status = falcon.HTTP_SEE_OTHER
             resp.location = req.context.get("ca").push_server + "/ev/" + req.context.get("ca").uuid
             resp.body = "Redirecting to:" + resp.location
-            print("Delegating EventSource handling to:", resp.location)
         return func(self, req, resp, *args, **kwargs)
     return wrapped
 
@@ -24,9 +49,10 @@ class MyEncoder(json.JSONEncoder):
         "organizational_unit", "given_name", "surname", "fqdn", "email_address", \
         "key_type", "key_length", "md5sum", "sha1sum", "sha256sum", "key_usage"
 
-    CERTIFICATE_ATTRIBUTES = "revokable", "identity", "changed", "common_name", \
+    CERTIFICATE_ATTRIBUTES = "revokable", "identity", "common_name", \
         "organizational_unit", "given_name", "surname", "fqdn", "email_address", \
-        "key_type", "key_length", "sha256sum", "serial_number", "key_usage"
+        "key_type", "key_length", "sha256sum", "serial_number", "key_usage", \
+        "signed", "expires"
 
     def default(self, obj):
         if isinstance(obj, crypto.X509Name):
@@ -60,18 +86,25 @@ def serialize(func):
     Falcon response serialization
     """
     def wrapped(instance, req, resp, **kwargs):
-        assert not req.get_param("unicode") or req.get_param("unicode") == u"✓", "Unicode sanity check failed"
-        resp.set_header("Cache-Control", "no-cache, no-store, must-revalidate");
-        resp.set_header("Pragma", "no-cache");
-        resp.set_header("Expires", "0");
+        resp.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+        resp.set_header("Pragma", "no-cache")
+        resp.set_header("Expires", "0")
         r = func(instance, req, resp, **kwargs)
         if resp.body is None:
-            if req.get_header("Accept").split(",")[0] == "application/json":
+            if req.accept.startswith("application/json"):
                 resp.set_header("Content-Type", "application/json")
                 resp.set_header("Content-Disposition", "inline")
                 resp.body = json.dumps(r, cls=MyEncoder)
+
+            elif hasattr(r, "content_type") and req.client_accepts(r.content_type):
+                resp.set_header("Content-Type", r.content_type)
+                resp.set_header("Content-Disposition",
+                    ("attachment; filename=%s" % r.suggested_filename).encode("ascii"))
+                resp.body = r.dump()
             else:
-                resp.body = repr(r)
+                logger.debug("Client did not accept application/json or %s, client expected %s" % (r.content_type, req.accept))
+                raise falcon.HTTPUnsupportedMediaType(
+                    "Client did not accept application/json or %s" % r.content_type)
         return r
     return wrapped
 

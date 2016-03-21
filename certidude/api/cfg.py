@@ -6,6 +6,7 @@ from random import choice
 from certidude import config
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize
+from certidude.relational import RelationalMixin
 from jinja2 import Environment, FileSystemLoader
 
 logger = logging.getLogger("api")
@@ -39,43 +40,42 @@ where
     device.cn = %s
 """
 
-SQL_SELECT_INHERITANCE = """
+
+SQL_SELECT_RULES = """
 select
-    tag_inheritance.`id` as `id`,
-    tag.id as `tag_id`,
-    tag.`key` as `match_key`,
-    tag.`value` as `match_value`,
-    tag_inheritance.`key` as `key`,
-    tag_inheritance.`value` as `value`
-from tag_inheritance
-join tag on tag.id = tag_inheritance.tag_id
+    tag.cn as `cn`,
+    tag.key as `tag_key`,
+    tag.value as `tag_value`,
+    tag_properties.property_key as `property_key`,
+    tag_properties.property_value as `property_value`
+from
+    tag_properties
+join
+    tag
+on
+    tag.key = tag_properties.tag_key and
+    tag.value = tag_properties.tag_value
 """
 
-class ConfigResource(object):
+
+class ConfigResource(RelationalMixin):
     @serialize
     @login_required
     @authorize_admin
     def on_get(self, req, resp):
-        conn = config.DATABASE_POOL.get_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(SQL_SELECT_INHERITANCE)
-        def g():
-            for row in cursor:
-                yield row
-            cursor.close()
-            conn.close()
-        return g()
+        return self.iterfetch(SQL_SELECT_RULES)
 
-class ScriptResource(object):
+
+class ScriptResource(RelationalMixin):
     def on_get(self, req, resp):
         from certidude.api.whois import address_to_identity
 
         node = address_to_identity(
-            config.DATABASE_POOL.get_connection(),
-            ipaddress.ip_address(req.env["REMOTE_ADDR"])
+            self.connect(),
+            req.context.get("remote_addr")
         )
         if not node:
-            resp.body = "Could not map IP address: %s" % req.env["REMOTE_ADDR"]
+            resp.body = "Could not map IP address: %s" % req.context.get("remote_addr")
             resp.status = falcon.HTTP_404
             return
 
@@ -84,7 +84,7 @@ class ScriptResource(object):
         key, common_name = identity.split("=")
         assert "=" not in common_name
 
-        conn = config.DATABASE_POOL.get_connection()
+        conn = self.connect()
         cursor = conn.cursor()
 
         resp.set_header("Content-Type", "text/x-shellscript")

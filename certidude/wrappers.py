@@ -3,10 +3,9 @@ import hashlib
 import re
 import click
 import io
-from Crypto.Util import asn1
+from certidude import constants
 from OpenSSL import crypto
 from datetime import datetime
-from certidude.signer import raw_sign, EXTENSION_WHITELIST
 
 def subject2dn(subject):
     bits = []
@@ -16,6 +15,10 @@ def subject2dn(subject):
     return ", ".join(bits)
 
 class CertificateBase:
+    # Others will cause browsers to import the cert instead of offering to
+    # download it
+    content_type = "application/x-pem-file"
+
     def __repr__(self):
         return self.buf
 
@@ -41,7 +44,7 @@ class CertificateBase:
 
     @common_name.setter
     def common_name(self, value):
-        return setattr(self._obj.get_subject(), "CN", value)
+        self.subject.CN = value
 
     @property
     def country_code(self):
@@ -130,7 +133,6 @@ class CertificateBase:
     def set_extensions(self, extensions):
         # X509Req().add_extensions() first invocation takes only effect?!
         assert self._obj.get_extensions() == [], "Extensions already set!"
-
         self._obj.add_extensions([
             crypto.X509Extension(
                 key.encode("ascii"),
@@ -164,6 +166,7 @@ class CertificateBase:
 
     @property
     def pubkey(self):
+        from Crypto.Util import asn1
         pubkey_asn1=crypto.dump_privatekey(crypto.FILETYPE_ASN1, self._obj.get_pubkey())
         pubkey_der=asn1.DerSequence()
         pubkey_der.decode(pubkey_asn1)
@@ -194,6 +197,11 @@ class CertificateBase:
 
 
 class Request(CertificateBase):
+
+    @property
+    def suggested_filename(self):
+        return self.common_name + ".csr"
+
     def __init__(self, mixed=None):
         self.buf = None
         self.path = NotImplemented
@@ -204,27 +212,23 @@ class Request(CertificateBase):
             _, _, _, _, _, _, _, _, mtime, _ = os.stat(self.path)
             self.created = datetime.fromtimestamp(mtime)
             mixed = mixed.read()
-        if isinstance(mixed, bytes):
-            mixed = mixed.decode("ascii")
         if isinstance(mixed, str):
             try:
                 self.buf = mixed
                 mixed = crypto.load_certificate_request(crypto.FILETYPE_PEM, mixed)
             except crypto.Error:
-                print("Failed to parse:", mixed)
-                raise
-
+                raise ValueError("Failed to parse: %s" % mixed)
         if isinstance(mixed, crypto.X509Req):
             self._obj = mixed
         else:
-            raise ValueError("Can't parse %s as X.509 certificate signing request!" % mixed)
+            raise ValueError("Can't parse %s (%s) as X.509 certificate signing request!" % (mixed, type(mixed)))
 
         assert not self.buf or self.buf == self.dump(), "%s is not %s" % (repr(self.buf), repr(self.dump()))
 
     @property
     def signable(self):
         for key, value, data in self.extensions:
-            if key not in EXTENSION_WHITELIST:
+            if key not in constants.EXTENSION_WHITELIST:
                 return False
         return True
 
@@ -243,6 +247,11 @@ class Request(CertificateBase):
 
 
 class Certificate(CertificateBase):
+
+    @property
+    def suggested_filename(self):
+        return self.common_name + ".crt"
+
     def __init__(self, mixed):
         self.buf = NotImplemented
         self.path = NotImplemented
@@ -253,15 +262,12 @@ class Certificate(CertificateBase):
             _, _, _, _, _, _, _, _, mtime, _ = os.stat(self.path)
             self.changed = datetime.fromtimestamp(mtime)
             mixed = mixed.read()
-
         if isinstance(mixed, str):
             try:
                 self.buf = mixed
                 mixed = crypto.load_certificate(crypto.FILETYPE_PEM, mixed)
             except crypto.Error:
-                print("Failed to parse:", mixed)
-                raise
-
+                raise ValueError("Failed to parse: %s" % mixed)
         if isinstance(mixed, crypto.X509):
             self._obj = mixed
         else:

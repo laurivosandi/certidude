@@ -67,7 +67,6 @@ function onRequestSubmitted(e) {
         url: "/api/request/" + e.data + "/",
         dataType: "json",
         success: function(request, status, xhr) {
-            console.info(request);
             $("#pending_requests").prepend(
                 nunjucks.render('views/request.html', { request: request }));
         }
@@ -75,12 +74,12 @@ function onRequestSubmitted(e) {
 }
 
 function onRequestDeleted(e) {
-    console.log("Removing deleted request #" + e.data);
-    $("#request_" + e.data).remove();
+    console.log("Removing deleted request", e.data);
+    $("#request-" + e.data.replace("@", "--").replace(".", "-")).remove();
 }
 
 function onClientUp(e) {
-    console.log("Adding security association:" + e.data);
+    console.log("Adding security association:", e.data);
     var lease = JSON.parse(e.data);
     var $status = $("#signed_certificates [data-dn='" + lease.identity + "'] .status");
     $status.html(nunjucks.render('views/status.html', {
@@ -93,7 +92,7 @@ function onClientUp(e) {
 }
 
 function onClientDown(e) {
-    console.log("Removing security association:" + e.data);
+    console.log("Removing security association:", e.data);
     var lease = JSON.parse(e.data);
     var $status = $("#signed_certificates [data-dn='" + lease.identity + "'] .status");
     $status.html(nunjucks.render('views/status.html', {
@@ -107,7 +106,9 @@ function onClientDown(e) {
 
 function onRequestSigned(e) {
     console.log("Request signed:", e.data);
-    $("#request_" + e.data).slideUp("normal", function() { $(this).remove(); });
+
+    $("#request-" + e.data.replace("@", "--").replace(".", "-")).slideUp("normal", function() { $(this).remove(); });
+    $("#certificate-" + e.data.replace("@", "--").replace(".", "-")).slideUp("normal", function() { $(this).remove(); });
 
     $.ajax({
         method: "GET",
@@ -121,13 +122,14 @@ function onRequestSigned(e) {
     });
 }
 
+
 function onCertificateRevoked(e) {
-    console.log("Removing revoked certificate #" + e.data);
-    $("#certificate_" + e.data).slideUp("normal", function() { $(this).remove(); });
+    console.log("Removing revoked certificate", e.data);
+    $("#certificate-" + e.data.replace("@", "--").replace(".", "-")).slideUp("normal", function() { $(this).remove(); });
 }
 
 function onTagAdded(e) {
-    console.log("Tag added #" + e.data);
+    console.log("Tag added", e.data);
     $.ajax({
         method: "GET",
         url: "/api/tag/" + e.data + "/",
@@ -143,12 +145,12 @@ function onTagAdded(e) {
 }
 
 function onTagRemoved(e) {
-    console.log("Tag removed #" + e.data);
+    console.log("Tag removed", e.data);
     $("#tag_" + e.data).remove();
 }
 
 function onTagUpdated(e) {
-    console.log("Tag updated #" + e.data);
+    console.log("Tag updated", e.data);
     $.ajax({
         method: "GET",
         url: "/api/tag/" + e.data + "/",
@@ -175,32 +177,49 @@ $(document).ready(function() {
             $("#container").html(nunjucks.render('views/error.html', { message: msg }));
         },
         success: function(session, status, xhr) {
-            console.info("Opening EventSource from:", session.event_channel);
-
-            var source = new EventSource(session.event_channel);
-
-            source.onmessage = function(event) {
-                console.log("Received server-sent event:", event);
-            }
-
-            source.addEventListener("log-entry", onLogEntry);
-            source.addEventListener("up-client", onClientUp);
-            source.addEventListener("down-client", onClientDown);
-            source.addEventListener("request-deleted", onRequestDeleted);
-            source.addEventListener("request-submitted", onRequestSubmitted);
-            source.addEventListener("request-signed", onRequestSigned);
-            source.addEventListener("certificate-revoked", onCertificateRevoked);
-            source.addEventListener("tag-added", onTagAdded);
-            source.addEventListener("tag-removed", onTagRemoved);
-            source.addEventListener("tag-updated", onTagUpdated);
+            $("#login").hide();
 
             /**
              * Render authority views
              **/
             $("#container").html(nunjucks.render('views/authority.html', { session: session, window: window }));
-            console.info("Swtiching to requests section");
-            $("section").hide();
-            $("section#requests").show();
+
+            if (session.authority) {
+                $("#log input").each(function(i, e) {
+                    console.info("e.checked:", e.checked , "and", e.id, "@localstorage is", localStorage[e.id], "setting to:", localStorage[e.id] || e.checked, "bool:", localStorage[e.id] || e.checked == "true");
+                    e.checked = localStorage[e.id] ? localStorage[e.id] == "true" : e.checked;
+                });
+
+                $("#log input").change(function() {
+                    localStorage[this.id] = this.checked;
+                });
+
+                console.info("Opening EventSource from:", session.authority.events);
+
+                var source = new EventSource(session.authority.events);
+
+                source.onmessage = function(event) {
+                    console.log("Received server-sent event:", event);
+                }
+
+                source.addEventListener("log-entry", onLogEntry);
+                source.addEventListener("up-client", onClientUp);
+                source.addEventListener("down-client", onClientDown);
+                source.addEventListener("request-deleted", onRequestDeleted);
+                source.addEventListener("request-submitted", onRequestSubmitted);
+                source.addEventListener("request-signed", onRequestSigned);
+                source.addEventListener("certificate-revoked", onCertificateRevoked);
+                source.addEventListener("tag-added", onTagAdded);
+                source.addEventListener("tag-removed", onTagRemoved);
+                source.addEventListener("tag-updated", onTagUpdated);
+
+                console.info("Swtiching to requests section");
+                $("section").hide();
+                $("section#requests").show();
+                $("#section-revoked").show();
+                $("#section-signed").show();
+                $("#section-requests").show();
+            }
 
             $("nav#menu li").click(function(e) {
                 $("section").hide();
@@ -231,88 +250,97 @@ $(document).ready(function() {
 
             });
 
-
-
-            $.ajax({
-                method: "GET",
-                url: "/api/config/",
-                dataType: "json",
-                success: function(configuration, status, xhr) {
-                    console.info("Appending " + configuration.length + " configuration items");
-                    $("#config").html(nunjucks.render('views/configuration.html', { configuration:configuration}));
-                    /**
-                     * Fetch tags for certificates
-                     */
-                    $.ajax({
-                        method: "GET",
-                        url: "/api/tag/",
-                        dataType: "json",
-                        success:function(tags, status, xhr) {
-                            console.info("Got", tags.length, "tags");
-                            for (var j = 0; j < tags.length; j++) {
-                                // TODO: Deduplicate
-                                $tag = $("<span id=\"tag_" + tags[j].id + "\"  title=\"" + tags[j].key + "=" + tags[j].value + "\" class=\"" + tags[j].key.replace(/\./g, " ") + " icon tag\" data-id=\""+tags[j].id+"\" data-key=\"" + tags[j].key + "\">" + tags[j].value + "</span>");
-                                console.info("Inserting tag", tags[j], $tag);
-                                $tags = $("#signed_certificates [data-cn='" + tags[j].cn + "'] .tags").prepend(" ");
-                                $tags = $("#signed_certificates [data-cn='" + tags[j].cn + "'] .tags").prepend($tag);
-                                $tag.click(onTagClicked);
-                                $("#tags_autocomplete").prepend("<option value=\"" + tags[j].id + "\">" + tags[j].key + "='" + tags[j].value + "'</option>");
+            console.log("Features enabled:", session.features);
+            if (session.features.tagging) {
+                console.info("Tagging enabled");
+                $("#section-config").show();
+                $.ajax({
+                    method: "GET",
+                    url: "/api/config/",
+                    dataType: "json",
+                    success: function(configuration, status, xhr) {
+                        console.info("Appending", configuration.length, "configuration items");
+                        $("#config").html(nunjucks.render('views/configuration.html', { configuration:configuration}));
+                        /**
+                         * Fetch tags for certificates
+                         */
+                        $.ajax({
+                            method: "GET",
+                            url: "/api/tag/",
+                            dataType: "json",
+                            success:function(tags, status, xhr) {
+                                console.info("Got", tags.length, "tags");
+                                $("#config").html(nunjucks.render('views/configuration.html', { configuration:configuration}));
+                                for (var j = 0; j < tags.length; j++) {
+                                    // TODO: Deduplicate
+                                    $tag = $("<span id=\"tag_" + tags[j].id + "\"  title=\"" + tags[j].key + "=" + tags[j].value + "\" class=\"" + tags[j].key.replace(/\./g, " ") + " icon tag\" data-id=\""+tags[j].id+"\" data-key=\"" + tags[j].key + "\">" + tags[j].value + "</span>");
+                                    console.info("Inserting tag", tags[j], $tag);
+                                    $tags = $("#signed_certificates [data-cn='" + tags[j].cn + "'] .tags").prepend(" ");
+                                    $tags = $("#signed_certificates [data-cn='" + tags[j].cn + "'] .tags").prepend($tag);
+                                    $tag.click(onTagClicked);
+                                    $("#tags_autocomplete").prepend("<option value=\"" + tags[j].id + "\">" + tags[j].key + "='" + tags[j].value + "'</option>");
+                                }
                             }
-                        }
-                    });
-                }
-            });
+                        });
+                    }
+                });
+            }
 
             /**
              * Fetch leases associated with certificates
              */
-            $.ajax({
-                method: "GET",
-                url: "/api/lease/",
-                dataType: "json",
-                success: function(leases, status, xhr) {
-                    console.info("Got leases:", leases);
-                    for (var j = 0; j < leases.length; j++) {
-                        var $status = $("#signed_certificates [data-dn='" + leases[j].identity + "'] .status");
-                        if (!$status.length) {
-                            console.info("Detected rogue client:", leases[j]);
-                            continue;
+            if (session.features.leases) {
+                $.ajax({
+                    method: "GET",
+                    url: "/api/lease/",
+                    dataType: "json",
+                    success: function(leases, status, xhr) {
+                        console.info("Got leases:", leases);
+                        for (var j = 0; j < leases.length; j++) {
+                            var $status = $("#signed_certificates [data-dn='" + leases[j].identity + "'] .status");
+                            if (!$status.length) {
+                                console.info("Detected rogue client:", leases[j]);
+                                continue;
+                            }
+                            $status.html(nunjucks.render('views/status.html', {
+                                lease: {
+                                    address: leases[j].address,
+                                    age: (new Date() - new Date(leases[j].released)) / 1000,
+                                    identity: leases[j].identity,
+                                    acquired: new Date(leases[j].acquired).toLocaleString(),
+                                    released: leases[j].released ? new Date(leases[j].released).toLocaleString() : null
+                                }}));
                         }
-                        $status.html(nunjucks.render('views/status.html', {
-                            lease: {
-                                address: leases[j].address,
-                                age: (new Date() - new Date(leases[j].released)) / 1000,
-                                identity: leases[j].identity,
-                                acquired: new Date(leases[j].acquired).toLocaleString(),
-                                released: leases[j].released ? new Date(leases[j].released).toLocaleString() : null
-                            }}));
-                    }
 
-                }
-            });
-            return;
+                    }
+                });
+            }
+
             /**
              * Fetch log entries
              */
-            $.ajax({
-                method: "GET",
-                url: "/api/log/",
-                dataType: "json",
-                success:function(entries, status, xhr) {
-                    console.info("Got", entries.length, "log entries");
-                    for (var j = 0; j < entries.length; j++) {
-                        if ($("#log_level_" + entries[j].severity).prop("checked")) {
-                            $("#log_entries").append(nunjucks.render("views/logentry.html", {
-                                entry: {
-                                    created: new Date(entries[j].created).toLocaleString("et-EE"),
-                                    message: entries[j].message,
-                                    severity: entries[j].severity
-                                }
-                            }));
+            if (session.features.logging) {
+                $("#section-log").show();
+                $.ajax({
+                    method: "GET",
+                    url: "/api/log/",
+                    dataType: "json",
+                    success:function(entries, status, xhr) {
+                        console.info("Got", entries.length, "log entries");
+                        for (var j = 0; j < entries.length; j++) {
+                            if ($("#log_level_" + entries[j].severity).prop("checked")) {
+                                $("#log_entries").append(nunjucks.render("views/logentry.html", {
+                                    entry: {
+                                        created: new Date(entries[j].created).toLocaleString("et-EE"),
+                                        message: entries[j].message,
+                                        severity: entries[j].severity
+                                    }
+                                }));
+                            }
                         }
                     }
-                }
-            });
+                });
+            }
         }
     });
 });

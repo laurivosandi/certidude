@@ -1,36 +1,127 @@
 
 <section id="about">
-<p>Hi {{session.username}},</p>
+<h2>{{ session.user.gn }} {{ session.user.sn }} ({{session.user.name }}) settings</h2>
 
-<p>Request submission is allowed from: {% if session.request_subnets %}{% for i in session.request_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}</p>
-<p>Autosign is allowed from: {% if session.autosign_subnets %}{% for i in session.autosign_subnets %}{{ i }} {% endfor %}{% else %}nowhere{% endif %}</p>
-<p>Authority administration is allowed from: {% if session.admin_subnets %}{% for i in session.admin_subnets %}{{ i }} {% endfor %}{% else %}anywhere{% endif %}
-<p>Authority administration allowed for: {% for i in session.admin_users %}{{ i }} {% endfor %}</p>
+<p>Mails will be sent to: {{ session.user.mail }}</p>
+
+<p>You can click <a href="/api/bundle/">here</a> to generate bundle
+for current user account.</p>
+
+{% if session.authority %}
+
+<h2>Authority certificate</h2>
+
+<p>Several things such as CRL location and e-mails are hardcoded into
+the <a href="/api/certificate">certificate</a> and
+as such require complete reset of X509 infrastructure if some of them needs to be changed:</p>
+
+<p>Mails will appear from: {{ session.authority.certificate.email_address }}</p>
+
+
+<h2>Authority settings</h2>
+
+<p>These can be reconfigured via /etc/certidude/server.conf on the server.</p>
+
+<p>Outgoing mail server:
+{% if session.authority.outbox %}
+    {{ session.authority.outbox }}
+{% else %}
+    E-mail disabled
+{% endif %}</p>
+
+<p>Authenticated users allowed from:
+
+{% if "0.0.0.0/0" in session.user_subnets %}
+    anywhere
+    </p>
+{% else %}
+    </p>
+    <ul>
+        {% for i in session.user_subnets %}
+            <li>{{ i }}</li>
+        {% endfor %}
+    </ul>
+{% endif %}
+
+
+<p>Request submission is allowed from:
+
+{% if "0.0.0.0/0" in session.request_subnets %}
+    anywhere
+    </p>
+{% else %}
+    </p>
+    <ul>
+        {% for subnet in session.request_subnets %}
+            <li>{{ subnet }}</li>
+        {% endfor %}
+    </ul>
+{% endif %}
+
+<p>Autosign is allowed from:
+{% if "0.0.0.0/0" in session.autosign_subnets %}
+    anywhere
+    </p>
+{% else %}
+    </p>
+    <ul>
+        {% for subnet in session.autosign_subnets %}
+            <li>{{ subnet }}</li>
+        {% endfor %}
+    </ul>
+{% endif %}
+
+<p>Authority administration is allowed from:
+{% if "0.0.0.0/0" in session.admin_subnets %}
+    anywhere
+    </p>
+{% else %}
+    <ul>
+        {% for subnet in session.admin_subnets %}
+            <li>{{ subnet }}</li>
+        {% endfor %}
+    </ul>
+{% endif %}
+
+<p>Authority administration allowed for:</p>
+
+<ul>
+{% for handle, full_name in session.admin_users %}
+    <li>{{ full_name }}</li>
+{% endfor %}
+</ul>
 </section>
+
+{% else %}
+<p>Here you can renew your certificates</p>
+
+{% endif %}
+
 {% set s = session.certificate.identity %}
 
 
+{% if session.authority %}
 <section id="requests">
     <h1>Pending requests</h1>
 
+    <p>Submit a certificate signing request with Certidude:</p>
+    <pre>certidude setup client {{session.common_name}}</pre>
 
     <ul id="pending_requests">
-        {% for request in session.requests %}
+        {% for request in session.authority.requests %}
              {% include "views/request.html" %}
 	    {% endfor %}
         <li class="notify">
-            <p>No certificate signing requests to sign! You can  submit a certificate signing request by:</p>
-            <pre>certidude setup client {{session.common_name}}</pre>
+            <p>No certificate signing requests to sign!</p>
         </li>
     </ul>
 </section>
-
 
 <section id="signed">
     <h1>Signed certificates</h1>
     <input id="search" type="search" class="icon search">
     <ul id="signed_certificates">
-        {% for certificate in session.signed | sort | reverse %}
+        {% for certificate in session.authority.signed | sort | reverse %}
             {% include "views/signed.html" %}
 	    {% endfor %}
     </ul>
@@ -62,7 +153,7 @@
     </pre>
     -->
     <ul>
-        {% for j in session.revoked %}
+        {% for j in session.authority.revoked %}
             <li id="certificate_{{ j.sha256sum }}">
                 {{j.changed}}
                 {{j.serial_number}} <span class="monospace">{{j.identity}}</span>
@@ -75,3 +166,5 @@
 
 <section id="config">
 </section>
+
+{% endif %}

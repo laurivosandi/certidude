@@ -1,11 +1,11 @@
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-barcode-4-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-barcode-4.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n\r\n<!-- License Agreement at http://iconmonstr.com/license/ -->\r\n\r\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\r\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\r\n\t width=\"512px\" height=\"512px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\r\n<path id=\"barcode-4-icon\" fill-rule=\"evenodd\" clip-rule=\"evenodd\" d=\"M117,331.114V181.956h23.215v149.158H117z M162.318,331.114\r\n\tV181.956h27.75v149.158H162.318z M211.979,331.114V181.956h13.611v149.16L211.979,331.114z M297.614,331.114V181.956h13.61v149.16\r\n\tL297.614,331.114z M247.827,331.114l-0.001-149.158h27.749v149.16L247.827,331.114z M333.566,331.114v-149.16h23.217v149.16H333.566\r\n\tz M377.978,331.114v-149.16L395,181.956v149.158H377.978z M165.095,141.45H241v-30h-75.905V141.45z M345.566,111.45H269v30h76.566\r\n\tV111.45z M241,400.55v-30h-75.905v30H241z M462,224.863h-30v68h30V224.863z M373.566,141.45H432v55.413h30V111.45h-88.434V141.45z\r\n\t M345.566,370.55H269v30h76.566V370.55z M137.095,370.55H80v-49.687H50v79.687h87.095V370.55z M432,320.863v49.687h-58.434v30H462\r\n\tv-79.687H432z M50,292.863h30v-76H50V292.863z M80,188.863V141.45h57.095v-30H50v77.413H80z\"/>\r\n</svg>\r\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M4 16v-8h2v8h-2zm12 0v-8h2v8h-2zm-9 0v-8h1v8h-1zm2 0v-8h2v8h-2zm3 0v-8h1v8h-1zm2 0v-8h1v8h-1zm5 0v-8h1v8h-1zm1-10h2v2h2v-4h-4v2zm-18 2v-2h2v-2h-4v4h2zm2 10h-2v-2h-2v4h4v-2zm18-2v2h-2v2h4v-4h-2zm-20-6h-2v4h2v-4zm22 0h-2v4h2v-4zm-13-6h-5v2h5v-2zm7 0h-5v2h5v-2zm-7 14h-5v2h5v-2zm7 0h-5v2h5v-2z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -22,14 +22,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-certificate-15-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-calendar-6.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n\r\n<!-- License Agreement at http://iconmonstr.com/license/ -->\r\n\r\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\r\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\r\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" style=\"enable-background:new 0 0 512 512;\" xml:space=\"preserve\">\r\n<path id=\"certificate-15\" d=\"M374.021,384.08c-4.527,29.103-16.648,55.725-36.043,77.92c-1.125-7.912-4.359-15.591-7.428-21.727\r\n\tc-7.023,3.705-15.439,5.666-22.799,5.666c-1.559,0-3.102-0.084-4.543-0.268c20.586-21.459,30.746-43.688,33.729-73.294\r\n\tc4.828,1.341,10.697,2.046,18.072,2.046C362.119,379.285,364.918,382.319,374.021,384.08z M457.709,445.672\r\n\tc-20.553-21.425-30.596-43.755-33.596-73.327c-4.861,1.358-10.73,2.079-18.207,2.079c-7.107,4.895-10.074,7.93-18.994,9.639\r\n\tc4.527,29.12,16.648,55.742,36.027,77.938c1.123-7.912,4.359-15.591,7.426-21.727C439.133,444.9,449.795,446.678,457.709,445.672z\r\n\t M372.01,362.789c-12.088-8.482-9.473-7.678-24.426-7.628c-0.018,0-0.018,0-0.033,0c-6.221,0-11.752-3.872-13.631-9.572\r\n\tc-4.576-13.68-3.018-11.551-15.088-19.95c-5.18-3.57-7.174-9.907-5.264-15.456c4.695-13.612,4.695-10.997,0-24.677\r\n\tc-1.877-5.499,0.033-11.869,5.264-15.457c12.07-8.383,10.496-6.27,15.088-19.958c1.879-5.717,7.41-9.564,13.631-9.564\r\n\tc0.016,0,0.016,0,0.033,0c14.938,0.042,12.322,0.888,24.426-7.628c2.514-1.76,5.465-2.649,8.449-2.649s5.934,0.889,8.449,2.649\r\n\tc12.086,8.491,9.471,7.678,24.426,7.628c0.016,0,0.016,0,0.016,0c6.236,0,11.77,3.847,13.68,9.564\r\n\tc4.561,13.654,2.951,11.542,15.055,19.958c3.822,2.632,5.969,6.822,5.969,11.165c0,1.425-0.234,2.884-0.721,4.292\r\n\tc-4.678,13.612-4.678,10.997,0,24.677c1.91,5.432,0,11.835-5.248,15.456c-12.104,8.399-10.494,6.287-15.055,19.95\r\n\tc-3.52,10.562-11.266,9.522-20.25,9.522c-7.947,0-7.98,0.721-17.871,7.678C383.879,366.326,377.039,366.326,372.01,362.789z\r\n\t M380.459,331.641c18.676,0,33.797-15.154,33.797-33.797c0-18.676-15.121-33.797-33.797-33.797s-33.797,15.121-33.797,33.797\r\n\tC346.662,316.486,361.783,331.641,380.459,331.641z M300.225,354.508c-28.76,18.172-61.131,38.574-67.837,42.799\r\n\tc-0.737-13.261-5.649-25.6-14.216-35.792c-0.998-1.257-99.79-127.031-123.981-157.987c-19.044-24.358-1.039-50.352,21.106-50.352\r\n\tc29.078,0,40.662,37.887,15.348,54.3l19.967,25.515l138.247-78.122c23.975-17.712,30.73-50.436,15.691-76.119\r\n\tC294.156,61.014,274.91,50,254.348,50c-8.155,0-16.068,1.677-23.57,5.013L88.918,127.577C66.58,138.281,54.292,159.27,54.292,181.6\r\n\tc0,14.015,4.836,28.55,15.062,41.408c24.786,31.165,124.643,158.859,125.641,160.133c14.794,19.682,0.293,47.259-23.621,47.259\r\n\tc-16.974,0-26.019-12.104-28.608-22.447c-3.018-12.104,1.19-24.157,13.269-31.903l-19.58-25.028\r\n\tc-14.686,10.327-24.032,26.001-25.876,43.521C106.646,431.857,136.386,462,171.633,462c10.821,0,21.542-2.984,31.014-8.617\r\n\tl94.158-59.379C301.33,386.896,305.891,369.461,300.225,354.508z M243.25,84.057c3.487-1.635,7.401-2.49,11.315-2.49\r\n\tc9.909,0,18.577,5.23,23.161,14.007c5.801,11.073,4.191,27.3-10.193,35.548l-91.114,51.609c0-20.453-9.975-39.212-26.957-50.67\r\n\tL243.25,84.057z M277.35,191.642c5.139,6.32,16.891,20.729,29.613,36.336c5.969-9.019,14.736-15.817,25.062-19.245\r\n\tc-11.549-14.166-21.775-26.739-26.805-32.883L277.35,191.642z M227.81,329.729l49.288-27.963l-10.863-14.149l-49.145,28.5\r\n\tL227.81,329.729z M259.428,209.772l-86.042,50.52l10.712,13.596l86.288-50.662L259.428,209.772z M281.516,237.182l-86.429,50.905\r\n\tl10.713,13.597l86.679-51.048L281.516,237.182z\"/>\r\n</svg>\r\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M24 2v22h-24v-22h3v1c0 1.103.897 2 2 2s2-.897 2-2v-1h10v1c0 1.103.897 2 2 2s2-.897 2-2v-1h3zm-2 6h-20v14h20v-14zm-2-7c0-.552-.447-1-1-1s-1 .448-1 1v2c0 .552.447 1 1 1s1-.448 1-1v-2zm-14 2c0 .552-.447 1-1 1s-1-.448-1-1v-2c0-.552.447-1 1-1s1 .448 1 1v2zm1 11.729l.855-.791c1 .484 1.635.852 2.76 1.654 2.113-2.399 3.511-3.616 6.106-5.231l.279.64c-2.141 1.869-3.709 3.949-5.967 7.999-1.393-1.64-2.322-2.686-4.033-4.271z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -46,14 +46,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-compass-7-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-certificate-15.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n\r\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. \r\nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\r\n\r\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\r\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\r\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\r\n<path id=\"compass-7-icon\" d=\"M256,90c91.74,0,166,74.243,166,166c0,91.741-74.245,166-166,166c-91.741,0-166-74.245-166-166\r\n\tC90,164.259,164.244,90,256,90 M256,50C142.229,50,50,142.229,50,256s92.229,206,206,206s206-92.229,206-206S369.771,50,256,50z\r\n\t M197.686,216.466l-28.355-47.135l47.225,28.408C209.145,202.733,202.736,209.099,197.686,216.466z M296.709,198.612\r\n\tc6.459,4.562,12.119,10.179,16.729,16.602l29.232-45.883L296.709,198.612z M198.312,297.179l-28.982,45.492l45.416-28.936\r\n\tC208.398,309.163,202.838,303.563,198.312,297.179z M296.018,314.604l46.652,28.066l-28.117-46.74\r\n\tC309.596,303.253,303.299,309.593,296.018,314.604z M400.199,256.001l-99.238,21.998c-4.369,8.913-11.312,16.328-19.859,21.295\r\n\tL256,400.2l-25.104-100.908c-8.545-4.965-15.488-12.381-19.857-21.293l-99.238-21.998l99.238-21.999\r\n\tc4.369-8.913,11.312-16.328,19.857-21.294L256,111.8l25.104,100.908c8.545,4.966,15.488,12.381,19.857,21.294L400.199,256.001z\r\n\t M278.406,256c0-12.374-10.031-22.407-22.406-22.407S233.592,243.626,233.592,256c0,12.376,10.033,22.408,22.408,22.408\r\n\tS278.406,268.376,278.406,256z\"/>\r\n</svg>\r\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M18.625 19.46c-.264 1.696-.97 3.247-2.1 4.54-.065-.461-.254-.908-.433-1.266-.409.216-.899.33-1.328.33l-.265-.016c1.199-1.25 1.791-2.544 1.965-4.27.281.079.623.12 1.053.12.415.284.578.46 1.108.562zm4.875 3.589c-1.197-1.248-1.782-2.549-1.957-4.271-.283.079-.625.122-1.061.122-.414.285-.587.461-1.106.561.264 1.697.97 3.247 2.099 4.54.065-.461.254-.908.433-1.266.51.269 1.131.372 1.592.314zm-4.992-4.829c-.704-.494-.552-.447-1.423-.444h-.002c-.362 0-.685-.225-.794-.557-.267-.797-.176-.673-.879-1.163-.302-.208-.418-.577-.307-.9.273-.793.273-.641 0-1.438-.109-.32.002-.691.307-.9.703-.488.611-.365.879-1.163.109-.333.432-.557.794-.557h.002c.87.002.718.052 1.423-.444.146-.102.318-.154.492-.154s.346.052.492.154c.704.495.552.447 1.423.444h.001c.363 0 .686.224.797.557.266.796.172.673.877 1.163.223.153.348.397.348.65l-.042.25c-.272.793-.272.641 0 1.438.111.317 0 .69-.306.9-.705.489-.611.366-.877 1.163-.205.614-.656.555-1.18.555-.463 0-.465.042-1.041.446-.293.207-.691.207-.984 0zm.492-1.814c1.088 0 1.969-.882 1.969-1.969 0-1.087-.881-1.969-1.969-1.969s-1.969.881-1.969 1.969c0 1.087.881 1.969 1.969 1.969zm-4.674 1.333c-1.675 1.058-3.561 2.247-3.952 2.493-.043-.772-.329-1.492-.828-2.084-.058-.074-5.813-7.4-7.222-9.204-1.109-1.42-.06-2.934 1.23-2.934 1.694 0 2.369 2.207.894 3.163l1.163 1.486 8.053-4.551c1.396-1.032 1.79-2.938.914-4.434-.605-1.032-1.726-1.674-2.924-1.674-.475 0-.936.098-1.373.292l-8.264 4.227c-1.301.624-2.017 1.846-2.017 3.147 0 .816.282 1.663.877 2.412 1.444 1.815 7.261 9.253 7.319 9.328.862 1.147.017 2.753-1.376 2.753-.989 0-1.516-.705-1.667-1.308-.176-.705.069-1.407.773-1.858l-1.141-1.458c-.855.602-1.4 1.515-1.507 2.536-.228 2.174 1.504 3.929 3.557 3.929.63 0 1.255-.174 1.807-.502l5.485-3.458c.264-.415.529-1.431.199-2.301zm-3.319-15.755c.203-.095.431-.145.659-.145.577 0 1.082.305 1.349.816.338.645.244 1.59-.594 2.071l-5.307 3.006c0-1.191-.581-2.284-1.57-2.952l5.463-2.796zm1.987 6.267l1.725 2.117c.348-.525.858-.921 1.46-1.121l-1.562-1.916-1.623.92zm-2.886 8.043l2.871-1.628-.633-.825-2.863 1.661.625.792zm1.842-6.987l-5.012 2.943.624.792 5.026-2.951-.638-.784zm1.286 1.597l-5.035 2.965.624.792 5.049-2.974-.638-.783z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -70,14 +70,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-download-12-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-compass-7.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\n\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. \nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\n\n\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\n\n\t width=\"512px\" height=\"512px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\n\n<path id=\"download-12-icon\" d=\"M462,246.575c0,44.318-35.928,80.246-80.246,80.246H331.58v-38.119\n\n\tc-0.998-43.379,40.92-44.379,59.67-46.379c-27.168-33.334-70.918-48.244-104.611-48.244c-66.546,0-108.17,39.104-108.17,104.808\n\n\tv27.935h-48.223C85.928,326.821,50,290.894,50,246.575c0-40.982,30.729-74.766,70.396-79.623\n\n\tc2.891-42.287,49.035-66.355,85.217-45.898c19.236-30.605,53.297-50.953,92.115-50.953c57.107,0,103.932,44.033,108.375,100\n\n\tC438.516,180.413,462,210.747,462,246.575z M301.58,288.702c0-30.761,6.053-48.484,31.926-56.837\n\n\tc-20.066-8.452-125.037-28.815-125.037,67.021c0,32.187,0,58.909,0,58.909h-37.408l83.963,84.104l83.965-84.104H301.58\n\n\tC301.58,357.796,301.58,315.59,301.58,288.702z\"/>\n\n</svg>\n\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M12 2c5.514 0 10 4.486 10 10s-4.486 10-10 10-10-4.486-10-10 4.486-10 10-10zm0-2c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm1.608 9.476l-1.608-5.476-1.611 5.477c-.429.275-.775.658-1.019 1.107l-5.37 1.416 5.37 1.416c.243.449.589.833 1.019 1.107l1.611 5.477 1.618-5.479c.428-.275.771-.659 1.014-1.109l5.368-1.412-5.368-1.413c-.244-.452-.592-.836-1.024-1.111zm-1.608 4.024c-.828 0-1.5-.672-1.5-1.5s.672-1.5 1.5-1.5 1.5.672 1.5 1.5-.672 1.5-1.5 1.5zm5.25 3.75l-2.573-1.639c.356-.264.67-.579.935-.934l1.638 2.573zm-2.641-8.911l2.64-1.588-1.588 2.639c-.29-.407-.645-.761-1.052-1.051zm-5.215 7.325l-2.644 1.586 1.589-2.641c.29.408.646.764 1.055 1.055zm-1.005-6.34l-1.638-2.573 2.573 1.638c-.357.264-.672.579-.935.935z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -94,14 +94,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-email-2-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-download-12.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\n\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. \nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\n\n\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\n\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\n\n<path id=\"email-2-icon\" d=\"M49.744,103.407v305.186H50.1h411.156h1V103.407H49.744z M415.533,138.407L255.947,260.465\n\n\tL96.473,138.407H415.533z M84.744,173.506l85.504,65.441L84.744,324.45V173.506z M85.1,373.593l113.186-113.186l57.654,44.127\n\n\tl57.375-43.882l112.941,112.94H85.1z M427.256,325.097l-85.896-85.896l85.896-65.695V325.097z\"/>\n\n</svg>\n\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M6 13h4v-7h4v7h4l-6 6-6-6zm16-1c0 5.514-4.486 10-10 10s-10-4.486-10-10 4.486-10 10-10 10 4.486 10 10zm2 0c0-6.627-5.373-12-12-12s-12 5.373-12 12 5.373 12 12 12 12-5.373 12-12z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -118,14 +118,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-error-4-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-email-2.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated.\nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\n<path id=\"error-4-icon\" d=\"M324.76,90L422,187.24v137.52L324.76,422H187.24L90,324.76V187.24L187.24,90H324.76 M341.328,50H170.672\n\tL50,170.672v170.656L170.672,462h170.656L462,341.328V170.672L341.328,50L341.328,50z M228.55,135.812h54.9v166.5h-54.9V135.812z\n\t M256,388.188c-16.362,0-29.625-13.264-29.625-29.625c0-16.362,13.263-29.627,29.625-29.627c16.361,0,29.625,13.265,29.625,29.627\n\tC285.625,374.924,272.361,388.188,256,388.188z\"/>\n</svg>\n\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M0 3v18h24v-18h-24zm6.623 7.929l-4.623 5.712v-9.458l4.623 3.746zm-4.141-5.929h19.035l-9.517 7.713-9.518-7.713zm5.694 7.188l3.824 3.099 3.83-3.104 5.612 6.817h-18.779l5.513-6.812zm9.208-1.264l4.616-3.741v9.348l-4.616-5.607z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -142,14 +142,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-flag-3-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-error-4.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n\r\n<!-- License Agreement at http://iconmonstr.com/license/ -->\r\n\r\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\r\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\r\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\r\n<path id=\"flag-3-icon\" d=\"M120.204,462H74.085V50h46.119V462z M437.915,80.746c0,0-29.079,25.642-67.324,25.642\r\n\tc-60.271,0-61.627-51.923-131.596-51.923c-37.832,0-73.106,17.577-88.045,30.381c0,12.64,0,216.762,0,216.762\r\n\tc21.204-14.696,53.426-30.144,88.286-30.144c66.08,0,75.343,49.388,134.242,49.388c38.042,0,64.437-24.369,64.437-24.369V80.746z\"/>\r\n</svg>\r\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M16.143 2l5.857 5.858v8.284l-5.857 5.858h-8.286l-5.857-5.858v-8.284l5.857-5.858h8.286zm.828-2h-9.942l-7.029 7.029v9.941l7.029 7.03h9.941l7.03-7.029v-9.942l-7.029-7.029zm-6.471 6h3l-1 8h-1l-1-8zm1.5 12.25c-.69 0-1.25-.56-1.25-1.25s.56-1.25 1.25-1.25 1.25.56 1.25 1.25-.56 1.25-1.25 1.25z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -166,14 +166,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-home-4-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-flag-3.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\n\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. \nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\n\n\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\n\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\n\n<path id=\"home-4-icon\" d=\"M419.492,275.815v166.213H300.725v-90.33h-89.451v90.33H92.507V275.815H50L256,69.972l206,205.844H419.492\n\n\tz M394.072,88.472h-47.917v38.311l47.917,48.023V88.472z\"/>\n\n</svg>\n\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M4 24h-2v-24h2v24zm18-21.387s-1.621 1.43-3.754 1.43c-3.36 0-3.436-2.895-7.337-2.895-2.108 0-4.075.98-4.909 1.694v12.085c1.184-.819 2.979-1.681 4.923-1.681 3.684 0 4.201 2.754 7.484 2.754 2.122 0 3.593-1.359 3.593-1.359v-12.028z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -190,14 +190,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-info-6-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-home-7.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated.\nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\n<path id=\"info-6-icon\" d=\"M256,90.002c91.74,0,166,74.241,166,165.998c0,91.739-74.245,165.998-166,165.998\n\tc-91.738,0-166-74.242-166-165.998C90,164.259,164.243,90.002,256,90.002 M256,50.002C142.229,50.002,50,142.228,50,256\n\tc0,113.769,92.229,205.998,206,205.998c113.77,0,206-92.229,206-205.998C462,142.228,369.77,50.002,256,50.002L256,50.002z\n\t M252.566,371.808c-28.21,9.913-51.466-1.455-46.801-28.547c4.667-27.098,31.436-85.109,35.255-96.079\n\tc3.816-10.97-3.502-13.977-11.346-9.513c-4.524,2.61-11.248,7.841-17.02,12.925c-1.601-3.223-3.852-6.906-5.542-10.433\n\tc9.419-9.439,25.164-22.094,43.803-26.681c22.27-5.497,59.492,3.29,43.494,45.858c-11.424,30.34-19.503,51.276-24.594,66.868\n\tc-5.088,15.598,0.955,18.868,9.863,12.791c6.959-4.751,14.372-11.214,19.806-16.226c2.515,4.086,3.319,5.389,5.806,10.084\n\tC295.857,342.524,271.182,365.151,252.566,371.808z M311.016,184.127c-12.795,10.891-31.76,10.655-42.37-0.532\n\tc-10.607-11.181-8.837-29.076,3.955-39.969c12.794-10.89,31.763-10.654,42.37,0.525\n\tC325.577,155.337,323.809,173.231,311.016,184.127z\"/>\n</svg>\n\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M20 7.093v-5.093h-3v2.093l3 3zm4 5.907l-12-12-12 12h3v10h7v-5h4v5h7v-10h3zm-5 8h-3v-5h-8v5h-3v-10.26l7-6.912 7 6.99v10.182z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -214,14 +214,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-key-2-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-info-8.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n\r\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. \r\nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\r\n\r\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\r\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\r\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\r\n<path id=\"key-2-icon\" stroke=\"#000000\" stroke-miterlimit=\"10\" d=\"M286.529,325.486l-45.314,45.314h-43.873l0.002,43.872\r\n\tl-45.746-0.001v41.345l-100.004-0.001l150.078-150.076c-4.578-4.686-10.061-11.391-13.691-17.423L50,426.498v-40.939\r\n\tl145.736-145.736C212.174,278.996,244.713,310.705,286.529,325.486z M425.646,92.339c48.473,48.473,48.471,127.064-0.002,175.535\r\n\tc-48.477,48.476-127.061,48.476-175.537,0.001c-48.473-48.472-48.475-127.062,0-175.537\r\n\tC298.58,43.865,377.172,43.865,425.646,92.339z M400.73,117.165c-12.023-12.021-31.516-12.021-43.537,0\r\n\tc-12.021,12.022-12.021,31.517,0,43.538s31.514,12.021,43.537-0.001C412.754,148.68,412.75,129.188,400.73,117.165z\"/>\r\n</svg>\r\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M12 2c5.514 0 10 4.486 10 10s-4.486 10-10 10-10-4.486-10-10 4.486-10 10-10zm0-2c-6.627 0-12 5.373-12 12s5.373 12 12 12 12-5.373 12-12-5.373-12-12-12zm-2.033 16.01c.564-1.789 1.632-3.932 1.821-4.474.273-.787-.211-1.136-1.74.209l-.34-.64c1.744-1.897 5.335-2.326 4.113.613-.763 1.835-1.309 3.074-1.621 4.03-.455 1.393.694.828 1.819-.211.153.25.203.331.356.619-2.498 2.378-5.271 2.588-4.408-.146zm4.742-8.169c-.532.453-1.32.443-1.761-.022-.441-.465-.367-1.208.164-1.661.532-.453 1.32-.442 1.761.022.439.466.367 1.209-.164 1.661z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -238,14 +238,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-lock-3-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-key-3.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n\r\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. \r\nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\r\n\r\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\r\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\r\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\r\n<path id=\"lock-3-icon\" d=\"M195.334,223.333h-50v-62.666C145.334,99.645,194.979,50,256,50c61.022,0,110.667,49.645,110.667,110.667\r\n\tv62.666h-50v-62.666C316.667,127.215,289.452,100,256,100c-33.451,0-60.666,27.215-60.666,60.667V223.333z M404,253.333V462H108\r\n\tV253.333H404z M283,341c0-14.912-12.088-27-27-27s-27,12.088-27,27c0,7.811,3.317,14.844,8.619,19.773\r\n\tc4.385,4.075,6.881,9.8,6.881,15.785V399.5h23v-22.941c0-5.989,2.494-11.708,6.881-15.785C279.683,355.844,283,348.811,283,341z\"/>\r\n</svg>\r\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M12.451 17.337l-2.451 2.663h-2v2h-2v2h-6v-1.293l7.06-7.06c-.214-.26-.413-.533-.599-.815l-6.461 6.461v-2.293l6.865-6.949c1.08 2.424 3.095 4.336 5.586 5.286zm11.549-9.337c0 4.418-3.582 8-8 8s-8-3.582-8-8 3.582-8 8-8 8 3.582 8 8zm-3-3c0-1.104-.896-2-2-2s-2 .896-2 2 .896 2 2 2 2-.896 2-2z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -262,14 +262,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-magnifier-4-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-magnifier-4.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\n\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. \nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\n\n\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\n\n\t width=\"512px\" height=\"512px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\n\n<path id=\"magnifier-4-icon\" d=\"M448.225,394.243l-85.387-85.385c16.55-26.081,26.146-56.986,26.146-90.094\n\n\tc0-92.989-75.652-168.641-168.643-168.641c-92.989,0-168.641,75.652-168.641,168.641s75.651,168.641,168.641,168.641\n\n\tc31.465,0,60.939-8.67,86.175-23.735l86.14,86.142C429.411,486.566,485.011,431.029,448.225,394.243z M103.992,218.764\n\n\tc0-64.156,52.192-116.352,116.35-116.352s116.353,52.195,116.353,116.352s-52.195,116.352-116.353,116.352\n\n\tS103.992,282.92,103.992,218.764z M138.455,188.504c34.057-78.9,148.668-69.752,170.248,12.862\n\n\tC265.221,150.329,188.719,144.834,138.455,188.504z\"/>\n\n</svg>\n\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M23.111 20.058l-4.977-4.977c.965-1.52 1.523-3.322 1.523-5.251 0-5.42-4.409-9.83-9.829-9.83-5.42 0-9.828 4.41-9.828 9.83s4.408 9.83 9.829 9.83c1.834 0 3.552-.505 5.022-1.383l5.021 5.021c2.144 2.141 5.384-1.096 3.239-3.24zm-20.064-10.228c0-3.739 3.043-6.782 6.782-6.782s6.782 3.042 6.782 6.782-3.043 6.782-6.782 6.782-6.782-3.043-6.782-6.782zm2.01-1.764c1.984-4.599 8.664-4.066 9.922.749-2.534-2.974-6.993-3.294-9.922-.749z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -286,14 +286,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-mobile-phone-6-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-mobile-phone-7.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n\r\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. \r\nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\r\n\r\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\r\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\r\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\r\n<path id=\"mobile-phone-6-icon\" d=\"M139.59,131.775c-13.807,0-25,11.197-25,25.01V436.99c0,13.812,11.193,25.01,25,25.01h150.49\r\n\tc13.807,0,25-11.198,25-25.01V156.766c0-13.802-11.186-24.99-24.98-24.99H139.59z M179.832,416.514h-30.996v-24.51h30.996V416.514z\r\n\t M179.832,372.203h-30.996v-24.51h30.996V372.203z M230.334,416.514h-30.996v-24.51h30.996V416.514z M230.334,372.203h-30.996\r\n\tv-24.51h30.996V372.203z M280.836,416.514H249.84v-24.51h30.996V416.514z M280.836,372.203H249.84v-24.51h30.996V372.203z\r\n\t M280.836,312.887h-132V183.226h132V312.887z M283.451,111.408c13.445-0.01,26.9,5.113,37.164,15.369s15.4,23.699,15.41,37.147\r\n\th22.121c-0.012-19.113-7.312-38.231-21.898-52.805c-14.588-14.573-33.691-21.854-52.797-21.842V111.408z M283.451,72.682\r\n\tc23.354-0.015,46.691,8.882,64.52,26.696c17.828,17.812,26.75,41.187,26.766,64.547h22.674c-0.02-29.166-11.16-58.358-33.418-80.597\r\n\tC341.734,61.089,312.605,49.982,283.451,50V72.682z\"/>\r\n</svg>\r\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M5 6c-1.104 0-2 .896-2 2v14c0 1.104.896 2 2 2h8c1.104 0 2-.896 2-2v-14c0-1.104-.896-2-2-2h-8zm2 15h-2v-1h2v1zm0-2h-2v-1h2v1zm3 2h-2v-1h2v1zm0-2h-2v-1h2v1zm3 2h-2v-1h2v1zm0-2h-2v-1h2v1zm0-3h-8v-7h8v7zm0-11.688c.944-.001 1.889.359 2.608 1.08.721.72 1.082 1.664 1.082 2.606h1.554c-.001-1.341-.514-2.684-1.538-3.707-1.025-1.022-2.365-1.533-3.706-1.532v1.553zm0-2.718c1.639-.001 3.277.623 4.53 1.874 1.251 1.25 1.877 2.892 1.878 4.531h1.592c-.001-2.047-.782-4.096-2.345-5.658-1.562-1.562-3.609-2.341-5.655-2.34v1.593z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -310,14 +310,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-pen-10-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-pen-14.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n\r\n<!-- License Agreement at http://iconmonstr.com/license/ -->\r\n\r\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\r\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\r\n\t width=\"512px\" height=\"512px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\r\n<path id=\"pen-10-icon\" d=\"M244.558,199.493l67.827,67.826l-73.17,134.531c0,0-90.805,23.4-147.694,60.027l-14.185-14.182\r\n\tl68.113-68.105c5.975-5.982,13.726-9.773,22.11-10.807c4.642-0.582,9.128-2.621,12.696-6.205c8.538-8.547,8.546-22.4-0.002-30.951\r\n\tc-8.549-8.543-22.407-8.543-30.959-0.002c-3.573,3.572-5.623,8.061-6.199,12.693c-1.028,8.371-4.834,16.15-10.8,22.117\r\n\tl-68.104,68.105L50,420.354c37.028-57.496,60.021-147.693,60.021-147.693L244.558,199.493z M315.896,50.122\r\n\tc-22.784,44.143-53.014,100-53.014,100l98.872,98.869c0,0,55.909-30.086,100.246-52.766L315.896,50.122z\"/>\r\n</svg>\r\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M12.014 6.54s2.147-3.969 3.475-6.54l8.511 8.511c-2.583 1.321-6.556 3.459-6.556 3.459l-5.43-5.43zm-8.517 6.423s-1.339 5.254-3.497 8.604l.827.826 3.967-3.967c.348-.348.569-.801.629-1.288.034-.27.153-.532.361-.74.498-.498 1.306-.498 1.803 0 .498.499.498 1.305 0 1.803-.208.209-.469.328-.74.361-.488.061-.94.281-1.288.63l-3.967 3.968.826.84c3.314-2.133 8.604-3.511 8.604-3.511l4.262-7.837-3.951-3.951-7.836 4.262z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -334,14 +334,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-tag-2-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-tag-3.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\n\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. \nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\n\n\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\n\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\n\n<path id=\"tag-2-icon\" d=\"M234.508,50L50.068,50.262l-0.004,184.311L277.365,462l184.57-184.57L234.508,50z M114.877,167.365\n\n\tc-15.027-15.027-15.027-39.395,0-54.424c15.029-15.029,39.396-15.029,54.426,0s15.029,39.396,0,54.424\n\n\tC154.273,182.395,129.906,182.395,114.877,167.365z M242.316,327.94l-76.225-76.226l17.678-17.678l76.225,76.226L242.316,327.94z\n\n\t M317.609,335.887L199.764,218.041l17.678-17.678l117.846,117.846L317.609,335.887z M351.818,301.678L233.973,183.832l17.678-17.678\n\n\tL369.496,284L351.818,301.678z\"/>\n\n</svg>\n\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M10.605 0h-10.604v10.609l13.39 13.391 10.609-10.605-13.395-13.395zm-7.019 6.414c-.781-.782-.781-2.047 0-2.828.782-.781 2.048-.781 2.828-.002.782.783.782 2.048 0 2.83-.781.781-2.046.781-2.828 0zm6.823 8.947l-4.243-4.242.708-.708 4.243 4.243-.708.707zm4.949.707l-7.07-7.071.707-.707 7.071 7.071-.708.707zm2.121-2.121l-7.071-7.071.707-.707 7.071 7.071-.707.707z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -358,14 +358,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-time-13-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-user-5.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n\r\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. \r\nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\r\n\r\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\r\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\r\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\r\n<path id=\"time-13-icon\" d=\"M361.629,172.206c15.555-19.627,24.121-44.229,24.121-69.273V50h-259.5v52.933\r\n\tc0,25.044,8.566,49.646,24.121,69.273l50.056,63.166c9.206,11.617,9.271,27.895,0.159,39.584l-50.768,65.13\r\n\tc-15.198,19.497-23.568,43.85-23.568,68.571V462h259.5v-53.343c0-24.722-8.37-49.073-23.567-68.571l-50.769-65.13\r\n\tc-9.112-11.689-9.047-27.967,0.159-39.584L361.629,172.206z M330.634,364.678c11.412,14.64,15.116,29.947,15.116,47.321h-11.096\r\n\tc-4.586-17.886-31.131-30.642-62.559-47.586c-6.907-3.724-6.096-10.373-6.096-15.205h-20c0,4.18,1.03,11.365-6.106,15.202\r\n\tc-32.073,17.249-58.274,29.705-62.701,47.589H166.25c0-17.261,3.645-32.605,15.115-47.321l50.769-65.13\r\n\tc7.109-9.12,11.723-19.484,13.866-30.22v13.38h20V269.33c2.144,10.734,6.758,21.098,13.866,30.218L330.634,364.678z\r\n\t M197.966,167.862l-16.245-20.5c-11.538-14.56-15.471-30.096-15.471-47.361h179.5c0,17.149-3.872,32.727-15.471,47.361l-16.245,20.5\r\n\tH197.966z M246,294.458h20v15h-20V294.458z M246,321.958h20v15h-20V321.958z\"/>\r\n</svg>\r\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M19 7.001c0 3.865-3.134 7-7 7s-7-3.135-7-7c0-3.867 3.134-7.001 7-7.001s7 3.134 7 7.001zm-1.598 7.18c-1.506 1.137-3.374 1.82-5.402 1.82-2.03 0-3.899-.685-5.407-1.822-4.072 1.793-6.593 7.376-6.593 9.821h24c0-2.423-2.6-8.006-6.598-9.819z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -382,14 +382,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-warning-6-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-warning-8.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated.\nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\n<path id=\"warning-6-icon\" d=\"M239.939,231.352h32.121v97.421h-32.121V231.352z M256,379.019c-9.574,0-17.334-7.761-17.334-17.334\n\tc0-9.574,7.76-17.335,17.334-17.335c9.573,0,17.334,7.761,17.334,17.335C273.334,371.258,265.573,379.019,256,379.019z M256,78.07\n\tL50,434.873h412L256,78.07z M256,158.07l136.718,236.803H119.282L256,158.07z\"/>\n</svg>\n\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M12 5.177l8.631 15.823h-17.262l8.631-15.823zm0-4.177l-12 22h24l-12-22zm-1 9h2v6h-2v-6zm1 9.75c-.689 0-1.25-.56-1.25-1.25s.561-1.25 1.25-1.25 1.25.56 1.25 1.25-.561 1.25-1.25 1.25z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -406,38 +406,14 @@ root: root
 
 })();
 })();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-wireless-6-icon.svg"] = (function() {
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-x-mark-8.svg"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
 var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\r\n\r\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. \r\nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\r\n\r\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\r\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\r\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\r\n<path id=\"wireless-6-icon\" d=\"M50,178.599c52.72-52.72,125.552-85.328,206-85.328c80.448,0,153.28,32.608,206,85.328l-35,35\r\n\tc-43.763-43.763-104.221-70.83-171-70.83c-66.78,0-127.237,27.067-171,70.83L50,178.599z M148.196,276.796\r\n\tc27.589-27.59,65.704-44.654,107.804-44.654s80.215,17.064,107.804,44.654l35.935-35.936\r\n\tc-36.785-36.787-87.604-59.539-143.738-59.539s-106.953,22.752-143.738,59.539L148.196,276.796z M211,339.599\r\n\tc11.517-11.517,27.427-18.64,45-18.64s33.483,7.123,45,18.64l35.313-35.312c-20.554-20.554-48.949-33.269-80.313-33.269\r\n\ts-59.76,12.715-80.313,33.269L211,339.599z M256,356.138c-17.284,0-31.299,14.01-31.299,31.297\r\n\tc0,17.285,14.015,31.295,31.299,31.295c17.283,0,31.296-14.01,31.296-31.295C287.296,370.147,273.283,356.138,256,356.138z\"/>\r\n</svg>\r\n";
-if(parentTemplate) {
-parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
-} else {
-cb(null, output);
-}
-;
-} catch (e) {
-  cb(runtime.handleError(e, lineno, colno));
-}
-}
-return {
-root: root
-};
-
-})();
-})();
-(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["img/iconmonstr-x-mark-5-icon.svg"] = (function() {
-function root(env, context, frame, runtime, cb) {
-var lineno = null;
-var colno = null;
-var output = "";
-try {
-var parentTemplate = null;
-output += "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n\n\n<!-- The icon can be used freely in both personal and commercial projects with no attribution required, but always appreciated. \nYou may NOT sub-license, resell, rent, redistribute or otherwise transfer the icon without express written permission from iconmonstr.com -->\n\n\n<!DOCTYPE svg PUBLIC \"-//W3C//DTD SVG 1.1//EN\" \"http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd\">\n\n<svg version=\"1.1\" xmlns=\"http://www.w3.org/2000/svg\" xmlns:xlink=\"http://www.w3.org/1999/xlink\" x=\"0px\" y=\"0px\"\n\n\t width=\"32px\" height=\"32px\" viewBox=\"0 0 512 512\" enable-background=\"new 0 0 512 512\" xml:space=\"preserve\">\n\n<path id=\"x-mark-5-icon\" d=\"M432.546,133.462L367.133,76.39L254.078,210.715L140.967,73.702l-61.513,65.068\n\n\tc33.791,43.885,78.146,89.797,123.688,132.465L82.993,413.987l19.865,22.629c29.251-20.31,87.839-65.578,150.312-120.092\n\n\tc63.662,55.812,122.861,101.336,151.301,121.773l21.438-19.443L303.804,270.95C352.439,225.709,399.308,177.442,432.546,133.462z\"/>\n\n</svg>\n\n";
+output += "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"24\" height=\"24\" viewBox=\"0 0 24 24\"><path d=\"M24 3.752l-4.423-3.752-7.771 9.039-7.647-9.008-4.159 4.278c2.285 2.885 5.284 5.903 8.362 8.708l-8.165 9.447 1.343 1.487c1.978-1.335 5.981-4.373 10.205-7.958 4.304 3.67 8.306 6.663 10.229 8.006l1.449-1.278-8.254-9.724c3.287-2.973 6.584-6.354 8.831-9.245z\"/></svg>";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -461,7 +437,7 @@ var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"utf-8\"/>\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>\n    <title>Certidude server</title>\n    <link href=\"/css/style.css\" rel=\"stylesheet\" type=\"text/css\"/>\n    <script type=\"text/javascript\" src=\"/js/jquery-2.1.4.min.js\"></script>\n    <script type=\"text/javascript\" src=\"/js/nunjucks-slim.min.js\"></script>\n    <script type=\"text/javascript\" src=\"/js/templates.js\"></script>\n    <script type=\"text/javascript\" src=\"/js/certidude.js\"></script>\n    <link rel=\"shortcut icon\" href=\"data:image/x-icon;,\" type=\"image/x-icon\">\n</head>\n<body>\n    <nav id=\"menu\">\n        <ul class=\"container\">\n          <li data-section=\"requests\">Requests</li>\n          <li data-section=\"signed\">Signed</li>\n          <li data-section=\"revoked\">Revoked</li>\n          <li data-section=\"config\">Configuration</li>\n          <li data-section=\"log\">Log</li>\n        </ul>\n    </nav>\n    <div id=\"container\" class=\"container\">\n        Loading certificate authority...\n    </div>\n</body>\n\n<footer>\n    <a href=\"http://github.com/laurivosandi/certidude\">Certidude</a> by\n    <a href=\"http://github.com/laurivosandi/\">Lauri Võsandi</a>\n</footer>\n\n</html>\n\n";
+output += "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n    <meta charset=\"utf-8\"/>\n    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>\n    <title>Certidude server</title>\n    <link href=\"/css/style.css\" rel=\"stylesheet\" type=\"text/css\"/>\n    <script type=\"text/javascript\" src=\"/js/jquery-2.1.4.min.js\"></script>\n    <script type=\"text/javascript\" src=\"/js/nunjucks-slim.min.js\"></script>\n    <script type=\"text/javascript\" src=\"/js/templates.js\"></script>\n    <script type=\"text/javascript\" src=\"/js/certidude.js\"></script>\n    <link rel=\"shortcut icon\" href=\"data:image/x-icon;,\" type=\"image/x-icon\">\n</head>\n<body>\n    <nav id=\"menu\">\n        <ul class=\"container\">\n          <li data-section=\"about\">Profile</li>\n          <li id=\"section-requests\" data-section=\"requests\" style=\"display:none;\">Requests</li>\n          <li id=\"section-signed\" data-section=\"signed\" style=\"display:none;\">Signed</li>\n          <li id=\"section-revoked\" data-section=\"revoked\" style=\"display:none;\">Revoked</li>\n          <li id=\"section-config\" data-section=\"config\" style=\"display:none;\">Configuration</li>\n          <li id=\"section-log\" data-section=\"log\" style=\"display:none;\">Log</li>\n        </ul>\n    </nav>\n    <div id=\"container\" class=\"container\">\n        Loading certificate authority...\n    </div>\n</body>\n\n<footer>\n    <a href=\"http://github.com/laurivosandi/certidude\">Certidude</a> by\n    <a href=\"http://github.com/laurivosandi/\">Lauri Võsandi</a>\n</footer>\n\n</html>\n\n";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
@@ -485,12 +461,38 @@ var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "\n<section id=\"about\">\n<p>Hi ";
-output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"username"), env.opts.autoescape);
-output += ",</p>\n\n<p>Request submission is allowed from: ";
-if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"request_subnets")) {
+output += "\n<section id=\"about\">\n<h2>";
+output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"user")),"gn"), env.opts.autoescape);
+output += " ";
+output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"user")),"sn"), env.opts.autoescape);
+output += " (";
+output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"user")),"name"), env.opts.autoescape);
+output += ") settings</h2>\n\n<p>Mails will be sent to: ";
+output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"user")),"mail"), env.opts.autoescape);
+output += "</p>\n\n<p>You can click <a href=\"/api/bundle/\">here</a> to generate bundle\nfor current user account.</p>\n\n";
+if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")) {
+output += "\n\n<h2>Authority certificate</h2>\n\n<p>Several things such as CRL location and e-mails are hardcoded into\nthe <a href=\"/api/certificate\">certificate</a> and\nas such require complete reset of X509 infrastructure if some of them needs to be changed:</p>\n\n<p>Mails will appear from: ";
+output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"certificate")),"email_address"), env.opts.autoescape);
+output += "</p>\n\n\n<h2>Authority settings</h2>\n\n<p>These can be reconfigured via /etc/certidude/server.conf on the server.</p>\n\n<p>Outgoing mail server:\n";
+if(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"outbox")) {
+output += "\n    ";
+output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"outbox"), env.opts.autoescape);
+output += "\n";
+;
+}
+else {
+output += "\n    E-mail disabled\n";
+;
+}
+output += "</p>\n\n<p>Authenticated users allowed from:\n\n";
+if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"user_subnets"))) {
+output += "\n    anywhere\n    </p>\n";
+;
+}
+else {
+output += "\n    </p>\n    <ul>\n        ";
 frame = frame.push();
-var t_3 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"request_subnets");
+var t_3 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"user_subnets");
 if(t_3) {var t_2 = t_3.length;
 for(var t_1=0; t_1 < t_3.length; t_1++) {
 var t_4 = t_3[t_1];
@@ -502,26 +504,29 @@ frame.set("loop.revindex0", t_2 - t_1 - 1);
 frame.set("loop.first", t_1 === 0);
 frame.set("loop.last", t_1 === t_2 - 1);
 frame.set("loop.length", t_2);
+output += "\n            <li>";
 output += runtime.suppressValue(t_4, env.opts.autoescape);
-output += " ";
+output += "</li>\n        ";
 ;
 }
 }
 frame = frame.pop();
+output += "\n    </ul>\n";
+;
+}
+output += "\n\n\n<p>Request submission is allowed from:\n\n";
+if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"request_subnets"))) {
+output += "\n    anywhere\n    </p>\n";
 ;
 }
 else {
-output += "anywhere";
-;
-}
-output += "</p>\n<p>Autosign is allowed from: ";
-if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"autosign_subnets")) {
+output += "\n    </p>\n    <ul>\n        ";
 frame = frame.push();
-var t_7 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"autosign_subnets");
+var t_7 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"request_subnets");
 if(t_7) {var t_6 = t_7.length;
 for(var t_5=0; t_5 < t_7.length; t_5++) {
 var t_8 = t_7[t_5];
-frame.set("i", t_8);
+frame.set("subnet", t_8);
 frame.set("loop.index", t_5 + 1);
 frame.set("loop.index0", t_5);
 frame.set("loop.revindex", t_6 - t_5);
@@ -529,26 +534,29 @@ frame.set("loop.revindex0", t_6 - t_5 - 1);
 frame.set("loop.first", t_5 === 0);
 frame.set("loop.last", t_5 === t_6 - 1);
 frame.set("loop.length", t_6);
+output += "\n            <li>";
 output += runtime.suppressValue(t_8, env.opts.autoescape);
-output += " ";
+output += "</li>\n        ";
 ;
 }
 }
 frame = frame.pop();
+output += "\n    </ul>\n";
+;
+}
+output += "\n\n<p>Autosign is allowed from:\n";
+if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"autosign_subnets"))) {
+output += "\n    anywhere\n    </p>\n";
 ;
 }
 else {
-output += "nowhere";
-;
-}
-output += "</p>\n<p>Authority administration is allowed from: ";
-if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"admin_subnets")) {
+output += "\n    </p>\n    <ul>\n        ";
 frame = frame.push();
-var t_11 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"admin_subnets");
+var t_11 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"autosign_subnets");
 if(t_11) {var t_10 = t_11.length;
 for(var t_9=0; t_9 < t_11.length; t_9++) {
 var t_12 = t_11[t_9];
-frame.set("i", t_12);
+frame.set("subnet", t_12);
 frame.set("loop.index", t_9 + 1);
 frame.set("loop.index0", t_9);
 frame.set("loop.revindex", t_10 - t_9);
@@ -556,25 +564,29 @@ frame.set("loop.revindex0", t_10 - t_9 - 1);
 frame.set("loop.first", t_9 === 0);
 frame.set("loop.last", t_9 === t_10 - 1);
 frame.set("loop.length", t_10);
+output += "\n            <li>";
 output += runtime.suppressValue(t_12, env.opts.autoescape);
-output += " ";
+output += "</li>\n        ";
 ;
 }
 }
 frame = frame.pop();
+output += "\n    </ul>\n";
+;
+}
+output += "\n\n<p>Authority administration is allowed from:\n";
+if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"admin_subnets"))) {
+output += "\n    anywhere\n    </p>\n";
 ;
 }
 else {
-output += "anywhere";
-;
-}
-output += "\n<p>Authority administration allowed for: ";
+output += "\n    <ul>\n        ";
 frame = frame.push();
-var t_15 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"admin_users");
+var t_15 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"admin_subnets");
 if(t_15) {var t_14 = t_15.length;
 for(var t_13=0; t_13 < t_15.length; t_13++) {
 var t_16 = t_15[t_13];
-frame.set("i", t_16);
+frame.set("subnet", t_16);
 frame.set("loop.index", t_13 + 1);
 frame.set("loop.index0", t_13);
 frame.set("loop.revindex", t_14 - t_13);
@@ -582,71 +594,132 @@ frame.set("loop.revindex0", t_14 - t_13 - 1);
 frame.set("loop.first", t_13 === 0);
 frame.set("loop.last", t_13 === t_14 - 1);
 frame.set("loop.length", t_14);
+output += "\n            <li>";
 output += runtime.suppressValue(t_16, env.opts.autoescape);
-output += " ";
+output += "</li>\n        ";
 ;
 }
 }
 frame = frame.pop();
-output += "</p>\n</section>\n";
-var t_17;
-t_17 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"certificate")),"identity");
-frame.set("s", t_17, true);
-if(frame.topLevel) {
-context.setVariable("s", t_17);
+output += "\n    </ul>\n";
+;
 }
-if(frame.topLevel) {
-context.addExport("s", t_17);
-}
-output += "\n\n\n<section id=\"requests\">\n    <h1>Pending requests</h1>\n\n\n    <ul id=\"pending_requests\">\n        ";
+output += "\n\n<p>Authority administration allowed for:</p>\n\n<ul>\n";
 frame = frame.push();
-var t_20 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"requests");
-runtime.asyncEach(t_20, 1, function(request, t_18, t_19,next) {
-frame.set("request", request);
-frame.set("loop.index", t_18 + 1);
-frame.set("loop.index0", t_18);
-frame.set("loop.revindex", t_19 - t_18);
-frame.set("loop.revindex0", t_19 - t_18 - 1);
-frame.set("loop.first", t_18 === 0);
-frame.set("loop.last", t_18 === t_19 - 1);
-frame.set("loop.length", t_19);
-output += "\n             ";
-env.getTemplate("views/request.html", false, "views/authority.html", null, function(t_23,t_21) {
-if(t_23) { cb(t_23); return; }
-t_21.render(context.getVariables(), frame, function(t_24,t_22) {
-if(t_24) { cb(t_24); return; }
-output += t_22
-output += "\n\t    ";
-next(t_18);
-})});
-}, function(t_26,t_25) {
-if(t_26) { cb(t_26); return; }
+var t_19 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"admin_users");
+if(t_19) {var t_17;
+if(runtime.isArray(t_19)) {
+var t_18 = t_19.length;
+for(t_17=0; t_17 < t_19.length; t_17++) {
+var t_20 = t_19[t_17][0]
+frame.set("handle", t_19[t_17][0]);
+var t_21 = t_19[t_17][1]
+frame.set("full_name", t_19[t_17][1]);
+frame.set("loop.index", t_17 + 1);
+frame.set("loop.index0", t_17);
+frame.set("loop.revindex", t_18 - t_17);
+frame.set("loop.revindex0", t_18 - t_17 - 1);
+frame.set("loop.first", t_17 === 0);
+frame.set("loop.last", t_17 === t_18 - 1);
+frame.set("loop.length", t_18);
+output += "\n    <li>";
+output += runtime.suppressValue(t_21, env.opts.autoescape);
+output += "</li>\n";
+;
+}
+} else {
+t_17 = -1;
+var t_18 = runtime.keys(t_19).length;
+for(var t_22 in t_19) {
+t_17++;
+var t_23 = t_19[t_22];
+frame.set("handle", t_22);
+frame.set("full_name", t_23);
+frame.set("loop.index", t_17 + 1);
+frame.set("loop.index0", t_17);
+frame.set("loop.revindex", t_18 - t_17);
+frame.set("loop.revindex0", t_18 - t_17 - 1);
+frame.set("loop.first", t_17 === 0);
+frame.set("loop.last", t_17 === t_18 - 1);
+frame.set("loop.length", t_18);
+output += "\n    <li>";
+output += runtime.suppressValue(t_23, env.opts.autoescape);
+output += "</li>\n";
+;
+}
+}
+}
 frame = frame.pop();
-output += "\n        <li class=\"notify\">\n            <p>No certificate signing requests to sign! You can  submit a certificate signing request by:</p>\n            <pre>certidude setup client ";
+output += "\n</ul>\n</section>\n\n";
+;
+}
+else {
+output += "\n<p>Here you can renew your certificates</p>\n\n";
+;
+}
+output += "\n\n";
+var t_24;
+t_24 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"certificate")),"identity");
+frame.set("s", t_24, true);
+if(frame.topLevel) {
+context.setVariable("s", t_24);
+}
+if(frame.topLevel) {
+context.addExport("s", t_24);
+}
+output += "\n\n\n";
+if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")) {
+output += "\n<section id=\"requests\">\n    <h1>Pending requests</h1>\n\n    <p>Submit a certificate signing request with Certidude:</p>\n    <pre>certidude setup client ";
 output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"common_name"), env.opts.autoescape);
-output += "</pre>\n        </li>\n    </ul>\n</section>\n\n\n<section id=\"signed\">\n    <h1>Signed certificates</h1>\n    <input id=\"search\" type=\"search\" class=\"icon search\">\n    <ul id=\"signed_certificates\">\n        ";
+output += "</pre>\n\n    <ul id=\"pending_requests\">\n        ";
 frame = frame.push();
-var t_29 = env.getFilter("reverse").call(context, env.getFilter("sort").call(context, runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"signed")));
-runtime.asyncEach(t_29, 1, function(certificate, t_27, t_28,next) {
-frame.set("certificate", certificate);
-frame.set("loop.index", t_27 + 1);
-frame.set("loop.index0", t_27);
-frame.set("loop.revindex", t_28 - t_27);
-frame.set("loop.revindex0", t_28 - t_27 - 1);
-frame.set("loop.first", t_27 === 0);
-frame.set("loop.last", t_27 === t_28 - 1);
-frame.set("loop.length", t_28);
-output += "\n            ";
-env.getTemplate("views/signed.html", false, "views/authority.html", null, function(t_32,t_30) {
+var t_27 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"requests");
+if(t_27) {var t_26 = t_27.length;
+for(var t_25=0; t_25 < t_27.length; t_25++) {
+var t_28 = t_27[t_25];
+frame.set("request", t_28);
+frame.set("loop.index", t_25 + 1);
+frame.set("loop.index0", t_25);
+frame.set("loop.revindex", t_26 - t_25);
+frame.set("loop.revindex0", t_26 - t_25 - 1);
+frame.set("loop.first", t_25 === 0);
+frame.set("loop.last", t_25 === t_26 - 1);
+frame.set("loop.length", t_26);
+output += "\n             ";
+env.getTemplate("views/request.html", false, "views/authority.html", null, function(t_31,t_29) {
+if(t_31) { cb(t_31); return; }
+t_29.render(context.getVariables(), frame, function(t_32,t_30) {
 if(t_32) { cb(t_32); return; }
-t_30.render(context.getVariables(), frame, function(t_33,t_31) {
-if(t_33) { cb(t_33); return; }
-output += t_31
+output += t_30
 output += "\n\t    ";
-next(t_27);
 })});
-}, function(t_35,t_34) {
-if(t_35) { cb(t_35); return; }
+}
+}
+frame = frame.pop();
+output += "\n        <li class=\"notify\">\n            <p>No certificate signing requests to sign!</p>\n        </li>\n    </ul>\n</section>\n\n<section id=\"signed\">\n    <h1>Signed certificates</h1>\n    <input id=\"search\" type=\"search\" class=\"icon search\">\n    <ul id=\"signed_certificates\">\n        ";
+frame = frame.push();
+var t_35 = env.getFilter("reverse").call(context, env.getFilter("sort").call(context, runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"signed")));
+if(t_35) {var t_34 = t_35.length;
+for(var t_33=0; t_33 < t_35.length; t_33++) {
+var t_36 = t_35[t_33];
+frame.set("certificate", t_36);
+frame.set("loop.index", t_33 + 1);
+frame.set("loop.index0", t_33);
+frame.set("loop.revindex", t_34 - t_33);
+frame.set("loop.revindex0", t_34 - t_33 - 1);
+frame.set("loop.first", t_33 === 0);
+frame.set("loop.last", t_33 === t_34 - 1);
+frame.set("loop.length", t_34);
+output += "\n            ";
+env.getTemplate("views/signed.html", false, "views/authority.html", null, function(t_39,t_37) {
+if(t_39) { cb(t_39); return; }
+t_37.render(context.getVariables(), frame, function(t_40,t_38) {
+if(t_40) { cb(t_40); return; }
+output += t_38
+output += "\n\t    ";
+})});
+}
+}
 frame = frame.pop();
 output += "\n    </ul>\n</section>\n\n<section id=\"log\">\n    <h1>Log</h1>\n    <p>\n        <input id=\"log_level_critical\" type=\"checkbox\" checked/> <label for=\"log_level_critical\">Critical</label>\n        <input id=\"log_level_error\" type=\"checkbox\" checked/> <label for=\"log_level_error\">Errors</label>\n        <input id=\"log_level_warning\" type=\"checkbox\" checked/> <label for=\"log_level_warning\">Warnings</label>\n        <input id=\"log_level_info\" type=\"checkbox\" checked/> <label for=\"log_level_info\">Info</label>\n        <input id=\"log_level_debug\" type=\"checkbox\"/> <label for=\"log_level_debug\">Debug</label>\n    </p>\n    <ul id=\"log_entries\">\n    </ul>\n</section>\n\n<section id=\"revoked\">\n    <h1>Revoked certificates</h1>\n    <p>To fetch certificate revocation list:</p>\n    <pre>curl ";
 output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "window")),"location")),"href"), env.opts.autoescape);
@@ -656,41 +729,44 @@ output += "/certificate/ > session.pem\n    openssl ocsp -issuer session.pem -CA
 output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "request")),"url"), env.opts.autoescape);
 output += "/ocsp/ -serial 0x\n    </pre>\n    -->\n    <ul>\n        ";
 frame = frame.push();
-var t_38 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"revoked");
-if(t_38) {var t_37 = t_38.length;
-for(var t_36=0; t_36 < t_38.length; t_36++) {
-var t_39 = t_38[t_36];
-frame.set("j", t_39);
-frame.set("loop.index", t_36 + 1);
-frame.set("loop.index0", t_36);
-frame.set("loop.revindex", t_37 - t_36);
-frame.set("loop.revindex0", t_37 - t_36 - 1);
-frame.set("loop.first", t_36 === 0);
-frame.set("loop.last", t_36 === t_37 - 1);
-frame.set("loop.length", t_37);
+var t_43 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"revoked");
+if(t_43) {var t_42 = t_43.length;
+for(var t_41=0; t_41 < t_43.length; t_41++) {
+var t_44 = t_43[t_41];
+frame.set("j", t_44);
+frame.set("loop.index", t_41 + 1);
+frame.set("loop.index0", t_41);
+frame.set("loop.revindex", t_42 - t_41);
+frame.set("loop.revindex0", t_42 - t_41 - 1);
+frame.set("loop.first", t_41 === 0);
+frame.set("loop.last", t_41 === t_42 - 1);
+frame.set("loop.length", t_42);
 output += "\n            <li id=\"certificate_";
-output += runtime.suppressValue(runtime.memberLookup((t_39),"sha256sum"), env.opts.autoescape);
+output += runtime.suppressValue(runtime.memberLookup((t_44),"sha256sum"), env.opts.autoescape);
 output += "\">\n                ";
-output += runtime.suppressValue(runtime.memberLookup((t_39),"changed"), env.opts.autoescape);
+output += runtime.suppressValue(runtime.memberLookup((t_44),"changed"), env.opts.autoescape);
 output += "\n                ";
-output += runtime.suppressValue(runtime.memberLookup((t_39),"serial_number"), env.opts.autoescape);
+output += runtime.suppressValue(runtime.memberLookup((t_44),"serial_number"), env.opts.autoescape);
 output += " <span class=\"monospace\">";
-output += runtime.suppressValue(runtime.memberLookup((t_39),"identity"), env.opts.autoescape);
+output += runtime.suppressValue(runtime.memberLookup((t_44),"identity"), env.opts.autoescape);
 output += "</span>\n            </li>\n        ";
 ;
 }
 }
-if (!t_37) {
+if (!t_42) {
 output += "\n            <li>Great job! No certificate signing requests to sign.</li>\n\t    ";
 }
 frame = frame.pop();
-output += "\n    </ul>\n</section>\n\n<section id=\"config\">\n</section>\n";
+output += "\n    </ul>\n</section>\n\n<section id=\"config\">\n</section>\n\n";
+;
+}
+output += "\n";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
 cb(null, output);
 }
-})});
+;
 } catch (e) {
   cb(runtime.handleError(e, lineno, colno));
 }
@@ -894,8 +970,8 @@ var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<li id=\"request_";
-output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "request")),"common_name"), env.opts.autoescape);
+output += "<li id=\"request-";
+output += runtime.suppressValue(env.getFilter("replace").call(context, env.getFilter("replace").call(context, runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "request")),"common_name"),"@","--"),".","-"), env.opts.autoescape);
 output += "\" class=\"filterable\">\n\n<a class=\"button icon download\" href=\"/api/request/";
 output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "request")),"common_name"), env.opts.autoescape);
 output += "/\">Fetch</a>\n";
@@ -912,7 +988,7 @@ output += "\n<button title=\"Please use certidude command-line utility to sign u
 output += "\n<button class=\"icon revoke\" onClick=\"javascript:$(this).addClass('busy');$.ajax({url:'/api/request/";
 output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "request")),"common_name"), env.opts.autoescape);
 output += "/',type:'delete'});\">Delete</button>\n\n\n<div class=\"monospace\">\n";
-env.getTemplate("img/iconmonstr-certificate-15-icon.svg", false, "views/request.html", null, function(t_3,t_1) {
+env.getTemplate("img/iconmonstr-certificate-15.svg", false, "views/request.html", null, function(t_3,t_1) {
 if(t_3) { cb(t_3); return; }
 t_1.render(context.getVariables(), frame, function(t_4,t_2) {
 if(t_4) { cb(t_4); return; }
@@ -920,9 +996,9 @@ output += t_2
 output += "\n";
 output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "request")),"identity"), env.opts.autoescape);
 output += "\n</div>\n\n";
-(function(cb) {if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "request")),"email_address")) {
+if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "request")),"email_address")) {
 output += "\n<div class=\"email\">";
-env.getTemplate("img/iconmonstr-email-2-icon.svg", false, "views/request.html", null, function(t_7,t_5) {
+env.getTemplate("img/iconmonstr-email-2.svg", false, "views/request.html", null, function(t_7,t_5) {
 if(t_7) { cb(t_7); return; }
 t_5.render(context.getVariables(), frame, function(t_8,t_6) {
 if(t_8) { cb(t_8); return; }
@@ -930,12 +1006,10 @@ output += t_6
 output += " ";
 output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "request")),"email_address"), env.opts.autoescape);
 output += "</div>\n";
-cb()})});
+})});
 }
-else {
-cb()}
-})(function() {output += "\n\n<div class=\"monospace\">\n";
-env.getTemplate("img/iconmonstr-key-2-icon.svg", false, "views/request.html", null, function(t_11,t_9) {
+output += "\n\n<div class=\"monospace\">\n";
+env.getTemplate("img/iconmonstr-key-3.svg", false, "views/request.html", null, function(t_11,t_9) {
 if(t_11) { cb(t_11); return; }
 t_9.render(context.getVariables(), frame, function(t_12,t_10) {
 if(t_12) { cb(t_12); return; }
@@ -957,9 +1031,9 @@ if(frame.topLevel) {
 context.addExport("key_usage", t_13);
 }
 output += "\n";
-(function(cb) {if(runtime.contextOrFrameLookup(context, frame, "key_usage")) {
+if(runtime.contextOrFrameLookup(context, frame, "key_usage")) {
 output += "\n<div>\n";
-env.getTemplate("img/iconmonstr-flag-3-icon.svg", false, "views/request.html", null, function(t_16,t_14) {
+env.getTemplate("img/iconmonstr-flag-3.svg", false, "views/request.html", null, function(t_16,t_14) {
 if(t_16) { cb(t_16); return; }
 t_14.render(context.getVariables(), frame, function(t_17,t_15) {
 if(t_17) { cb(t_17); return; }
@@ -967,17 +1041,15 @@ output += t_15
 output += "\n";
 output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "request")),"key_usage"), env.opts.autoescape);
 output += "\n</div>\n";
-cb()})});
+})});
 }
-else {
-cb()}
-})(function() {output += "\n\n</li>\n\n";
+output += "\n\n</li>\n\n";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
 cb(null, output);
 }
-})})})})})});
+})})})});
 } catch (e) {
   cb(runtime.handleError(e, lineno, colno));
 }
@@ -995,8 +1067,8 @@ var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<li id=\"certificate_";
-output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"sha256sum"), env.opts.autoescape);
+output += "<li id=\"certificate-";
+output += runtime.suppressValue(env.getFilter("replace").call(context, env.getFilter("replace").call(context, runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"common_name"),"@","--"),".","-"), env.opts.autoescape);
 output += "\" data-dn=\"";
 output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"identity"), env.opts.autoescape);
 output += "\" data-cn=\"";
@@ -1006,17 +1078,17 @@ output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLook
 output += "/\">Fetch</a>\n    <button class=\"icon revoke\" onClick=\"javascript:$(this).addClass('busy');$.ajax({url:'/api/signed/";
 output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"common_name"), env.opts.autoescape);
 output += "/',type:'delete'});\">Revoke</button>\n\n    <div class=\"monospace\">\n    ";
-env.getTemplate("img/iconmonstr-certificate-15-icon.svg", false, "views/signed.html", null, function(t_3,t_1) {
+env.getTemplate("img/iconmonstr-certificate-15.svg", false, "views/signed.html", null, function(t_3,t_1) {
 if(t_3) { cb(t_3); return; }
 t_1.render(context.getVariables(), frame, function(t_4,t_2) {
 if(t_4) { cb(t_4); return; }
 output += t_2
 output += "\n    ";
-output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"identity"), env.opts.autoescape);
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"common_name"), env.opts.autoescape);
 output += "\n    </div>\n\n    ";
-(function(cb) {if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"email_address")) {
+if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"email_address")) {
 output += "\n    <div class=\"email\">";
-env.getTemplate("img/iconmonstr-email-2-icon.svg", false, "views/signed.html", null, function(t_7,t_5) {
+env.getTemplate("img/iconmonstr-email-2.svg", false, "views/signed.html", null, function(t_7,t_5) {
 if(t_7) { cb(t_7); return; }
 t_5.render(context.getVariables(), frame, function(t_8,t_6) {
 if(t_8) { cb(t_8); return; }
@@ -1024,32 +1096,53 @@ output += t_6
 output += " ";
 output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"email_address"), env.opts.autoescape);
 output += "</div>\n    ";
-cb()})});
+})});
 }
-else {
-cb()}
-})(function() {output += "\n\n    ";
-output += "\n\n    <div class=\"tags\">\n      <select class=\"icon tag\" data-cn=\"";
-output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"common_name"), env.opts.autoescape);
-output += "\" onChange=\"onNewTagClicked();\">\n        <option value=\"\">Add tag...</option>\n        ";
-env.getTemplate("views/tagtypes.html", false, "views/signed.html", null, function(t_11,t_9) {
+output += "\n    \n    ";
+if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"given_name") || runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"surname")) {
+output += "\n    <div class=\"person\">";
+env.getTemplate("img/iconmonstr-user-5.svg", false, "views/signed.html", null, function(t_11,t_9) {
 if(t_11) { cb(t_11); return; }
 t_9.render(context.getVariables(), frame, function(t_12,t_10) {
 if(t_12) { cb(t_12); return; }
 output += t_10
-output += "\n      </select>\n    </div>\n\n    <div class=\"status\">\n    ";
-env.getTemplate("views/status.html", false, "views/signed.html", null, function(t_15,t_13) {
+output += " ";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"given_name"), env.opts.autoescape);
+output += " ";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"surname"), env.opts.autoescape);
+output += "</div>\n    ";
+})});
+}
+output += "\n\n    <div class=\"lifetime\" title=\"Valid from ";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"signed"), env.opts.autoescape);
+output += " to ";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"expires"), env.opts.autoescape);
+output += "\">\n        ";
+env.getTemplate("img/iconmonstr-calendar-6.svg", false, "views/signed.html", null, function(t_15,t_13) {
 if(t_15) { cb(t_15); return; }
 t_13.render(context.getVariables(), frame, function(t_16,t_14) {
 if(t_16) { cb(t_16); return; }
 output += t_14
-output += "\n    </div>\n</li>\n";
+output += "\n        <time>";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"signed"), env.opts.autoescape);
+output += "</time> -\n        <time>";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"expires"), env.opts.autoescape);
+output += "</time>\n    </div>\n\n    ";
+output += "\n\n    <div class=\"tags\">\n        <select class=\"icon tag\" data-cn=\"";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"common_name"), env.opts.autoescape);
+output += "\" onChange=\"onNewTagClicked();\">\n        <option value=\"\">Add tag...</option>\n            ";
+env.getTemplate("views/tagtypes.html", false, "views/signed.html", null, function(t_19,t_17) {
+if(t_19) { cb(t_19); return; }
+t_17.render(context.getVariables(), frame, function(t_20,t_18) {
+if(t_20) { cb(t_20); return; }
+output += t_18
+output += "\n        </select>\n    </div>\n    <div class=\"status\"></div>\n</li>\n";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {
 cb(null, output);
 }
-})})})})})})});
+})})})})})});
 } catch (e) {
   cb(runtime.handleError(e, lineno, colno));
 }
@@ -1137,6 +1230,44 @@ root: root
 
 })();
 })();
+(function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["views/tags.html"] = (function() {
+function root(env, context, frame, runtime, cb) {
+var lineno = null;
+var colno = null;
+var output = "";
+try {
+var parentTemplate = null;
+output += "<span id=\"tag_";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "tag")),"id"), env.opts.autoescape);
+output += "\" onclick=\"onTagClicked()\"\ntitle=\"";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "tag")),"key"), env.opts.autoescape);
+output += "=";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "tag")),"value"), env.opts.autoescape);
+output += "\" class=\"";
+output += runtime.suppressValue(env.getFilter("replace").call(context, runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "tag")),"key"),"."," "), env.opts.autoescape);
+output += "\"\ndata-id=\"";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "tag")),"id"), env.opts.autoescape);
+output += "\" data-key=\"";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "tag")),"key"), env.opts.autoescape);
+output += "\">";
+output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "tag")),"value"), env.opts.autoescape);
+output += "</span>\n";
+if(parentTemplate) {
+parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
+} else {
+cb(null, output);
+}
+;
+} catch (e) {
+  cb(runtime.handleError(e, lineno, colno));
+}
+}
+return {
+root: root
+};
+
+})();
+})();
 (function() {(window.nunjucksPrecompiled = window.nunjucksPrecompiled || {})["views/tagtypes.html"] = (function() {
 function root(env, context, frame, runtime, cb) {
 var lineno = null;
@@ -1144,7 +1275,7 @@ var colno = null;
 var output = "";
 try {
 var parentTemplate = null;
-output += "<option value=\"location\">Location</option>\n<option value=\"phone\">Phone</option>\n<option value=\"room\">Room</option>\n<option value=\"serial\">Product serial</option>\n\n<option value=\"wireless.protected.password\">Protected wireless network password</option>\n<option value=\"wireless.protected.name\">Protected wireless network name</option>\n<option value=\"wireless.public.name\">Public wireless network name</option>\n<option value=\"wireless.channela\">5GHz channel number</option>\n<option value=\"wireless.channelb\">2.4GHz channel number</option>\n<option value=\"usb.approved\">Approved USB device</option>\n";
+output += "<option value=\"location\">Location</option>\n<option value=\"phone\">Phone</option>\n<option value=\"room\">Room</option>\n<option value=\"serial\">Product serial</option>\n\n<option value=\"wireless.protected.password\">Protected wireless network password</option>\n<option value=\"wireless.protected.name\">Protected wireless network name</option>\n<option value=\"wireless.public.name\">Public wireless network name</option>\n<option value=\"wireless.channel\">Channel number</option>\n<option value=\"usb.approved\">Approved USB device</option>\n";
 if(parentTemplate) {
 parentTemplate.rootRenderFunc(env, context, frame, runtime, cb);
 } else {

@@ -54,3 +54,9 @@ docs/_build/
 
 # PyBuilder
 target/
+
+# npm
+node_modules/
+
+# diff
+*.diff

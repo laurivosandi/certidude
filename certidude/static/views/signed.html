@@ -1,20 +1,30 @@
-<li id="certificate_{{ certificate.sha256sum }}" data-dn="{{ certificate.identity }}" data-cn="{{ certificate.common_name }}" class="filterable">
+<li id="certificate-{{ certificate.common_name | replace('@', '--') | replace('.', '-') }}" data-dn="{{ certificate.identity }}" data-cn="{{ certificate.common_name }}" class="filterable">
     <a class="button icon download" href="/api/signed/{{certificate.common_name}}/">Fetch</a>
     <button class="icon revoke" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/signed/{{certificate.common_name}}/',type:'delete'});">Revoke</button>
 
     <div class="monospace">
-    {% include 'img/iconmonstr-certificate-15-icon.svg' %}
-    {{certificate.identity}}
+    {% include 'img/iconmonstr-certificate-15.svg' %}
+    {{certificate.common_name}}
     </div>
 
     {% if certificate.email_address %}
-    <div class="email">{% include 'img/iconmonstr-email-2-icon.svg' %} {{ certificate.email_address }}</div>
+    <div class="email">{% include 'img/iconmonstr-email-2.svg' %} {{ certificate.email_address }}</div>
     {% endif %}
+
+    {% if certificate.given_name or certificate.surname %}
+    <div class="person">{% include 'img/iconmonstr-user-5.svg' %} {{ certificate.given_name }} {{ certificate.surname }}</div>
+    {% endif %}
+
+    <div class="lifetime" title="Valid from {{ certificate.signed }} to {{ certificate.expires }}">
+        {% include 'img/iconmonstr-calendar-6.svg' %}
+        <time>{{ certificate.signed }}</time> -
+        <time>{{ certificate.expires }}</time>
+    </div>
 
     {#
 
     <div class="monospace">
-    {% include 'img/iconmonstr-key-2-icon.svg' %}
+    {% include 'img/iconmonstr-key-3.svg' %}
     <span title="SHA-256 of public key">
     {{ certificate.sha256sum }}
     </span>
@@ -23,20 +33,17 @@
     </div>
 
     <div>
-    {% include 'img/iconmonstr-flag-3-icon.svg' %}
+    {% include 'img/iconmonstr-flag-3.svg' %}
     {{certificate.key_usage}}
     </div>
 
     #}
 
     <div class="tags">
-      <select class="icon tag" data-cn="{{ certificate.common_name }}" onChange="onNewTagClicked();">
+        <select class="icon tag" data-cn="{{ certificate.common_name }}" onChange="onNewTagClicked();">
         <option value="">Add tag...</option>
-        {% include 'views/tagtypes.html' %}
-      </select>
+            {% include 'views/tagtypes.html' %}
+        </select>
     </div>
-
-    <div class="status">
-    {% include 'views/status.html' %}
-    </div>
+    <div class="status"></div>
 </li>

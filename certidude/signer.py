@@ -6,6 +6,7 @@ import socket
 import os
 import asyncore
 import asynchat
+from certidude import constants, config
 from datetime import datetime
 from OpenSSL import crypto
 
@@ -26,86 +27,83 @@ certificate authoirty (basicConstraints=CA:TRUE) or
 TLS server certificates (extendedKeyUsage=serverAuth).
 """
 
-EXTENSION_WHITELIST = set(["subjectAltName"])
-
 def raw_sign(private_key, ca_cert, request, basic_constraints, lifetime, key_usage=None, extended_key_usage=None):
-        """
-        Sign certificate signing request directly with private key assuming it's readable by the process
-        """
+    """
+    Sign certificate signing request directly with private key assuming it's readable by the process
+    """
 
-        # Initialize X.509 certificate object
-        cert = crypto.X509()
-        cert.set_version(2) # This corresponds to X.509v3
+    # Initialize X.509 certificate object
+    cert = crypto.X509()
+    cert.set_version(2) # This corresponds to X.509v3
 
-        # Set public key
-        cert.set_pubkey(request.get_pubkey())
+    # Set public key
+    cert.set_pubkey(request.get_pubkey())
 
-        # Set issuer
-        cert.set_issuer(ca_cert.get_subject())
+    # Set issuer
+    cert.set_issuer(ca_cert.get_subject())
 
-        # TODO: Assert openssl.cnf policy for subject attributes
-#        if request.get_subject().O != ca_cert.get_subject().O:
-#            raise ValueError("Orgnization name mismatch!")
-#        if request.get_subject().C != ca_cert.get_subject().C:
-#            raise ValueError("Country mismatch!")
+    # Copy attributes from CA
+    if ca_cert.get_subject().C:
+        cert.get_subject().C  = ca_cert.get_subject().C
+    if ca_cert.get_subject().ST:
+        cert.get_subject().ST  = ca_cert.get_subject().ST
+    if ca_cert.get_subject().L:
+        cert.get_subject().L  = ca_cert.get_subject().L
+    if ca_cert.get_subject().O:
+        cert.get_subject().O  = ca_cert.get_subject().O
 
-        # Copy attributes from CA
-        if ca_cert.get_subject().C:
-            cert.get_subject().C  = ca_cert.get_subject().C
-        if ca_cert.get_subject().ST:
-            cert.get_subject().ST  = ca_cert.get_subject().ST
-        if ca_cert.get_subject().L:
-            cert.get_subject().L  = ca_cert.get_subject().L
-        if ca_cert.get_subject().O:
-            cert.get_subject().O  = ca_cert.get_subject().O
+    # Copy attributes from request
+    cert.get_subject().CN = request.get_subject().CN
 
-        # Copy attributes from request
-        cert.get_subject().CN = request.get_subject().CN
-        req_subject = request.get_subject()
-        if hasattr(req_subject, "OU") and req_subject.OU:
-            cert.get_subject().OU = req_subject.OU
+    if request.get_subject().SN:
+        cert.get_subject().SN = request.get_subject().SN
+    if request.get_subject().GN:
+        cert.get_subject().GN = request.get_subject().GN
 
-        # Copy e-mail, key usage, extended key from request
-        for extension in request.get_extensions():
-            cert.add_extensions([extension])
+    if request.get_subject().OU:
+        cert.get_subject().OU = req_subject.OU
 
-        # TODO: Set keyUsage and extendedKeyUsage defaults if none has been provided in the request
+    # Copy e-mail, key usage, extended key from request
+    for extension in request.get_extensions():
+        cert.add_extensions([extension])
 
-        # Override basic constraints if nececssary
-        if basic_constraints:
+    # TODO: Set keyUsage and extendedKeyUsage defaults if none has been provided in the request
+
+    # Override basic constraints if nececssary
+    if basic_constraints:
+        cert.add_extensions([
+            crypto.X509Extension(
+                b"basicConstraints",
+                True,
+                basic_constraints.encode("ascii"))])
+
+    if key_usage:
+        try:
             cert.add_extensions([
                 crypto.X509Extension(
-                    b"basicConstraints",
+                    b"keyUsage",
                     True,
-                    basic_constraints.encode("ascii"))])
+                    key_usage.encode("ascii"))])
+        except crypto.Error:
+            raise ValueError("Invalid value '%s' for keyUsage attribute" % key_usage)
 
-        if key_usage:
-            try:
-                cert.add_extensions([
-                    crypto.X509Extension(
-                        b"keyUsage",
-                        True,
-                        key_usage.encode("ascii"))])
-            except crypto.Error:
-                raise ValueError("Invalid value '%s' for keyUsage attribute" % key_usage)
+    if extended_key_usage:
+        cert.add_extensions([
+            crypto.X509Extension(
+                b"extendedKeyUsage",
+                True,
+                extended_key_usage.encode("ascii"))])
 
-        if extended_key_usage:
-            cert.add_extensions([
-                crypto.X509Extension(
-                    b"extendedKeyUsage",
-                    True,
-                    extended_key_usage.encode("ascii"))])
+    # Set certificate lifetime
+    cert.gmtime_adj_notBefore(-3600)
+    cert.gmtime_adj_notAfter(lifetime * 24 * 60 * 60)
 
-        # Set certificate lifetime
-        cert.gmtime_adj_notBefore(-3600)
-        cert.gmtime_adj_notAfter(lifetime * 24 * 60 * 60)
-
-        # Generate serial from 0x10000000000000000000 to 0xffffffffffffffffffff
-        cert.set_serial_number(random.randint(
-            0x1000000000000000000000000000000000000000,
-            0xffffffffffffffffffffffffffffffffffffffff))
-        cert.sign(private_key, 'sha1')
-        return cert
+    # Generate serial from 0x10000000000000000000 to 0xffffffffffffffffffff
+    cert.set_serial_number(random.randint(
+        0x1000000000000000000000000000000000000000,
+        0xffffffffffffffffffffffffffffffffffffffff))
+    cert.sign(private_key, 'sha256')
+    return cert
 
 
 class SignHandler(asynchat.async_chat):
@@ -128,7 +126,7 @@ class SignHandler(asynchat.async_chat):
                     serial_number, timestamp = line.split(":")
                     # TODO: Assert serial against regex
                     revocation = crypto.Revoked()
-                    revocation.set_rev_date(datetime.fromtimestamp(int(timestamp)).strftime("%Y%m%d%H%M%SZ").encode("ascii"))
+                    revocation.set_rev_date(datetime.utcfromtimestamp(int(timestamp)).strftime("%Y%m%d%H%M%SZ").encode("ascii"))
                     revocation.set_reason(b"keyCompromise")
                     revocation.set_serial(serial_number.encode("ascii"))
                     crl.add_revoked(revocation)
@@ -137,7 +135,7 @@ class SignHandler(asynchat.async_chat):
                 self.server.certificate,
                 self.server.private_key,
                 crypto.FILETYPE_PEM,
-                self.server.revocation_list_lifetime))
+                config.REVOCATION_LIST_LIFETIME))
 
         elif cmd == "ocsp-request":
             NotImplemented # TODO: Implement OCSP
@@ -147,7 +145,7 @@ class SignHandler(asynchat.async_chat):
 
             for e in request.get_extensions():
                 key = e.get_short_name().decode("ascii")
-                if key not in EXTENSION_WHITELIST:
+                if key not in constants.EXTENSION_WHITELIST:
                     raise ValueError("Certificte Signing Request contains extension '%s' which is not whitelisted" % key)
 
             # TODO: Potential exploits during PEM parsing?
@@ -155,10 +153,10 @@ class SignHandler(asynchat.async_chat):
                 self.server.private_key,
                 self.server.certificate,
                 request,
-                basic_constraints=self.server.basic_constraints,
-                key_usage=self.server.key_usage,
-                extended_key_usage=self.server.extended_key_usage,
-                lifetime=self.server.lifetime)
+                basic_constraints=config.CERTIFICATE_BASIC_CONSTRAINTS,
+                key_usage=config.CERTIFICATE_KEY_USAGE_FLAGS,
+                extended_key_usage=config.CERTIFICATE_EXTENDED_KEY_USAGE_FLAGS,
+                lifetime=config.CERTIFICATE_LIFETIME)
             self.send(crypto.dump_certificate(crypto.FILETYPE_PEM, cert))
         else:
             raise NotImplementedError("Unknown command: %s" % cmd)
@@ -175,26 +173,23 @@ class SignHandler(asynchat.async_chat):
 
 
 class SignServer(asyncore.dispatcher):
-    def __init__(self, socket_path, private_key, certificate, lifetime, basic_constraints, key_usage, extended_key_usage, revocation_list_lifetime):
+    def __init__(self):
         asyncore.dispatcher.__init__(self)
 
         # Bind to sockets
-        if os.path.exists(socket_path):
-            os.unlink(socket_path)
+        if os.path.exists(config.SIGNER_SOCKET_PATH):
+            os.unlink(config.SIGNER_SOCKET_PATH)
         os.umask(0o007)
         self.create_socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.bind(socket_path)
+        self.bind(config.SIGNER_SOCKET_PATH)
         self.listen(5)
 
-        # Load CA private key and certificate
-        self.private_key = crypto.load_privatekey(crypto.FILETYPE_PEM, open(private_key).read())
-        self.certificate = crypto.load_certificate(crypto.FILETYPE_PEM, open(certificate).read())
-        self.lifetime = lifetime
-        self.revocation_list_lifetime = revocation_list_lifetime
-        self.basic_constraints = basic_constraints
-        self.key_usage = key_usage
-        self.extended_key_usage = extended_key_usage
 
+        # Load CA private key and certificate
+        self.private_key = crypto.load_privatekey(crypto.FILETYPE_PEM,
+            open(config.AUTHORITY_PRIVATE_KEY_PATH).read())
+        self.certificate = crypto.load_certificate(crypto.FILETYPE_PEM,
+            open(config.AUTHORITY_CERTIFICATE_PATH).read())
 
         # Perhaps perform chroot as well, currently results in
         # (<class 'OpenSSL.crypto.Error'>:[('random number generator', 'SSLEAY_RAND_BYTES', 'PRNG not seeded')

@@ -29,12 +29,6 @@ img {
     max-height: 100%;
 }
 
-ul {
-    list-style: none;
-    margin: 1em 0;
-    padding: 0;
-}
-
 #pending_requests .notify {
     display: none;
 }
@@ -142,7 +136,17 @@ pre {
     margin: 0 auto;
 }
 
-#container li {
+#signed ul,
+#requests ul,
+#log ul {
+    list-style: none;
+    margin: 1em 0;
+    padding: 0;
+}
+
+#signed li,
+#requests li,
+#log li {
     margin: 4px 0;
     padding: 4px 0;
     clear: both;
@@ -164,7 +168,8 @@ pre {
 
 .icon{
     background-size: 24px;
-    padding-left: 36px;
+    background-position: 6px 2px;
+    padding-left: 32px;
     background-repeat: no-repeat;
     display: block;
     vertical-align: text-bottom;
@@ -172,7 +177,7 @@ pre {
 }
 
 #log_entries li span.icon {
-    background-size: 32px;
+    background-size: 24px;
     padding-left: 42px;
     padding-top: 2px;
     padding-bottom: 2px;
@@ -180,7 +185,8 @@ pre {
 
 .tags .tag {
     display: inline;
-    background-size: 32px;
+    background-size: 24px;
+    background-position: 0 4px;
     padding-top: 4px;
     padding-bottom: 4px;
     padding-right: 1em;
@@ -199,25 +205,25 @@ select {
 
 }
 
-.icon.tag { background-image: url("../img/iconmonstr-tag-2-icon.svg"); }
+.icon.tag { background-image: url("../img/iconmonstr-tag-3.svg"); }
 
-.icon.critical { background-image: url("../img/iconmonstr-error-4-icon.svg"); }
-.icon.error { background-image: url("../img/iconmonstr-error-4-icon.svg"); }
-.icon.warning { background-image: url("../img/iconmonstr-warning-6-icon.svg"); }
-.icon.info { background-image: url("../img/iconmonstr-info-6-icon.svg"); }
+.icon.critical { background-image: url("../img/iconmonstr-error-4.svg"); }
+.icon.error { background-image: url("../img/iconmonstr-error-4.svg"); }
+.icon.warning { background-image: url("../img/iconmonstr-warning-8.svg"); }
+.icon.info { background-image: url("../img/iconmonstr-info-8.svg"); }
 
-.icon.revoke { background-image: url("../img/iconmonstr-x-mark-5-icon.svg"); }
-.icon.download { background-image: url("../img/iconmonstr-download-12-icon.svg"); }
-.icon.sign { background-image: url("../img/iconmonstr-pen-10-icon.svg"); }
-.icon.search { background-image: url("../img/iconmonstr-magnifier-4-icon.svg"); }
+.icon.revoke { background-image: url("../img/iconmonstr-x-mark-8.svg"); }
+.icon.download { background-image: url("../img/iconmonstr-download-12.svg"); }
+.icon.sign { background-image: url("../img/iconmonstr-pen-14.svg"); }
+.icon.search { background-image: url("../img/iconmonstr-magnifier-4.svg"); }
 
-.icon.phone { background-image: url("../img/iconmonstr-mobile-phone-6-icon.svg"); }
-.icon.location { background-image: url("../img/iconmonstr-compass-7-icon.svg"); }
-.icon.room { background-image: url("../img/iconmonstr-home-4-icon.svg"); }
-.icon.serial { background-image: url("../img/iconmonstr-barcode-4-icon.svg"); }
+.icon.phone { background-image: url("../img/iconmonstr-mobile-phone-7.svg"); }
+.icon.location { background-image: url("../img/iconmonstr-compass-7.svg"); }
+.icon.room { background-image: url("../img/iconmonstr-home-7.svg"); }
+.icon.serial { background-image: url("../img/iconmonstr-barcode-4.svg"); }
 
-.icon.wireless { background-image: url("../img/iconmonstr-wireless-6-icon.svg"); }
-.icon.password { background-image: url("../img/iconmonstr-lock-3-icon.svg"); }
+.icon.wireless { background-image: url("../img/iconmonstr-wireless-6.svg"); }
+.icon.password { background-image: url("../img/iconmonstr-lock-3.svg"); }
 
 /* Make sure this is the last one */
 .icon.busy{background-image:url("https://software.opensuse.org/assets/ajax-loader-ea46060b6c9f42822a3d58d075c83ea2.gif");}

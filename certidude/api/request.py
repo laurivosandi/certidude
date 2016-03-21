@@ -5,45 +5,42 @@ import logging
 import ipaddress
 import os
 from certidude import config, authority, helpers, push, errors
-from certidude.auth import login_required, authorize_admin
+from certidude.auth import login_required, login_optional, authorize_admin
 from certidude.decorators import serialize
 from certidude.wrappers import Request, Certificate
+from certidude.firewall import whitelist_subnets, whitelist_content_types
 
 logger = logging.getLogger("api")
 
 class RequestListResource(object):
     @serialize
+    @login_required
     @authorize_admin
     def on_get(self, req, resp):
-        return helpers.list_requests()
+        return authority.list_requests()
 
+    @login_optional
+    @whitelist_subnets(config.REQUEST_SUBNETS)
+    @whitelist_content_types("application/pkcs10")
     def on_post(self, req, resp):
         """
         Submit certificate signing request (CSR) in PEM format
         """
-        # Parse remote IPv4/IPv6 address
-        remote_addr = ipaddress.ip_network(req.env["REMOTE_ADDR"].decode("utf-8"))
 
-        # Check for CSR submission whitelist
-        if config.REQUEST_SUBNETS:
-            for subnet in config.REQUEST_SUBNETS:
-                if subnet.overlaps(remote_addr):
-                    break
-            else:
-               logger.warning("Attempted to submit signing request from non-whitelisted address %s", remote_addr)
-               raise falcon.HTTPForbidden("Forbidden", "IP address %s not whitelisted" % remote_addr)
-
-        if req.get_header("Content-Type") != "application/pkcs10":
-            raise falcon.HTTPUnsupportedMediaType(
-                "This API call accepts only application/pkcs10 content type")
-
-        body = req.stream.read(req.content_length).decode("ascii")
+        body = req.stream.read(req.content_length)
         csr = Request(body)
+
+        if not csr.common_name:
+            logger.warning("Rejected signing request without common name from %s",
+                req.context.get("remote_addr"))
+            raise falcon.HTTPBadRequest(
+                "Bad request",
+                "No common name specified!")
 
         # Check if this request has been already signed and return corresponding certificte if it has been signed
         try:
             cert = authority.get_signed(csr.common_name)
-        except FileNotFoundError:
+        except EnvironmentError:
             pass
         else:
             if cert.pubkey == csr.pubkey:
@@ -56,12 +53,12 @@ class RequestListResource(object):
         # Process automatic signing if the IP address is whitelisted and autosigning was requested
         if req.get_param_as_bool("autosign"):
             for subnet in config.AUTOSIGN_SUBNETS:
-                if subnet.overlaps(remote_addr):
+                if subnet.overlaps(req.context.get("remote_addr")):
                     try:
                         resp.set_header("Content-Type", "application/x-x509-user-cert")
                         resp.body = authority.sign(csr).dump()
                         return
-                    except FileExistsError: # Certificate already exists, try to save the request
+                    except EnvironmentError: # Certificate already exists, try to save the request
                         pass
                     break
 
@@ -73,7 +70,8 @@ class RequestListResource(object):
             pass
         except errors.DuplicateCommonNameError:
             # TODO: Certificate renewal
-            logger.warning("Rejected signing request with overlapping common name from %s", req.env["REMOTE_ADDR"])
+            logger.warning("Rejected signing request with overlapping common name from %s",
+                req.context.get("remote_addr"))
             raise falcon.HTTPConflict(
                 "CSR with such CN already exists",
                 "Will not overwrite existing certificate signing request, explicitly delete CSR and try again")
@@ -86,12 +84,12 @@ class RequestListResource(object):
             url = config.PUSH_LONG_POLL % csr.fingerprint()
             click.echo("Redirecting to: %s"  % url)
             resp.status = falcon.HTTP_SEE_OTHER
-            resp.set_header("Location", url)
-            logger.warning("Redirecting signing request from %s to %s", req.env["REMOTE_ADDR"], url)
+            resp.set_header("Location", url.encode("ascii"))
+            logger.debug("Redirecting signing request from %s to %s", req.context.get("remote_addr"), url)
         else:
             # Request was accepted, but not processed
             resp.status = falcon.HTTP_202
-            logger.info("Signing request from %s stored", req.env["REMOTE_ADDR"])
+            logger.info("Signing request from %s stored", req.context.get("remote_addr"))
 
 
 class RequestDetailResource(object):
@@ -101,11 +99,8 @@ class RequestDetailResource(object):
         Fetch certificate signing request as PEM
         """
         csr = authority.get_request(cn)
-#        if not os.path.exists(path):
-#            raise falcon.HTTPNotFound()
-
-        resp.set_header("Content-Type", "application/pkcs10")
-        resp.set_header("Content-Disposition", "attachment; filename=%s.csr" % csr.common_name)
+        logger.debug("Signing request %s was downloaded by %s",
+            csr.common_name, req.context.get("remote_addr"))
         return csr
 
     @login_required
@@ -120,14 +115,17 @@ class RequestDetailResource(object):
         resp.body = "Certificate successfully signed"
         resp.status = falcon.HTTP_201
         resp.location = os.path.join(req.relative_uri, "..", "..", "signed", cn)
-        logger.info("Signing request %s signed by %s from %s", csr.common_name, req.context["user"], req.env["REMOTE_ADDR"])
+        logger.info("Signing request %s signed by %s from %s", csr.common_name,
+            req.context.get("user"), req.context.get("remote_addr"))
 
     @login_required
     @authorize_admin
     def on_delete(self, req, resp, cn):
         try:
             authority.delete_request(cn)
-        except FileNotFoundError:
+            # Logging implemented in the function above
+        except EnvironmentError as e:
             resp.body = "No certificate CN=%s found" % cn
-            logger.warning("User %s attempted to delete non-existant signing request %s from %s", req.context["user"], cn, req.env["REMOTE_ADDR"])
+            logger.warning("User %s failed to delete signing request %s from %s, reason: %s",
+                req.context["user"], cn, req.context.get("remote_addr"), e)
             raise falcon.HTTPNotFound()

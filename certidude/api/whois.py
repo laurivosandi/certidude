@@ -46,7 +46,7 @@ class WhoisResource(object):
 
         identity = address_to_identity(
             conn,
-            ipaddress.ip_address(req.get_param("address") or req.env["REMOTE_ADDR"])
+            req.context.get("remote_addr")
         )
 
         conn.close()
@@ -55,4 +55,4 @@ class WhoisResource(object):
             return dict(address=identity[0], acquired=identity[1], identity=identity[2])
         else:
             resp.status = falcon.HTTP_403
-            resp.body = "Failed to look up node %s" % req.env["REMOTE_ADDR"]
+            resp.body = "Failed to look up node %s" % req.context.get("remote_addr")

@@ -2,38 +2,14 @@
 from certidude import config
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize
+from certidude.relational import RelationalMixin
 
-class LogResource(object):
+class LogResource(RelationalMixin):
+    SQL_CREATE_TABLES = "log_tables.sql"
+
     @serialize
     @login_required
     @authorize_admin
     def on_get(self, req, resp):
-        """
-        Translate currently online client's IP-address to distinguished name
-        """
-
-        SQL_LOG_ENTRIES = """
-            SELECT
-                *
-            FROM
-                log
-            ORDER BY created DESC
-        """
-        conn = config.DATABASE_POOL.get_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(SQL_LOG_ENTRIES)
-
-        def g():
-            for row in cursor:
-                yield row
-            cursor.close()
-            conn.close()
-        return tuple(g())
-
-#        for acquired, released, identity in cursor:
-#            return {
-#                "acquired": datetime.utcfromtimestamp(acquired),
-#                "identity": parse_dn(bytes(identity))
-#            }
-#        return None
-        
+        # TODO: Add last id parameter
+        return self.iterfetch("select * from log order by created desc")

@@ -1,4 +1,4 @@
-<li id="request_{{ request.common_name }}" class="filterable">
+<li id="request-{{ request.common_name | replace('@', '--') | replace('.', '-') }}" class="filterable">
 
 <a class="button icon download" href="/api/request/{{request.common_name}}/">Fetch</a>
 {% if request.signable %}
@@ -10,16 +10,16 @@
 
 
 <div class="monospace">
-{% include 'img/iconmonstr-certificate-15-icon.svg' %}
+{% include 'img/iconmonstr-certificate-15.svg' %}
 {{request.identity}}
 </div>
 
 {% if request.email_address %}
-<div class="email">{% include 'img/iconmonstr-email-2-icon.svg' %} {{ request.email_address }}</div>
+<div class="email">{% include 'img/iconmonstr-email-2.svg' %} {{ request.email_address }}</div>
 {% endif %}
 
 <div class="monospace">
-{% include 'img/iconmonstr-key-2-icon.svg' %}
+{% include 'img/iconmonstr-key-3.svg' %}
 <span title="SHA-1 of public key">
 {{ request.sha256sum }}
 </span>
@@ -30,7 +30,7 @@
 {% set key_usage = request.key_usage %}
 {% if key_usage %}
 <div>
-{% include 'img/iconmonstr-flag-3-icon.svg' %}
+{% include 'img/iconmonstr-flag-3.svg' %}
 {{request.key_usage}}
 </div>
 {% endif %}

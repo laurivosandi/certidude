@@ -67,8 +67,11 @@ To install Certidude:
 
 .. code:: bash
 
-    apt-get install -y python3 python3-pip python3-dev cython3 build-essential libffi-dev libssl-dev libkrb5-dev
-    pip3 install --allow-external mysql-connector-python  mysql-connector-python
+    apt-get install -y python python-pip python-dev cython \
+        python-pysqlite2 python-mysql.connector python-ldap \
+        build-essential libffi-dev libssl-dev libkrb5-dev \
+        ldap-utils krb5-user default-mta \
+        libsasl2-modules-gssapi-mit
     pip3 install certidude
 
 Make sure you're running PyOpenSSL 0.15+ and netifaces 0.10.4+ from PyPI,
@@ -79,6 +82,7 @@ Create a system user for ``certidude``:
 .. code:: bash
 
     adduser --system --no-create-home --group certidude
+    mkdir /etc/certidude
 
 
 Setting up CA
@@ -90,7 +94,7 @@ You can check it with:
 
 .. code:: bash
 
-  hostname -f
+    hostname -f
 
 The command should return ca.example.co
 
@@ -144,7 +148,7 @@ Install ``nginx`` and ``uwsgi``:
 
 .. code:: bash
 
-    apt-get install nginx uwsgi uwsgi-plugin-python3
+    apt-get install nginx uwsgi uwsgi-plugin-python
 
 For easy setup following is reccommended:
 
@@ -162,7 +166,7 @@ Otherwise manually configure ``uwsgi`` application in ``/etc/uwsgi/apps-availabl
     vaccum = true
     uid = certidude
     gid = certidude
-    plugins = python34
+    plugins = python
     chdir = /tmp
     module = certidude.wsgi
     callable = app
@@ -192,7 +196,7 @@ configure the site in /etc/nginx/sites-available/certidude:
         server_name localhost;
         listen 80 default_server;
         listen [::]:80 default_server ipv6only=on;
-        root /usr/local/lib/python3.4/dist-packages/certidude/static;
+        root /usr/local/lib/python2.7/dist-packages/certidude/static;
 
         location /api/ {
             include uwsgi_params;
@@ -201,19 +205,20 @@ configure the site in /etc/nginx/sites-available/certidude:
 
         # Add following three if you wish to enable push server on this machine
         location /pub {
-            allow 127.0.0.1; # Allow publishing only from CA machine
-            push_stream_publisher admin;
-            push_stream_channels_path $arg_id;
+            allow 127.0.0.1;
+            nchan_publisher http;
+            nchan_store_messages off;
+            nchan_channel_id $arg_id;
         }
 
         location ~ "^/lp/(.*)" {
-            push_stream_channels_path $1;
-            push_stream_subscriber long-polling;
+            nchan_subscriber longpoll;
+            nchan_channel_id $1;
         }
 
         location ~ "^/ev/(.*)" {
-            push_stream_channels_path $1;
-            push_stream_subscriber eventsource;
+            nchan_subscriber eventsource;
+            nchan_channel_id $1;
         }
     }
 
@@ -254,6 +259,8 @@ Also adjust ``/etc/nginx/nginx.conf``:
 
 In your CA ssl.cnf make sure Certidude is aware of your nginx setup:
 
+.. code::
+
     push_server = http://push.example.com/
 
 Restart the services:
@@ -283,7 +290,7 @@ Make sure Certidude machine's fully qualified hostname is correct in ``/etc/host
     127.0.0.1 localhost
     127.0.1.1 ca.example.lan ca
 
-Set up Samba client configuration in ``/etc/samba/smb.conf``:
+Reset Samba client configuration in ``/etc/samba/smb.conf``:
 
 .. code:: ini
 
@@ -294,11 +301,36 @@ Set up Samba client configuration in ``/etc/samba/smb.conf``:
     realm = EXAMPLE.LAN
     kerberos method = system keytab
 
+Reset Kerberos configuration in ``/etc/krb5.conf``:
+
+.. code:: ini
+
+    [libdefaults]
+    default_realm = EXAMPLE.LAN
+    dns_lookup_realm = true
+    dns_lookup_kdc = true
+    forwardable = true
+    proxiable = true
+
+Initialize Kerberos credentials:
+
+.. code:: bash
+
+    kinit administrator
+
+Join the machine to domain:
+
+.. code:: bash
+
+    net ads join -k
+
 Set up Kerberos keytab for the web service:
 
 .. code:: bash
 
-    KRB5_KTNAME=FILE:/etc/certidude/server.keytab net ads keytab add HTTP -U Administrator
+    KRB5_KTNAME=FILE:/etc/certidude/server.keytab net ads keytab add HTTP -k
+    chown root:certidude /etc/certidude/server.keytab
+    chmod 640 /etc/certidude/server.keytab
 
 
 Setting up authorization
@@ -379,22 +411,29 @@ Clone the repository:
     git clone https://github.com/laurivosandi/certidude
     cd certidude
 
+Install dependencies as shown above and additionally:
+
+.. code:: bash
+
+    pip install -r requirements.txt
+
 To generate templates:
 
 .. code:: bash
 
     apt-get install npm nodejs
-    npm install nunjucks
-    nunjucks-precompile --include "\\.html$" --include "\\.svg" certidude/static/ > certidude/static/js/templates.js
+    sudo ln -s nodejs /usr/bin/node # Fix 'env node' on Ubuntu 14.04
+    npm install -g nunjucks
+    nunjucks-precompile --include "\\.html$" --include "\\.svg$" certidude/static/ > certidude/static/js/templates.js
 
 To run from source tree:
 
 .. code:: bash
 
-    PYTHONPATH=. KRB5_KTNAME=/etc/certidude/server.keytab LANG=C.UTF-8 python3 misc/certidude
+    PYTHONPATH=. KRB5_KTNAME=/etc/certidude/server.keytab LANG=C.UTF-8 python misc/certidude
 
 To install the package from the source:
 
 .. code:: bash
 
-    python3 setup.py  install --single-version-externally-managed --root /
+    python setup.py  install --single-version-externally-managed --root /

@@ -6,7 +6,7 @@ from certidude import errors
 from certidude.wrappers import Certificate, Request
 from OpenSSL import crypto
 
-def certidude_request_certificate(url, key_path, request_path, certificate_path, authority_path, common_name, org_unit=None, email_address=None, given_name=None, surname=None, autosign=False, wait=False, key_usage=None, extended_key_usage=None, ip_address=None, dns=None):
+def certidude_request_certificate(url, key_path, request_path, certificate_path, authority_path, common_name, org_unit=None, email_address=None, given_name=None, surname=None, autosign=False, wait=False, key_usage=None, extended_key_usage=None, ip_address=None, dns=None, bundle=False):
     """
     Exchange CSR for certificate using Certidude HTTP API server
     """
@@ -41,7 +41,8 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
         click.echo("Attempting to fetch CA certificate from %s" % authority_url)
 
         try:
-            r = requests.get(authority_url)
+            r = requests.get(authority_url,
+                    headers={"Accept": "application/x-x509-ca-cert,application/x-pem-file"})
             cert = crypto.load_certificate(crypto.FILETYPE_PEM, r.text)
         except crypto.Error:
             raise ValueError("Failed to parse PEM: %s" % r.text)
@@ -53,7 +54,7 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
     try:
         request = Request(open(request_path))
         click.echo("Found signing request: %s" % request_path)
-    except FileNotFoundError:
+    except EnvironmentError:
 
         # Construct private key
         click.echo("Generating 4096-bit RSA key...")
@@ -69,10 +70,11 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
         csr = crypto.X509Req()
         csr.set_version(2) # Corresponds to X.509v3
         csr.set_pubkey(key)
+        csr.get_subject().CN = common_name
+
         request = Request(csr)
 
         # Set subject attributes
-        request.common_name = common_name
         if given_name:
             request.given_name = given_name
         if surname:
@@ -83,20 +85,20 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
         # Collect subject alternative names
         subject_alt_name = set()
         if email_address:
-            subject_alt_name.add("email:" + email_address)
+            subject_alt_name.add("email:%s" % email_address)
         if ip_address:
-            subject_alt_name.add("IP:" + ip_address)
+            subject_alt_name.add("IP:%s" % ip_address)
         if dns:
-            subject_alt_name.add("DNS:" + dns)
+            subject_alt_name.add("DNS:%s" % dns)
 
         # Set extensions
         extensions = []
         if key_usage:
             extensions.append(("keyUsage", key_usage, True))
         if extended_key_usage:
-            extensions.append(("extendedKeyUsage", extended_key_usage, True))
+            extensions.append(("extendedKeyUsage", extended_key_usage, False))
         if subject_alt_name:
-            extensions.append(("subjectAltName", ", ".join(subject_alt_name), True))
+            extensions.append(("subjectAltName", ", ".join(subject_alt_name), False))
         request.set_extensions(extensions)
 
         # Dump CSR
@@ -113,7 +115,7 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
     click.echo("Submitting to %s, waiting for response..." % request_url)
     submission = requests.post(request_url,
         data=open(request_path),
-        headers={"User-Agent": "Certidude", "Content-Type": "application/pkcs10", "Accept": "application/x-x509-user-cert"})
+        headers={"Content-Type": "application/pkcs10", "Accept": "application/x-x509-user-cert,application/x-pem-file"})
 
     if submission.status_code == requests.codes.ok:
         pass
@@ -131,11 +133,17 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
     try:
         cert = crypto.load_certificate(crypto.FILETYPE_PEM, submission.text)
     except crypto.Error:
-        raise ValueError("Failed to parse PEM: %s" % buf)
+        raise ValueError("Failed to parse PEM: %s" % submission.text)
 
     os.umask(0o022)
     with open(certificate_path + ".part", "w") as fh:
+        # Dump certificate
         fh.write(submission.text)
+
+        # Bundle CA certificate, necessary for nginx
+        if bundle:
+            with open(authority_path) as ch:
+                fh.write(ch.read())
 
     click.echo("Writing certificate to: %s" % certificate_path)
     os.rename(certificate_path + ".part", certificate_path)
