@@ -3,7 +3,7 @@ import falcon
 import logging
 from certidude.relational import RelationalMixin
 from certidude.auth import login_required, authorize_admin
-from certidude.decorators import serialize
+from certidude.decorators import serialize, csrf_protection
 
 logger = logging.getLogger("api")
 
@@ -17,6 +17,7 @@ class TagResource(RelationalMixin):
         return self.iterfetch("select * from tag")
 
 
+    @csrf_protection
     @serialize
     @login_required
     @authorize_admin
@@ -51,6 +52,7 @@ class TagDetailResource(RelationalMixin):
         raise falcon.HTTPNotFound()
 
 
+    @csrf_protection
     @serialize
     @login_required
     @authorize_admin
@@ -63,6 +65,7 @@ class TagDetailResource(RelationalMixin):
         push.publish("tag-updated", identifier)
 
 
+    @csrf_protection
     @serialize
     @login_required
     @authorize_admin

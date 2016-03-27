@@ -17,8 +17,9 @@ eventually support PKCS#11 and in far future WebCrypto.
 
 .. figure:: doc/usecase-diagram.png
 
-Certidude is mainly designed for VPN gateway operators to make VPN adoption usage
-as simple as possible.
+Certidude is mainly designed for VPN gateway operators to make
+desktop/laptop VPN setup as easy as possible.
+User certificate management eg. for HTTPS is also made reasonably simple.
 For a full-blown CA you might want to take a look at
 `EJBCA <http://www.ejbca.org/features.html>`_ or
 `OpenCA <https://pki.openca.org/>`_.
@@ -27,24 +28,29 @@ For a full-blown CA you might want to take a look at
 Features
 --------
 
+Common:
+
 * Standard request, sign, revoke workflow via web interface.
-* Colored command-line interface, check out ``certidude list``.
-* OpenVPN integration, check out ``certidude setup openvpn server`` and ``certidude setup openvpn client``.
-* strongSwan integration, check out ``certidude setup strongswan server`` and ``certidude setup strongswan client``.
+* Kerberos and basic auth based web interface authentication.
+* PAM and Active Directory compliant authentication backends: Kerberos single sign-on, LDAP simple bind.
+* POSIX groups and Active Directory (LDAP) group membership based authorization.
+* Command-line interface, check out ``certidude list``.
 * Privilege isolation, separate signer process is spawned per private key isolating
   private key use from the the web interface.
-* Certificate numbering obfuscation, certificate serial numbers are intentionally
-  randomized to avoid leaking information about business practices.
-* Server-side events support via for example nginx-push-stream-module.
-* Kerberos based web interface authentication.
-* File based whitelist authorization, easy to integrate with LDAP as shown below.
+* Certificate serial numbers are intentionally randomized to avoid leaking information about business practices.
+* Server-side events support via `nchan <https://nchan.slact.net/>`_.
+* E-mail notifications about pending, signed and revoked certificates.
 
+Virtual private networking:
 
-Coming soon
------------
+* OpenVPN integration, check out ``certidude setup openvpn server`` and ``certidude setup openvpn client``.
+* strongSwan integration, check out ``certidude setup strongswan server`` and ``certidude setup strongswan client``.
+* NetworkManager integration, check out ``certidude setup openvpn networkmanager`` and ``certidude setup strongswan networkmanager``.
 
-* Refactor mailing subsystem and server-side events to use hooks.
-* Notifications via e-mail.
+HTTPS:
+
+* P12 bundle generation for web browsers, seems to work well with Android
+* HTTPS server setup with client verification, check out ``certidude setup nginx``
 
 
 TODO
@@ -60,6 +66,7 @@ TODO
 * Cronjob for deleting expired certificates
 * Signer process logging.
 
+
 Install
 -------
 
@@ -67,15 +74,15 @@ To install Certidude:
 
 .. code:: bash
 
-    apt-get install -y python python-pip python-dev cython \
+    apt-get install -y python python-pip python-dev cython python-configparser \
         python-pysqlite2 python-mysql.connector python-ldap \
         build-essential libffi-dev libssl-dev libkrb5-dev \
         ldap-utils krb5-user default-mta \
         libsasl2-modules-gssapi-mit
     pip3 install certidude
 
-Make sure you're running PyOpenSSL 0.15+ and netifaces 0.10.4+ from PyPI,
-not the outdated ones provided by APT.
+Make sure you're running PyOpenSSL 0.15+ from PyPI,
+not the outdated one provided by APT.
 
 Create a system user for ``certidude``:
 
@@ -85,10 +92,10 @@ Create a system user for ``certidude``:
     mkdir /etc/certidude
 
 
-Setting up CA
---------------
+Setting up authority
+--------------------
 
-First make sure the machine used for CA has fully qualified
+First make sure the machine used for certificate authority has fully qualified
 domain name set up properly.
 You can check it with:
 
@@ -96,10 +103,10 @@ You can check it with:
 
     hostname -f
 
-The command should return ca.example.co
+The command should return ca.example.com
 
-Certidude can set up CA relatively easily, following will set up
-CA in /var/lib/certidude/hostname.domain.tld:
+Certidude can set up certificate authority relatively easily,
+following will set up certificate authority in /var/lib/certidude/hostname.domain.tld:
 
 .. code:: bash
 
@@ -176,6 +183,7 @@ Otherwise manually configure ``uwsgi`` application in ``/etc/uwsgi/apps-availabl
     env = LANG=C.UTF-8
     env = LC_ALL=C.UTF-8
     env = KRB5_KTNAME=/etc/certidude/server.keytab
+    env = KRB5CCNAME=/run/certidude/krb5cc
 
 Also enable the application:
 
@@ -183,7 +191,7 @@ Also enable the application:
 
     ln -s ../apps-available/certidude.ini /etc/uwsgi/apps-enabled/certidude.ini
 
-We support `nginx-push-stream-module <https://github.com/wandenberg/nginx-push-stream-module>`_,
+We support `nchan <https://nchan.slact.net/>`_,
 configure the site in /etc/nginx/sites-available/certidude:
 
 .. code::
@@ -238,11 +246,9 @@ Also adjust ``/etc/nginx/nginx.conf``:
 
     events {
         worker_connections 768;
-        # multi_accept on;
     }
 
     http {
-        push_stream_shared_memory_size 32M;
         sendfile on;
         tcp_nopush on;
         tcp_nodelay on;
@@ -254,10 +260,12 @@ Also adjust ``/etc/nginx/nginx.conf``:
         error_log /var/log/nginx/error.log;
         gzip on;
         gzip_disable "msie6";
+        include /etc/nginx/conf.d/*;
         include /etc/nginx/sites-enabled/*;
     }
 
-In your CA ssl.cnf make sure Certidude is aware of your nginx setup:
+In your Certidude server's /etc/certidude/server.conf make sure Certidude
+is aware of your nginx setup:
 
 .. code::
 
@@ -309,8 +317,6 @@ Reset Kerberos configuration in ``/etc/krb5.conf``:
     default_realm = EXAMPLE.LAN
     dns_lookup_realm = true
     dns_lookup_kdc = true
-    forwardable = true
-    proxiable = true
 
 Initialize Kerberos credentials:
 
@@ -332,43 +338,25 @@ Set up Kerberos keytab for the web service:
     chown root:certidude /etc/certidude/server.keytab
     chmod 640 /etc/certidude/server.keytab
 
+Reconfigure /etc/certidude/server.conf:
 
-Setting up authorization
-------------------------
+.. code:: ini
 
-Obviously arbitrary Kerberos authenticated user should not have access to
-the CA web interface.
-You could either specify user name list
-in ``/etc/ssl/openssl.cnf``:
+    [authentication]
+    backends = kerberos
 
-.. code:: bash
+    [authorization]
+    backend = ldap
+    ldap gssapi credential cache = /run/certidude/krb5cc
+    ldap user filter = (&(objectclass=user)(objectcategory=person)(samaccountname=%s))
+    ldap admin filter = (&(objectclass=user)(objectclass=person)(memberOf=cn=Domain Admins,cn=Users,dc=example,dc=com)(samaccountname=%s))
 
-    admin_users=alice bob john kate
-
-Or alternatively specify file path:
-
-.. code:: bash
-
-    admin_users=/run/certidude/user.whitelist
-
-Use following shell snippets eg in ``/etc/cron.hourly/update-certidude-user-whitelist``
-to generate user whitelist via LDAP:
-
-.. code:: bash
-
-    ldapsearch -H ldap://dc1.example.com -s sub -x -LLL \
-        -D 'cn=certidude,cn=Users,dc=example,dc=com' \
-        -w 'certidudepass' \
-        -b 'dc=example,dc=com' \
-        '(&(objectClass=user)(memberOf=cn=Domain Admins,cn=Users,dc=example,dc=com))' sAMAccountName userPrincipalName givenName sn \
-    | python3 -c "import ldif3; import sys; [sys.stdout.write('%s:%s:%s:%s\n' % (a.pop('sAMAccountName')[0], a.pop('userPrincipalName')[0], a.pop('givenName')[0], a.pop('sn')[0])) for _, a in ldif3.LDIFParser(sys.stdin.buffer).parse()]" \
-    > /run/certidude/user.whitelist
-
-Set permissions:
-
-.. code:: bash
-
-    chmod 700 /etc/cron.hourly/update-certidude-user-whitelist
+User filter here specified which users can log in to Certidude web interface
+at all eg. for generating user certificates for HTTPS.
+Admin filter specifies which users are allowed to sign and revoke certificates.
+Adjust admin filter according to your setup.
+Also make sure there is cron.hourly job for creating GSSAPI credential cache -
+that's necessary for querying LDAP using Certidude machine's credentials.
 
 
 Automating certificate setup
@@ -384,7 +372,7 @@ Create ``/etc/NetworkManager/dispatcher.d/certidude`` with following content:
 
     case "$2" in
         up)
-            LANG=C.UTF-8 /usr/local/bin/certidude setup strongswan networkmanager ca.example.com gateway.example.com
+            LANG=C.UTF-8 /usr/local/bin/certidude request spawn -k
         ;;
     esac
 
@@ -397,8 +385,7 @@ Finally make it executable:
 Whenever a wired or wireless connection is brought up,
 the dispatcher invokes ``certidude`` in order to generate RSA keys,
 submit CSR, fetch signed certificate,
-create NetworkManager configuration for the VPN connection and
-finally to bring up the VPN tunnel as well.
+create NetworkManager configuration for the VPN connection.
 
 
 Development

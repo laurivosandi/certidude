@@ -485,14 +485,14 @@ output += "\n    E-mail disabled\n";
 ;
 }
 output += "</p>\n\n<p>Authenticated users allowed from:\n\n";
-if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"user_subnets"))) {
+if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"user_subnets"))) {
 output += "\n    anywhere\n    </p>\n";
 ;
 }
 else {
 output += "\n    </p>\n    <ul>\n        ";
 frame = frame.push();
-var t_3 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"user_subnets");
+var t_3 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"user_subnets");
 if(t_3) {var t_2 = t_3.length;
 for(var t_1=0; t_1 < t_3.length; t_1++) {
 var t_4 = t_3[t_1];
@@ -515,14 +515,14 @@ output += "\n    </ul>\n";
 ;
 }
 output += "\n\n\n<p>Request submission is allowed from:\n\n";
-if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"request_subnets"))) {
+if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"request_subnets"))) {
 output += "\n    anywhere\n    </p>\n";
 ;
 }
 else {
 output += "\n    </p>\n    <ul>\n        ";
 frame = frame.push();
-var t_7 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"request_subnets");
+var t_7 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"request_subnets");
 if(t_7) {var t_6 = t_7.length;
 for(var t_5=0; t_5 < t_7.length; t_5++) {
 var t_8 = t_7[t_5];
@@ -545,7 +545,7 @@ output += "\n    </ul>\n";
 ;
 }
 output += "\n\n<p>Autosign is allowed from:\n";
-if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"autosign_subnets"))) {
+if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"autosign_subnets"))) {
 output += "\n    anywhere\n    </p>\n";
 ;
 }
@@ -575,14 +575,14 @@ output += "\n    </ul>\n";
 ;
 }
 output += "\n\n<p>Authority administration is allowed from:\n";
-if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"admin_subnets"))) {
+if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"admin_subnets"))) {
 output += "\n    anywhere\n    </p>\n";
 ;
 }
 else {
 output += "\n    <ul>\n        ";
 frame = frame.push();
-var t_15 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"admin_subnets");
+var t_15 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"admin_subnets");
 if(t_15) {var t_14 = t_15.length;
 for(var t_13=0; t_13 < t_15.length; t_13++) {
 var t_16 = t_15[t_13];
@@ -606,15 +606,11 @@ output += "\n    </ul>\n";
 }
 output += "\n\n<p>Authority administration allowed for:</p>\n\n<ul>\n";
 frame = frame.push();
-var t_19 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"admin_users");
-if(t_19) {var t_17;
-if(runtime.isArray(t_19)) {
-var t_18 = t_19.length;
-for(t_17=0; t_17 < t_19.length; t_17++) {
-var t_20 = t_19[t_17][0]
-frame.set("handle", t_19[t_17][0]);
-var t_21 = t_19[t_17][1]
-frame.set("full_name", t_19[t_17][1]);
+var t_19 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"admin_users");
+if(t_19) {var t_18 = t_19.length;
+for(var t_17=0; t_17 < t_19.length; t_17++) {
+var t_20 = t_19[t_17];
+frame.set("user", t_20);
 frame.set("loop.index", t_17 + 1);
 frame.set("loop.index0", t_17);
 frame.set("loop.revindex", t_18 - t_17);
@@ -622,31 +618,14 @@ frame.set("loop.revindex0", t_18 - t_17 - 1);
 frame.set("loop.first", t_17 === 0);
 frame.set("loop.last", t_17 === t_18 - 1);
 frame.set("loop.length", t_18);
-output += "\n    <li>";
-output += runtime.suppressValue(t_21, env.opts.autoescape);
-output += "</li>\n";
+output += "\n    <li><a href=\"mailto:";
+output += runtime.suppressValue(runtime.memberLookup((t_20),"mail"), env.opts.autoescape);
+output += "\">";
+output += runtime.suppressValue(runtime.memberLookup((t_20),"given_name"), env.opts.autoescape);
+output += " ";
+output += runtime.suppressValue(runtime.memberLookup((t_20),"surname"), env.opts.autoescape);
+output += "</a></li>\n";
 ;
-}
-} else {
-t_17 = -1;
-var t_18 = runtime.keys(t_19).length;
-for(var t_22 in t_19) {
-t_17++;
-var t_23 = t_19[t_22];
-frame.set("handle", t_22);
-frame.set("full_name", t_23);
-frame.set("loop.index", t_17 + 1);
-frame.set("loop.index0", t_17);
-frame.set("loop.revindex", t_18 - t_17);
-frame.set("loop.revindex0", t_18 - t_17 - 1);
-frame.set("loop.first", t_17 === 0);
-frame.set("loop.last", t_17 === t_18 - 1);
-frame.set("loop.length", t_18);
-output += "\n    <li>";
-output += runtime.suppressValue(t_23, env.opts.autoescape);
-output += "</li>\n";
-;
-}
 }
 }
 frame = frame.pop();
@@ -658,14 +637,14 @@ output += "\n<p>Here you can renew your certificates</p>\n\n";
 ;
 }
 output += "\n\n";
-var t_24;
-t_24 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"certificate")),"identity");
-frame.set("s", t_24, true);
+var t_21;
+t_21 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"certificate")),"identity");
+frame.set("s", t_21, true);
 if(frame.topLevel) {
-context.setVariable("s", t_24);
+context.setVariable("s", t_21);
 }
 if(frame.topLevel) {
-context.addExport("s", t_24);
+context.addExport("s", t_21);
 }
 output += "\n\n\n";
 if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")) {
@@ -673,24 +652,24 @@ output += "\n<section id=\"requests\">\n    <h1>Pending requests</h1>\n\n    <p>
 output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"common_name"), env.opts.autoescape);
 output += "</pre>\n\n    <ul id=\"pending_requests\">\n        ";
 frame = frame.push();
-var t_27 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"requests");
-if(t_27) {var t_26 = t_27.length;
-for(var t_25=0; t_25 < t_27.length; t_25++) {
-var t_28 = t_27[t_25];
-frame.set("request", t_28);
-frame.set("loop.index", t_25 + 1);
-frame.set("loop.index0", t_25);
-frame.set("loop.revindex", t_26 - t_25);
-frame.set("loop.revindex0", t_26 - t_25 - 1);
-frame.set("loop.first", t_25 === 0);
-frame.set("loop.last", t_25 === t_26 - 1);
-frame.set("loop.length", t_26);
+var t_24 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"requests");
+if(t_24) {var t_23 = t_24.length;
+for(var t_22=0; t_22 < t_24.length; t_22++) {
+var t_25 = t_24[t_22];
+frame.set("request", t_25);
+frame.set("loop.index", t_22 + 1);
+frame.set("loop.index0", t_22);
+frame.set("loop.revindex", t_23 - t_22);
+frame.set("loop.revindex0", t_23 - t_22 - 1);
+frame.set("loop.first", t_22 === 0);
+frame.set("loop.last", t_22 === t_23 - 1);
+frame.set("loop.length", t_23);
 output += "\n             ";
-env.getTemplate("views/request.html", false, "views/authority.html", null, function(t_31,t_29) {
-if(t_31) { cb(t_31); return; }
-t_29.render(context.getVariables(), frame, function(t_32,t_30) {
-if(t_32) { cb(t_32); return; }
-output += t_30
+env.getTemplate("views/request.html", false, "views/authority.html", null, function(t_28,t_26) {
+if(t_28) { cb(t_28); return; }
+t_26.render(context.getVariables(), frame, function(t_29,t_27) {
+if(t_29) { cb(t_29); return; }
+output += t_27
 output += "\n\t    ";
 })});
 }
@@ -698,24 +677,24 @@ output += "\n\t    ";
 frame = frame.pop();
 output += "\n        <li class=\"notify\">\n            <p>No certificate signing requests to sign!</p>\n        </li>\n    </ul>\n</section>\n\n<section id=\"signed\">\n    <h1>Signed certificates</h1>\n    <input id=\"search\" type=\"search\" class=\"icon search\">\n    <ul id=\"signed_certificates\">\n        ";
 frame = frame.push();
-var t_35 = env.getFilter("reverse").call(context, env.getFilter("sort").call(context, runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"signed")));
-if(t_35) {var t_34 = t_35.length;
-for(var t_33=0; t_33 < t_35.length; t_33++) {
-var t_36 = t_35[t_33];
-frame.set("certificate", t_36);
-frame.set("loop.index", t_33 + 1);
-frame.set("loop.index0", t_33);
-frame.set("loop.revindex", t_34 - t_33);
-frame.set("loop.revindex0", t_34 - t_33 - 1);
-frame.set("loop.first", t_33 === 0);
-frame.set("loop.last", t_33 === t_34 - 1);
-frame.set("loop.length", t_34);
+var t_32 = env.getFilter("reverse").call(context, env.getFilter("sort").call(context, runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"signed")));
+if(t_32) {var t_31 = t_32.length;
+for(var t_30=0; t_30 < t_32.length; t_30++) {
+var t_33 = t_32[t_30];
+frame.set("certificate", t_33);
+frame.set("loop.index", t_30 + 1);
+frame.set("loop.index0", t_30);
+frame.set("loop.revindex", t_31 - t_30);
+frame.set("loop.revindex0", t_31 - t_30 - 1);
+frame.set("loop.first", t_30 === 0);
+frame.set("loop.last", t_30 === t_31 - 1);
+frame.set("loop.length", t_31);
 output += "\n            ";
-env.getTemplate("views/signed.html", false, "views/authority.html", null, function(t_39,t_37) {
-if(t_39) { cb(t_39); return; }
-t_37.render(context.getVariables(), frame, function(t_40,t_38) {
-if(t_40) { cb(t_40); return; }
-output += t_38
+env.getTemplate("views/signed.html", false, "views/authority.html", null, function(t_36,t_34) {
+if(t_36) { cb(t_36); return; }
+t_34.render(context.getVariables(), frame, function(t_37,t_35) {
+if(t_37) { cb(t_37); return; }
+output += t_35
 output += "\n\t    ";
 })});
 }
@@ -729,31 +708,31 @@ output += "/certificate/ > session.pem\n    openssl ocsp -issuer session.pem -CA
 output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "request")),"url"), env.opts.autoescape);
 output += "/ocsp/ -serial 0x\n    </pre>\n    -->\n    <ul>\n        ";
 frame = frame.push();
-var t_43 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"revoked");
-if(t_43) {var t_42 = t_43.length;
-for(var t_41=0; t_41 < t_43.length; t_41++) {
-var t_44 = t_43[t_41];
-frame.set("j", t_44);
-frame.set("loop.index", t_41 + 1);
-frame.set("loop.index0", t_41);
-frame.set("loop.revindex", t_42 - t_41);
-frame.set("loop.revindex0", t_42 - t_41 - 1);
-frame.set("loop.first", t_41 === 0);
-frame.set("loop.last", t_41 === t_42 - 1);
-frame.set("loop.length", t_42);
+var t_40 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"revoked");
+if(t_40) {var t_39 = t_40.length;
+for(var t_38=0; t_38 < t_40.length; t_38++) {
+var t_41 = t_40[t_38];
+frame.set("j", t_41);
+frame.set("loop.index", t_38 + 1);
+frame.set("loop.index0", t_38);
+frame.set("loop.revindex", t_39 - t_38);
+frame.set("loop.revindex0", t_39 - t_38 - 1);
+frame.set("loop.first", t_38 === 0);
+frame.set("loop.last", t_38 === t_39 - 1);
+frame.set("loop.length", t_39);
 output += "\n            <li id=\"certificate_";
-output += runtime.suppressValue(runtime.memberLookup((t_44),"sha256sum"), env.opts.autoescape);
+output += runtime.suppressValue(runtime.memberLookup((t_41),"sha256sum"), env.opts.autoescape);
 output += "\">\n                ";
-output += runtime.suppressValue(runtime.memberLookup((t_44),"changed"), env.opts.autoescape);
+output += runtime.suppressValue(runtime.memberLookup((t_41),"changed"), env.opts.autoescape);
 output += "\n                ";
-output += runtime.suppressValue(runtime.memberLookup((t_44),"serial_number"), env.opts.autoescape);
+output += runtime.suppressValue(runtime.memberLookup((t_41),"serial_number"), env.opts.autoescape);
 output += " <span class=\"monospace\">";
-output += runtime.suppressValue(runtime.memberLookup((t_44),"identity"), env.opts.autoescape);
+output += runtime.suppressValue(runtime.memberLookup((t_41),"identity"), env.opts.autoescape);
 output += "</span>\n            </li>\n        ";
 ;
 }
 }
-if (!t_42) {
+if (!t_39) {
 output += "\n            <li>Great job! No certificate signing requests to sign.</li>\n\t    ";
 }
 frame = frame.pop();
@@ -1098,7 +1077,7 @@ output += runtime.suppressValue(runtime.memberLookup((runtime.contextOrFrameLook
 output += "</div>\n    ";
 })});
 }
-output += "\n    \n    ";
+output += "\n\n    ";
 if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"given_name") || runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "certificate")),"surname")) {
 output += "\n    <div class=\"person\">";
 env.getTemplate("img/iconmonstr-user-5.svg", false, "views/signed.html", null, function(t_11,t_9) {

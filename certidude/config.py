@@ -57,7 +57,6 @@ except configparser.NoOptionError:
     PUSH_LONG_POLL = PUSH_SERVER + "/lp/%s"
     PUSH_PUBLISH = PUSH_SERVER + "/pub?id=%s"
 
-
 TAGGING_BACKEND = cp.get("tagging", "backend")
 LOGGING_BACKEND = cp.get("logging", "backend")
 LEASES_BACKEND = cp.get("leases", "backend")
@@ -68,17 +67,15 @@ if "whitelist" == AUTHORIZATION_BACKEND:
     ADMINS_WHITELIST = set([j for j in  cp.get("authorization", "admins whitelist").split(" ") if j])
 elif "posix" == AUTHORIZATION_BACKEND:
     USERS_GROUP = cp.get("authorization", "posix user group")
-    ADMINS_GROUP = cp.get("authorization", "posix admin group")
+    ADMIN_GROUP = cp.get("authorization", "posix admin group")
 elif "ldap" == AUTHORIZATION_BACKEND:
-    USERS_GROUP = cp.get("authorization", "ldap user group")
-    ADMINS_GROUP = cp.get("authorization", "ldap admin group")
+    LDAP_GSSAPI_CRED_CACHE = cp.get("authorization", "ldap gssapi credential cache")
+    LDAP_USER_FILTER = cp.get("authorization", "ldap user filter")
+    LDAP_ADMIN_FILTER = cp.get("authorization", "ldap admin filter")
+    if "%s" not in LDAP_USER_FILTER: raise ValueError("No placeholder %s for username in 'ldap user filter'")
+    if "%s" not in LDAP_ADMIN_FILTER: raise ValueError("No placeholder %s for username in 'ldap admin filter'")
 else:
     raise NotImplementedError("Unknown authorization backend '%s'" % AUTHORIZATION_BACKEND)
-
-LDAP_USER_FILTER = cp.get("authorization", "ldap user filter")
-LDAP_GROUP_FILTER = cp.get("authorization", "ldap group filter")
-LDAP_MEMBERS_FILTER = cp.get("authorization", "ldap members filter")
-LDAP_MEMBER_OF_FILTER = cp.get("authorization", "ldap member of filter")
 
 for line in open("/etc/ldap/ldap.conf"):
     line = line.strip().lower()
@@ -92,6 +89,5 @@ for line in open("/etc/ldap/ldap.conf"):
         click.echo("LDAP servers: %s" % " ".join(LDAP_SERVERS))
     elif key == "base":
         LDAP_BASE = value
-else:
-    click.echo("No LDAP servers specified in /etc/ldap/ldap.conf")
 
+# TODO: Check if we don't have base or servers

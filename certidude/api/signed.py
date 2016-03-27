@@ -3,7 +3,7 @@ import falcon
 import logging
 from certidude import authority
 from certidude.auth import login_required, authorize_admin
-from certidude.decorators import serialize
+from certidude.decorators import serialize, csrf_protection
 
 logger = logging.getLogger("api")
 
@@ -24,20 +24,21 @@ class SignedCertificateDetailResource(object):
         try:
             cert = authority.get_signed(cn)
         except EnvironmentError:
-            logger.warning("Failed to serve non-existant certificate %s to %s",
+            logger.warning(u"Failed to serve non-existant certificate %s to %s",
                 cn, req.context.get("remote_addr"))
             resp.body = "No certificate CN=%s found" % cn
             raise falcon.HTTPNotFound()
         else:
-            logger.debug("Served certificate %s to %s",
+            logger.debug(u"Served certificate %s to %s",
                 cn, req.context.get("remote_addr"))
             return cert
 
 
+    @csrf_protection
     @login_required
     @authorize_admin
     def on_delete(self, req, resp, cn):
-        logger.info("Revoked certificate %s by %s from %s",
+        logger.info(u"Revoked certificate %s by %s from %s",
             cn, req.context.get("user"), req.context.get("remote_addr"))
         authority.revoke_certificate(cn)
 

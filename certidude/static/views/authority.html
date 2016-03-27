@@ -31,13 +31,13 @@ as such require complete reset of X509 infrastructure if some of them needs to b
 
 <p>Authenticated users allowed from:
 
-{% if "0.0.0.0/0" in session.user_subnets %}
+{% if "0.0.0.0/0" in session.authority.user_subnets %}
     anywhere
     </p>
 {% else %}
     </p>
     <ul>
-        {% for i in session.user_subnets %}
+        {% for i in session.authority.user_subnets %}
             <li>{{ i }}</li>
         {% endfor %}
     </ul>
@@ -46,20 +46,20 @@ as such require complete reset of X509 infrastructure if some of them needs to b
 
 <p>Request submission is allowed from:
 
-{% if "0.0.0.0/0" in session.request_subnets %}
+{% if "0.0.0.0/0" in session.authority.request_subnets %}
     anywhere
     </p>
 {% else %}
     </p>
     <ul>
-        {% for subnet in session.request_subnets %}
+        {% for subnet in session.authority.request_subnets %}
             <li>{{ subnet }}</li>
         {% endfor %}
     </ul>
 {% endif %}
 
 <p>Autosign is allowed from:
-{% if "0.0.0.0/0" in session.autosign_subnets %}
+{% if "0.0.0.0/0" in session.authority.autosign_subnets %}
     anywhere
     </p>
 {% else %}
@@ -72,12 +72,12 @@ as such require complete reset of X509 infrastructure if some of them needs to b
 {% endif %}
 
 <p>Authority administration is allowed from:
-{% if "0.0.0.0/0" in session.admin_subnets %}
+{% if "0.0.0.0/0" in session.authority.admin_subnets %}
     anywhere
     </p>
 {% else %}
     <ul>
-        {% for subnet in session.admin_subnets %}
+        {% for subnet in session.authority.admin_subnets %}
             <li>{{ subnet }}</li>
         {% endfor %}
     </ul>
@@ -86,8 +86,8 @@ as such require complete reset of X509 infrastructure if some of them needs to b
 <p>Authority administration allowed for:</p>
 
 <ul>
-{% for handle, full_name in session.admin_users %}
-    <li>{{ full_name }}</li>
+{% for user in session.authority.admin_users %}
+    <li><a href="mailto:{{ user.mail}}">{{ user.given_name }} {{user.surname }}</a></li>
 {% endfor %}
 </ul>
 </section>

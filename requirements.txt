@@ -9,7 +9,6 @@ ipaddress==1.0.16
 ipsecparse==0.1.0
 Jinja2==2.8
 Markdown==2.6.5
-MarkupSafe==0.23
 pyasn1==0.1.8
 pycrypto==2.6.1
 pykerberos==1.1.8

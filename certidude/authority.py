@@ -26,12 +26,12 @@ def publish_certificate(func):
         cert = func(csr, *args, **kwargs)
         assert isinstance(cert, Certificate), "notify wrapped function %s returned %s" % (func, type(cert))
 
-        if cert.email_address:
-            mailer.send(
-                "%s %s <%s>" % (cert.given_name, cert.surname, cert.email_address),
-                "certificate-signed.md",
-                attachments=(cert,),
-                certificate=cert)
+        mailer.send(
+            "certificate-signed.md",
+            to= "%s %s <%s>" % (cert.given_name, cert.surname, cert.email_address) if
+                cert.given_name and cert.surname else cert.email_address,
+            attachments=(cert,),
+            certificate=cert)
 
         if config.PUSH_PUBLISH:
             url = config.PUSH_PUBLISH % csr.fingerprint()
@@ -85,7 +85,9 @@ def store_request(buf, overwrite=False):
             fh.write(buf)
         os.rename(request_path + ".part", request_path)
 
-    return Request(open(request_path))
+    req = Request(open(request_path))
+    mailer.send("request-stored.md", attachments=(req,), request=req)
+    return req
 
 
 def signer_exec(cmd, *bits):
@@ -110,6 +112,7 @@ def revoke_certificate(common_name):
     revoked_filename = os.path.join(config.REVOKED_DIR, "%s.pem" % cert.serial_number)
     os.rename(cert.path, revoked_filename)
     push.publish("certificate-revoked", cert.common_name)
+    mailer.send("certificate-revoked.md", attachments=(cert,), certificate=cert)
 
 
 def list_requests(directory=config.REQUESTS_DIR):
@@ -184,7 +187,7 @@ def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
         if owner.surname:
             csr.get_subject().SN = owner.surname
         csr.add_extensions([
-            crypto.X509Extension("subjectAltName", True, "email:%s" % owner.mail)])
+            crypto.X509Extension("subjectAltName", True, "email:%s" % owner.mail.encode("ascii"))])
 
     buf = crypto.dump_certificate_request(crypto.FILETYPE_PEM, csr)
 

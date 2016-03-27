@@ -1,6 +1,8 @@
 
+import click
 import os
 import smtplib
+from certidude.user import User
 from markdown import markdown
 from jinja2 import Environment, PackageLoader
 from email.mime.multipart import MIMEMultipart
@@ -10,14 +12,18 @@ from urllib.parse import urlparse
 
 env = Environment(loader=PackageLoader("certidude", "templates/mail"))
 
-def send(recipients, template, attachments=(), **context):
+def send(template, to=None, attachments=(), **context):
     from certidude import authority, config
     if not config.OUTBOX:
         # Mailbox disabled, don't send e-mail
         return
 
-    if not recipients:
-        raise ValueError("No e-mail recipients specified!")
+    recipients = u", ".join([unicode(j) for j in User.objects.filter_admins()])
+
+    if to:
+        recipients = to + u", " + recipients
+
+    click.echo("Sending e-mail %s to %s" % (template, recipients))
 
     scheme, netloc, path, params, query, fragment = urlparse(config.OUTBOX)
     scheme = scheme.lower()

@@ -9,6 +9,7 @@ from datetime import datetime
 from time import sleep
 from certidude import authority, mailer
 from certidude.auth import login_required, authorize_admin
+from certidude.user import User
 from certidude.decorators import serialize, event_source, csrf_protection
 from certidude.wrappers import Request, Certificate
 from certidude import constants, config
@@ -33,34 +34,16 @@ class CertificateAuthorityResource(object):
         logger.info("Served CA certificate to %s", req.context.get("remote_addr"))
         resp.stream = open(config.AUTHORITY_CERTIFICATE_PATH, "rb")
         resp.append_header("Content-Type", "application/x-x509-ca-cert")
-        resp.append_header("Content-Disposition", "attachment; filename=ca.crt")
+        resp.append_header("Content-Disposition", "attachment; filename=%s.crt" %
+            constants.HOSTNAME.encode("ascii"))
 
 
 class SessionResource(object):
+    @csrf_protection
     @serialize
     @login_required
-    @authorize_admin
     @event_source
     def on_get(self, req, resp):
-        if config.ACCOUNTS_BACKEND == "ldap":
-            import ldap
-            ft = config.LDAP_MEMBERS_FILTER % (config.ADMINS_GROUP, "*")
-            r = req.context.get("ldap_conn").search_s(config.LDAP_BASE,
-                    ldap.SCOPE_SUBTREE, ft.encode("utf-8"), ["cn", "member"])
-
-            for dn,entry in r:
-                cn, = entry.get("cn")
-                break
-            else:
-                raise ValueError("Failed to look up group %s in LDAP" % repr(group_name))
-
-            admins = dict([(j, j.split(",")[0].split("=")[1]) for j in entry.get("member")])
-        elif config.ACCOUNTS_BACKEND == "posix":
-            import grp
-            _, _, gid, members = grp.getgrnam(config.ADMINS_GROUP)
-            admins = dict([(j, j) for j in members])
-        else:
-            raise NotImplementedError("Authorization backend %s not supported" % config.AUTHORIZATION_BACKEND)
 
         return dict(
             user = dict(
@@ -72,12 +55,6 @@ class SessionResource(object):
             request_submission_allowed = sum( # Dirty hack!
                 [req.context.get("remote_addr") in j
                     for j in config.REQUEST_SUBNETS]),
-            user_subnets = config.USER_SUBNETS,
-            autosign_subnets = config.AUTOSIGN_SUBNETS,
-            request_subnets = config.REQUEST_SUBNETS,
-            admin_subnets=config.ADMIN_SUBNETS,
-            admin_users = admins,
-            #admin_users=config.ADMIN_USERS,
             authority = dict(
                 outbox = config.OUTBOX,
                 certificate = authority.certificate,
@@ -85,7 +62,12 @@ class SessionResource(object):
                 requests=authority.list_requests(),
                 signed=authority.list_signed(),
                 revoked=authority.list_revoked(),
-            ) if config.ADMINS_GROUP in req.context.get("groups") else None,
+                admin_users = User.objects.filter_admins(),
+                user_subnets = config.USER_SUBNETS,
+                autosign_subnets = config.AUTOSIGN_SUBNETS,
+                request_subnets = config.REQUEST_SUBNETS,
+                admin_subnets=config.ADMIN_SUBNETS,
+            ) if req.context.get("user").is_admin() else None,
             features=dict(
                 tagging=config.TAGGING_BACKEND,
                 leases=False, #config.LEASES_BACKEND,
@@ -124,7 +106,7 @@ class BundleResource(object):
         common_name = req.context["user"].mail
         logger.info("Signing bundle %s for %s", common_name, req.context.get("user"))
         resp.set_header("Content-Type", "application/x-pkcs12")
-        resp.set_header("Content-Disposition", "attachment; filename=%s.p12" % common_name)
+        resp.set_header("Content-Disposition", "attachment; filename=%s.p12" % common_name.encode("ascii"))
         resp.body, cert = authority.generate_pkcs12_bundle(common_name,
                                 owner=req.context.get("user"))
 
@@ -132,7 +114,6 @@ class BundleResource(object):
 import ipaddress
 
 class NormalizeMiddleware(object):
-    @csrf_protection
     def process_request(self, req, resp, *args):
         assert not req.get_param("unicode") or req.get_param("unicode") == u"✓", "Unicode sanity check failed"
         req.context["remote_addr"] = ipaddress.ip_address(req.env["REMOTE_ADDR"].decode("utf-8"))

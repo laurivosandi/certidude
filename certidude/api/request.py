@@ -6,7 +6,7 @@ import ipaddress
 import os
 from certidude import config, authority, helpers, push, errors
 from certidude.auth import login_required, login_optional, authorize_admin
-from certidude.decorators import serialize
+from certidude.decorators import serialize, csrf_protection
 from certidude.wrappers import Request, Certificate
 from certidude.firewall import whitelist_subnets, whitelist_content_types
 
@@ -18,6 +18,7 @@ class RequestListResource(object):
     @authorize_admin
     def on_get(self, req, resp):
         return authority.list_requests()
+
 
     @login_optional
     @whitelist_subnets(config.REQUEST_SUBNETS)
@@ -53,7 +54,7 @@ class RequestListResource(object):
         # Process automatic signing if the IP address is whitelisted and autosigning was requested
         if req.get_param_as_bool("autosign"):
             for subnet in config.AUTOSIGN_SUBNETS:
-                if subnet.overlaps(req.context.get("remote_addr")):
+                if req.context.get("remote_addr") in subnet:
                     try:
                         resp.set_header("Content-Type", "application/x-x509-user-cert")
                         resp.body = authority.sign(csr).dump()
@@ -103,6 +104,8 @@ class RequestDetailResource(object):
             csr.common_name, req.context.get("remote_addr"))
         return csr
 
+
+    @csrf_protection
     @login_required
     @authorize_admin
     def on_patch(self, req, resp, cn):
@@ -118,6 +121,8 @@ class RequestDetailResource(object):
         logger.info("Signing request %s signed by %s from %s", csr.common_name,
             req.context.get("user"), req.context.get("remote_addr"))
 
+
+    @csrf_protection
     @login_required
     @authorize_admin
     def on_delete(self, req, resp, cn):

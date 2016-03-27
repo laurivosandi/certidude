@@ -1,4 +1,5 @@
 
+import click
 import socket
 
 FQDN = socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, 0, 0, socket.AI_CANONNAME)[0][3]

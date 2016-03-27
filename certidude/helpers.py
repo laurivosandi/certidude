@@ -2,11 +2,14 @@
 import click
 import os
 import requests
+import subprocess
+import tempfile
 from certidude import errors
 from certidude.wrappers import Certificate, Request
+from configparser import ConfigParser
 from OpenSSL import crypto
 
-def certidude_request_certificate(url, key_path, request_path, certificate_path, authority_path, common_name, org_unit=None, email_address=None, given_name=None, surname=None, autosign=False, wait=False, key_usage=None, extended_key_usage=None, ip_address=None, dns=None, bundle=False):
+def certidude_request_certificate(server, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, org_unit=None, email_address=None, given_name=None, surname=None, autosign=False, wait=False, key_usage=None, extended_key_usage=None, ip_address=None, dns=None, bundle=False):
     """
     Exchange CSR for certificate using Certidude HTTP API server
     """
@@ -18,38 +21,80 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
     if wait:
         request_params.add("wait=forever")
 
-    # Expand ca.example.com to http://ca.example.com/api/
-    if not url.endswith("/"):
-        url += "/api/"
-    if "//" not in url:
-        url = "http://" + url
-
-    authority_url = url + "certificate"
-    request_url = url + "request"
+    # Expand ca.example.com
+    authority_url = "http://%s/api/certificate/" % server
+    request_url = "http://%s/api/request/" % server
+    revoked_url = "http://%s/api/revoked/" % server
 
     if request_params:
         request_url = request_url + "?" + "&".join(request_params)
 
-    if os.path.exists(certificate_path):
-        click.echo("Found certificate: %s" % certificate_path)
-        # TODO: Check certificate validity, download CRL?
-        return
-
     if os.path.exists(authority_path):
-        click.echo("Found CA certificate in: %s" % authority_path)
+        click.echo("Found authority certificate in: %s" % authority_path)
     else:
-        click.echo("Attempting to fetch CA certificate from %s" % authority_url)
-
+        click.echo("Attempting to fetch authority certificate from %s" % authority_url)
         try:
             r = requests.get(authority_url,
                     headers={"Accept": "application/x-x509-ca-cert,application/x-pem-file"})
             cert = crypto.load_certificate(crypto.FILETYPE_PEM, r.text)
         except crypto.Error:
             raise ValueError("Failed to parse PEM: %s" % r.text)
-        with open(authority_path + ".part", "w") as oh:
+        authority_partial = tempfile.mktemp(prefix=authority_path + ".part")
+        with open(authority_partial, "w") as oh:
             oh.write(r.text)
-        click.echo("Writing CA certificate to: %s" % authority_path)
-        os.rename(authority_path + ".part", authority_path)
+        click.echo("Writing authority certificate to: %s" % authority_path)
+        os.rename(authority_partial, authority_path)
+
+    # Fetch certificate revocation list
+    r = requests.get(revoked_url, stream=True)
+    click.echo("Fetching CRL from %s to %s" % (revoked_url, revocations_path))
+    revocations_partial = tempfile.mktemp(prefix=revocations_path + ".part")
+    with open(revocations_partial, 'wb') as f:
+        for chunk in r.iter_content(chunk_size=8192):
+            if chunk:
+                f.write(chunk)
+    if subprocess.call(("openssl", "crl", "-CAfile", authority_path, "-in", revocations_partial, "-noout")):
+        raise ValueError("Failed to verify CRL in %s" % revocations_partial)
+    else:
+        # TODO: Check monotonically increasing CRL number
+        click.echo("Certificate revocation list passed verification")
+        os.rename(revocations_partial, revocations_path)
+
+    # Check if we have been inserted into CRL
+    if os.path.exists(certificate_path):
+        cert = crypto.load_certificate(crypto.FILETYPE_PEM, open(certificate_path).read())
+        revocation_list = crypto.load_crl(crypto.FILETYPE_PEM, open(revocations_path).read())
+        for revocation in revocation_list.get_revoked():
+            if int(revocation.get_serial(), 16) == cert.get_serial_number():
+                if revocation.get_reason() == "Certificate Hold": # TODO: 'Remove From CRL'
+                    # TODO: Disable service for time being
+                    click.echo("Certificate put on hold, doing nothing for now")
+                    break
+
+                # Disable the client if operation has been ceased or
+                # the certificate has been superseded by other
+                if revocation.get_reason() in ("Cessation Of Operation", "Superseded"):
+                    if os.path.exists("/etc/certidude/client.conf"):
+                        clients.readfp(open("/etc/certidude/client.conf"))
+                        if clients.has_section(server):
+                            clients.set(server, "trigger", "operation ceased")
+                            clients.write(open("/etc/certidude/client.conf", "w"))
+                            click.echo("Authority operation ceased, disabling in /etc/certidude/client.conf")
+                    # TODO: Disable related services
+                if revocation.get_reason() in ("CA Compromise", "AA Compromise"):
+                    if os.path.exists(authority_path):
+                        os.remove(key_path)
+
+                click.echo("Certificate has been revoked, wiping keys and certificates!")
+                if os.path.exists(key_path):
+                    os.remove(key_path)
+                if os.path.exists(request_path):
+                    os.remove(request_path)
+                if os.path.exists(certificate_path):
+                    os.remove(certificate_path)
+                break
+        else:
+            click.echo("Certificate does not seem to be revoked. Good!")
 
     try:
         request = Request(open(request_path))
@@ -62,8 +107,9 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
         key.generate_key(crypto.TYPE_RSA, 4096)
 
         # Dump private key
+        key_partial = tempfile.mktemp(prefix=key_path + ".part")
         os.umask(0o077)
-        with open(key_path + ".part", "wb") as fh:
+        with open(key_partial, "wb") as fh:
             fh.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
 
         # Construct CSR
@@ -107,10 +153,38 @@ def certidude_request_certificate(url, key_path, request_path, certificate_path,
             fh.write(request.dump())
 
         click.echo("Writing private key to: %s" % key_path)
-        os.rename(key_path + ".part", key_path)
+        os.rename(key_partial, key_path)
         click.echo("Writing certificate signing request to: %s" % request_path)
         os.rename(request_path + ".part", request_path)
 
+    # We have CSR now, save the paths to client.conf so we could:
+    # Update CRL, renew certificate, maybe something extra?
+
+    if not os.path.exists("/etc/certidude"):
+        os.makedirs("/etc/certidude")
+
+    clients = ConfigParser()
+    if os.path.exists("/etc/certidude/client.conf"):
+        clients.readfp(open("/etc/certidude/client.conf"))
+
+    if clients.has_section(server):
+        click.echo("Section %s already exists in /etc/certidude/client.conf, not reconfiguring" % server)
+    else:
+        clients.add_section(server)
+        clients.set(server, "trigger", "interface up")
+        clients.set(server, "key_path", key_path)
+        clients.set(server, "request_path", request_path)
+        clients.set(server, "certificate_path", certificate_path)
+        clients.set(server, "authority_path", authority_path)
+        clients.set(server, "key_path", key_path)
+        clients.set(server, "revocations_path", revocations_path)
+        clients.write(open("/etc/certidude/client.conf", "w"))
+        click.echo("Section %s added to /etc/certidude/client.conf" % repr(server))
+
+    if os.path.exists(certificate_path):
+        click.echo("Found certificate: %s" % certificate_path)
+        # TODO: Check certificate validity, download CRL?
+        return
 
     click.echo("Submitting to %s, waiting for response..." % request_url)
     submission = requests.post(request_url,

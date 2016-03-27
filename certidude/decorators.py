@@ -6,6 +6,7 @@ import re
 import types
 from datetime import date, time, datetime
 from OpenSSL import crypto
+from certidude.auth import User
 from certidude.wrappers import Request, Certificate
 from urllib.parse import urlparse
 
@@ -76,6 +77,9 @@ class MyEncoder(json.JSONEncoder):
         if isinstance(obj, Certificate):
             return dict([(key, getattr(obj, key)) for key in self.CERTIFICATE_ATTRIBUTES \
                 if hasattr(obj, key) and getattr(obj, key)])
+        if isinstance(obj, User):
+            return dict(name=obj.name, given_name=obj.given_name,
+                surname=obj.surname, mail=obj.mail)
         if hasattr(obj, "serialize"):
             return obj.serialize()
         return json.JSONEncoder.default(self, obj)
@@ -95,16 +99,20 @@ def serialize(func):
                 resp.set_header("Content-Type", "application/json")
                 resp.set_header("Content-Disposition", "inline")
                 resp.body = json.dumps(r, cls=MyEncoder)
-
             elif hasattr(r, "content_type") and req.client_accepts(r.content_type):
                 resp.set_header("Content-Type", r.content_type)
                 resp.set_header("Content-Disposition",
                     ("attachment; filename=%s" % r.suggested_filename).encode("ascii"))
                 resp.body = r.dump()
-            else:
-                logger.debug("Client did not accept application/json or %s, client expected %s" % (r.content_type, req.accept))
+            elif hasattr(r, "content_type"):
+                logger.debug("Client did not accept application/json or %s, "
+                    "client expected %s", r.content_type, req.accept)
                 raise falcon.HTTPUnsupportedMediaType(
                     "Client did not accept application/json or %s" % r.content_type)
+            else:
+                logger.debug("Client did not accept application/json, client expected %s", req.accept)
+                raise falcon.HTTPUnsupportedMediaType(
+                    "Client did not accept application/json")
         return r
     return wrapped
 
