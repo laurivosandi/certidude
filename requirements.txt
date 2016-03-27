@@ -1,6 +1,6 @@
 cffi==1.2.1
 click==5.1
-configparser==3.3.0r2
+configparser
 cryptography==1.0
 falcon==0.3.0
 humanize==0.5.1
