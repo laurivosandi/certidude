@@ -77,9 +77,9 @@ To install Certidude:
     apt-get install -y python python-pip python-dev cython python-configparser \
         python-pysqlite2 python-mysql.connector python-ldap \
         build-essential libffi-dev libssl-dev libkrb5-dev \
-        ldap-utils krb5-user default-mta \
+        ldap-utils krb5-user \
         libsasl2-modules-gssapi-mit
-    pip3 install certidude
+    pip install certidude
 
 Make sure you're running PyOpenSSL 0.15+ from PyPI,
 not the outdated one provided by APT.
@@ -279,8 +279,8 @@ Restart the services:
     service nginx restart
 
 
-Setting up Kerberos authentication
-----------------------------------
+Setting up Active Directory authentication
+------------------------------------------
 
 Following assumes you have already set up Kerberos infrastructure and
 Certidude is simply one of the servers making use of that infrastructure.
@@ -349,7 +349,7 @@ Reconfigure /etc/certidude/server.conf:
     backend = ldap
     ldap gssapi credential cache = /run/certidude/krb5cc
     ldap user filter = (&(objectclass=user)(objectcategory=person)(samaccountname=%s))
-    ldap admin filter = (&(objectclass=user)(objectclass=person)(memberOf=cn=Domain Admins,cn=Users,dc=example,dc=com)(samaccountname=%s))
+    ldap admin filter = (&(memberOf=cn=Domain Admins,cn=Users,dc=example,dc=com)(samaccountname=%s))
 
 User filter here specified which users can log in to Certidude web interface
 at all eg. for generating user certificates for HTTPS.

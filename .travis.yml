@@ -1,16 +1,14 @@
-sudo: false
+sudo: required
 language: python
+dist: trusty
 python:
-  #- "2.6"
-  #- "2.7"
-  #- "3.2"
-  - "3.3"
-  - "3.4"
-  - "3.5"
+  - "2.7"
 after_success:
   - codecov
+virtualenv:
+  system_site_packages: true
 before_install:
-  # codecov.io
+  - apt-get install -qq python-configparser python-cffi
   - pip install codecov pytest-cov
 install:
   - pip install -r requirements.txt
