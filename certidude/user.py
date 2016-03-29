@@ -26,6 +26,7 @@ class User(object):
         return hash(self.mail)
 
     def __eq__(self, other):
+        assert isinstance(other, User), "%s is not instance of User" % repr(other)
         return self.mail == other.mail
 
     def __repr__(self):
@@ -56,10 +57,10 @@ class PosixUserManager(object):
         for username in members:
             yield self.get(username)
 
-    def is_admin(self, username):
+    def is_admin(self, user):
         import grp
         _, _, gid, members = grp.getgrnam(config.ADMIN_GROUP)
-        return username in members
+        return user.name in members
 
 
 class DirectoryConnection(object):
@@ -161,5 +162,5 @@ if config.ACCOUNTS_BACKEND == "ldap":
 elif config.ACCOUNTS_BACKEND == "posix":
     User.objects = PosixUserManager()
 else:
-    raise NotImplementedError("Authorization backend %s not supported" % config.AUTHORIZATION_BACKEND)
+    raise NotImplementedError("Authorization backend %s not supported" % repr(config.AUTHORIZATION_BACKEND))
 
