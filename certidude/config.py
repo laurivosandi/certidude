@@ -16,6 +16,9 @@ AUTHENTICATION_BACKENDS = set([j for j in
 AUTHORIZATION_BACKEND = cp.get("authorization", "backend")  # whitelist, ldap, posix
 ACCOUNTS_BACKEND = cp.get("accounts", "backend")             # posix, ldap
 
+if ACCOUNTS_BACKEND == "ldap":
+    LDAP_GSSAPI_CRED_CACHE = cp.get("accounts", "ldap gssapi credential cache")
+
 USER_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "user subnets").split(" ") if j])
 ADMIN_SUBNETS = set([ipaddress.ip_network(j) for j in
@@ -69,7 +72,6 @@ elif "posix" == AUTHORIZATION_BACKEND:
     USERS_GROUP = cp.get("authorization", "posix user group")
     ADMIN_GROUP = cp.get("authorization", "posix admin group")
 elif "ldap" == AUTHORIZATION_BACKEND:
-    LDAP_GSSAPI_CRED_CACHE = cp.get("authorization", "ldap gssapi credential cache")
     LDAP_USER_FILTER = cp.get("authorization", "ldap user filter")
     LDAP_ADMIN_FILTER = cp.get("authorization", "ldap admin filter")
     if "%s" not in LDAP_USER_FILTER: raise ValueError("No placeholder %s for username in 'ldap user filter'")
