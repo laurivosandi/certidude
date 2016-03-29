@@ -5,7 +5,7 @@ from setuptools import setup
 
 setup(
     name = "certidude",
-    version = "0.1.20",
+    version = "0.1.21",
     author = u"Lauri Võsandi",
     author_email = "lauri.vosandi@gmail.com",
     description = "Certidude is a novel X.509 Certificate Authority management tool aiming to support PKCS#11 and in far future WebCrypto.",
