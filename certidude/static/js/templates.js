@@ -484,7 +484,11 @@ else {
 output += "\n    E-mail disabled\n";
 ;
 }
-output += "</p>\n\n<p>Authenticated users allowed from:\n\n";
+output += "</p>\n\n<p>Web signed certificate attributes:</p>\n\n<ul>\n    <li>Certificate lifetime: ";
+output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"signature")),"certificate_lifetime"), env.opts.autoescape);
+output += " days</li>\n    <li>Revocation list lifetime: ";
+output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"signature")),"revocation_list_lifetime"), env.opts.autoescape);
+output += " seconds</li>\n</ul>\n\n<p>Authenticated users allowed from:\n\n";
 if(runtime.inOperator("0.0.0.0/0",runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"user_subnets"))) {
 output += "\n    anywhere\n    </p>\n";
 ;

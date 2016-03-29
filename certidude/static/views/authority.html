@@ -29,6 +29,13 @@ as such require complete reset of X509 infrastructure if some of them needs to b
     E-mail disabled
 {% endif %}</p>
 
+<p>Web signed certificate attributes:</p>
+
+<ul>
+    <li>Certificate lifetime: {{ session.authority.signature.certificate_lifetime }} days</li>
+    <li>Revocation list lifetime: {{ session.authority.signature.revocation_list_lifetime }} seconds</li>
+</ul>
+
 <p>Authenticated users allowed from:
 
 {% if "0.0.0.0/0" in session.authority.user_subnets %}

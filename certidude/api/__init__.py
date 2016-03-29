@@ -67,6 +67,10 @@ class SessionResource(object):
                 autosign_subnets = config.AUTOSIGN_SUBNETS,
                 request_subnets = config.REQUEST_SUBNETS,
                 admin_subnets=config.ADMIN_SUBNETS,
+                signature = dict(
+                    certificate_lifetime=config.CERTIFICATE_LIFETIME,
+                    revocation_list_lifetime=config.REVOCATION_LIST_LIFETIME
+                )
             ) if req.context.get("user").is_admin() else None,
             features=dict(
                 tagging=config.TAGGING_BACKEND,
