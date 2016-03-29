@@ -571,6 +571,8 @@ def certidude_setup_strongswan_server(server, config, secrets, subnet, route, em
     click.echo("  apt-get install strongswan strongswan-starter strongswan-ikev2")
     click.secho("  service strongswan restart", bold=True)
     click.echo()
+    click.echo("If you're running Ubuntu make sure you're not affected by #1505222")
+    click.echo("https://bugs.launchpad.net/ubuntu/+source/strongswan/+bug/1505222")
 
 
 @click.command("client", help="Set up strongSwan client")
@@ -773,7 +775,7 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 @click.option("--locality", "-l", default=None, help="City or locality, none by default")
 @click.option("--authority-lifetime", default=20*365, help="Authority certificate lifetime in days, 7300 days (20 years) by default")
 @click.option("--certificate-lifetime", default=5*365, help="Certificate lifetime in days, 1825 days (5 years) by default")
-@click.option("--revocation-list-lifetime", default=1, help="Revocation list lifetime in days, 1 day by default")
+@click.option("--revocation-list-lifetime", default=20*60, help="Revocation list lifetime in days, 1200 seconds (20 minutes) by default")
 @click.option("--organization", "-o", default=None, help="Company or organization name")
 @click.option("--organizational-unit", "-ou", default=None)
 @click.option("--pkcs11", default=False, is_flag=True, help="Use PKCS#11 token instead of files")
@@ -782,9 +784,10 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 @click.option("--ocsp-responder-url", default=None, help="OCSP responder URL")
 @click.option("--push-server", default="http://push.%s" % constants.DOMAIN, help="Push server, http://push.%s by default" % constants.DOMAIN)
 @click.option("--email-address", default="certidude@" + FQDN, help="E-mail address of the CA")
-@click.option("--directory", default=os.path.join("/var/lib/certidude", FQDN), help="Directory for authority files, /var/lib/certidude/ by default")
+@click.option("--directory", default=os.path.join("/var/lib/certidude", FQDN), help="Directory for authority files, /var/lib/certidude/%s/ by default" % FQDN)
+@click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % constants.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % constants.DOMAIN)
-def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, revoked_url, certificate_url, ocsp_responder_url, push_server, email_address, outbox):
+def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, revoked_url, certificate_url, ocsp_responder_url, push_server, email_address, outbox, server_flags):
 
     # Make sure common_name is valid
     if not re.match(r"^[\.\-_a-zA-Z0-9]+$", common_name):
@@ -849,10 +852,6 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
             True,
             b"digitalSignature, keyCertSign, cRLSign"),
         crypto.X509Extension(
-            b"extendedKeyUsage",
-            False,
-            b"serverAuth,1.3.6.1.5.5.8.2.2"),
-        crypto.X509Extension(
             b"subjectKeyIdentifier",
             False,
             b"hash",
@@ -862,6 +861,14 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
             False,
             (u"DNS: %s, email: %s" % (common_name, email_address)).encode("ascii"))
     ])
+
+    if server_flags:
+        ca.add_extensions([
+            crypto.X509Extension(
+                b"extendedKeyUsage",
+                False,
+                b"serverAuth,1.3.6.1.5.5.8.2.2")
+        ])
 
     ca.add_extensions([
         crypto.X509Extension(
@@ -890,7 +897,7 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     # openssl x509 -in ca_crt.pem -outform DER | sha256sum
     # openssl x509 -fingerprint -in ca_crt.pem
 
-    ca.sign(key, "sha256")
+    ca.sign(key, "sha512")
 
     _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
     os.setgid(gid)
