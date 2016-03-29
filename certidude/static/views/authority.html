@@ -72,7 +72,7 @@ as such require complete reset of X509 infrastructure if some of them needs to b
 {% else %}
     </p>
     <ul>
-        {% for subnet in session.autosign_subnets %}
+        {% for subnet in session.authority.autosign_subnets %}
             <li>{{ subnet }}</li>
         {% endfor %}
     </ul>

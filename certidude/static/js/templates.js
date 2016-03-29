@@ -556,7 +556,7 @@ output += "\n    anywhere\n    </p>\n";
 else {
 output += "\n    </p>\n    <ul>\n        ";
 frame = frame.push();
-var t_11 = runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"autosign_subnets");
+var t_11 = runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"autosign_subnets");
 if(t_11) {var t_10 = t_11.length;
 for(var t_9=0; t_9 < t_11.length; t_9++) {
 var t_12 = t_11[t_9];
