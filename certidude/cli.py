@@ -17,24 +17,14 @@ from configparser import ConfigParser
 from certidude import constants
 from certidude.helpers import certidude_request_certificate
 from certidude.common import expand_paths, ip_address, ip_network
-from datetime import datetime
+from datetime import datetime, timedelta
 from humanize import naturaltime
 from jinja2 import Environment, PackageLoader
 from time import sleep
 from setproctitle import setproctitle
-from OpenSSL import crypto
+
 
 env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
-
-# Big fat warning:
-# m2crypto overflows around 2030 because on 32-bit systems
-# m2crypto does not support hardware engine support (?)
-# m2crypto CRL object is pretty much useless
-
-# pyopenssl has no straight-forward methods for getting RSA key modulus
-
-# pyopenssl 0.13 bundled with Ubuntu 14.04 has no get_extension_count() for X509Req objects
-assert hasattr(crypto.X509Req(), "get_extensions"), "You're running too old version of pyopenssl, upgrade to 0.15+"
 
 # http://www.mad-hacking.net/documentation/linux/security/ssl-tls/creating-ca.xml
 # https://kjur.github.io/jsrsasign/
@@ -778,16 +768,20 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 @click.option("--revocation-list-lifetime", default=20*60, help="Revocation list lifetime in days, 1200 seconds (20 minutes) by default")
 @click.option("--organization", "-o", default=None, help="Company or organization name")
 @click.option("--organizational-unit", "-ou", default=None)
-@click.option("--pkcs11", default=False, is_flag=True, help="Use PKCS#11 token instead of files")
 @click.option("--revoked-url", default=None, help="CRL distribution URL")
 @click.option("--certificate-url", default=None, help="Authority certificate URL")
-@click.option("--ocsp-responder-url", default=None, help="OCSP responder URL")
 @click.option("--push-server", default="http://push.%s" % constants.DOMAIN, help="Push server, http://push.%s by default" % constants.DOMAIN)
 @click.option("--email-address", default="certidude@" + FQDN, help="E-mail address of the CA")
 @click.option("--directory", default=os.path.join("/var/lib/certidude", FQDN), help="Directory for authority files, /var/lib/certidude/%s/ by default" % FQDN)
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % constants.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % constants.DOMAIN)
-def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, revoked_url, certificate_url, ocsp_responder_url, push_server, email_address, outbox, server_flags):
+def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, revoked_url, certificate_url, push_server, email_address, outbox, server_flags):
+
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
 
     # Make sure common_name is valid
     if not re.match(r"^[\.\-_a-zA-Z0-9]+$", common_name):
@@ -804,11 +798,11 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
 
     click.echo("Generating 4096-bit RSA key...")
 
-    if pkcs11:
-        raise NotImplementedError("Hardware token support not yet implemented!")
-    else:
-        key = crypto.PKey()
-        key.generate_key(crypto.TYPE_RSA, 4096)
+    key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=4096,
+        backend=default_backend()
+    )
 
     if not revoked_url:
         revoked_url = "http://%s/api/revoked/" % common_name
@@ -819,85 +813,59 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     ca_key = os.path.join(directory, "ca_key.pem")
     ca_crt = os.path.join(directory, "ca_crt.pem")
 
-    ca = crypto.X509()
-    ca.set_version(2) # This corresponds to X.509v3
-    ca.set_serial_number(1)
-    ca.get_subject().CN = common_name
 
-    if country:
-        ca.get_subject().C = country
-    if state:
-        ca.get_subject().ST = state
-    if locality:
-        ca.get_subject().L = locality
-    if organization:
-        ca.get_subject().O = organization
-    if organizational_unit:
-        ca.get_subject().OU = organizational_unit
-
-    ca.gmtime_adj_notBefore(0)
-    ca.gmtime_adj_notAfter(authority_lifetime * 24 * 60 * 60)
-    ca.set_issuer(ca.get_subject())
-    ca.set_pubkey(key)
-
-    # add_extensions shall be called only once and
-    # there has to be only one subjectAltName!
-    ca.add_extensions([
-        crypto.X509Extension(
-            b"basicConstraints",
-            True,
-            b"CA:TRUE"),
-        crypto.X509Extension(
-            b"keyUsage",
-            True,
-            b"digitalSignature, keyCertSign, cRLSign"),
-        crypto.X509Extension(
-            b"subjectKeyIdentifier",
-            False,
-            b"hash",
-            subject = ca),
-        crypto.X509Extension(
-            b"subjectAltName",
-            False,
-            (u"DNS: %s, email: %s" % (common_name, email_address)).encode("ascii"))
+    subject = issuer = x509.Name([
+        x509.NameAttribute(o, value) for o, value in (
+            (NameOID.COUNTRY_NAME, country),
+            (NameOID.STATE_OR_PROVINCE_NAME, state),
+            (NameOID.LOCALITY_NAME, locality),
+            (NameOID.ORGANIZATION_NAME, organization),
+            (NameOID.COMMON_NAME, common_name),
+        ) if value
     ])
+
+    builder = x509.CertificateBuilder(
+        ).subject_name(subject
+        ).issuer_name(issuer
+        ).public_key(key.public_key()
+        ).not_valid_before(datetime.utcnow()
+        ).not_valid_after(
+            datetime.utcnow() + timedelta(days=authority_lifetime)
+        ).serial_number(1
+        ).add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True,
+        ).add_extension(x509.KeyUsage(
+            digital_signature=True,
+            key_encipherment=False,
+            content_commitment=False,
+            data_encipherment=False,
+            key_agreement=False,
+            key_cert_sign=True,
+            crl_sign=True,
+            encipher_only=False,
+            decipher_only=False), critical=True,
+        ).add_extension(
+            x509.SubjectAlternativeName([
+                x509.DNSName(common_name),
+                x509.RFC822Name(email_address)
+            ]),
+            critical=False,
+        ).add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(key.public_key()),
+            critical=False
+        ).add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(key.public_key()),
+            critical=False
+
+        )
 
     if server_flags:
-        ca.add_extensions([
-            crypto.X509Extension(
-                b"extendedKeyUsage",
-                False,
-                b"serverAuth,1.3.6.1.5.5.8.2.2")
-        ])
+        builder = builder.add_extension(x509.ExtendedKeyUsage([
+            ExtendedKeyUsageOID.CLIENT_AUTH,
+            ObjectIdentifier("1.3.6.1.5.5.8.2.2")]))
 
-    ca.add_extensions([
-        crypto.X509Extension(
-            b"authorityKeyIdentifier",
-            False,
-            b"keyid:always",
-            issuer = ca)
-    ])
+    cert = builder.sign(key, hashes.SHA512(), default_backend())
 
-    if ocsp_responder_url:
-        raise NotImplementedError()
-
-    """
-        ocsp_responder_url = "http://%s/api/ocsp/" % common_name
-        authority_info_access = "OCSP;URI:%s" % ocsp_responder_url
-        ca.add_extensions([
-            crypto.X509Extension(
-                b"authorityInfoAccess",
-                False,
-                authority_info_access.encode("ascii"))
-        ])
-    """
-
-    click.echo("Signing %s..." % ca.get_subject())
-
-    # openssl x509 -in ca_crt.pem -outform DER | sha256sum
-    # openssl x509 -fingerprint -in ca_crt.pem
-
-    ca.sign(key, "sha512")
+    click.echo("Signing %s..." % cert.subject)
 
     _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
     os.setgid(gid)
@@ -918,12 +886,16 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     with open(certidude_conf, "w") as fh:
         fh.write(env.get_template("certidude.conf").render(vars()))
     with open(ca_crt, "wb") as fh:
-        fh.write(crypto.dump_certificate(crypto.FILETYPE_PEM, ca))
+        fh.write(cert.public_bytes(serialization.Encoding.PEM))
 
     # Set permission bits to 600
     os.umask(0o177)
     with open(ca_key, "wb") as fh:
-        fh.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
+        fh.write(key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption() # TODO: Implement passphrase
+        ))
 
     click.echo()
     click.echo("Use following commands to inspect the newly created files:")
