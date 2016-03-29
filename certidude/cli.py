@@ -778,7 +778,7 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, revoked_url, certificate_url, push_server, email_address, outbox, server_flags):
 
     from cryptography import x509
-    from cryptography.x509.oid import NameOID
+    from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
     from cryptography.hazmat.backends import default_backend
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
@@ -860,8 +860,8 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
 
     if server_flags:
         builder = builder.add_extension(x509.ExtendedKeyUsage([
-            ExtendedKeyUsageOID.CLIENT_AUTH,
-            ObjectIdentifier("1.3.6.1.5.5.8.2.2")]))
+            ExtendedKeyUsageOID.SERVER_AUTH,
+            x509.ObjectIdentifier("1.3.6.1.5.5.8.2.2")]), critical=False)
 
     cert = builder.sign(key, hashes.SHA512(), default_backend())
 
