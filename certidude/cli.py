@@ -863,7 +863,15 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
         crypto.X509Extension(
             b"subjectAltName",
             False,
-            "DNS: %s, email: %s" % (common_name.encode("ascii"), email_address.encode("ascii")))
+            (u"DNS: %s, email: %s" % (common_name, email_address)).encode("ascii"))
+    ])
+
+    ca.add_extensions([
+        crypto.X509Extension(
+            b"authorityKeyIdentifier",
+            False,
+            b"keyid:always",
+            issuer = ca)
     ])
 
     if ocsp_responder_url:
