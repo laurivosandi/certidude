@@ -39,10 +39,13 @@ SIGNED_DIR = cp.get("authority", "signed dir")
 REVOKED_DIR = cp.get("authority", "revoked dir")
 OUTBOX = cp.get("authority", "outbox")
 
+
 CERTIFICATE_BASIC_CONSTRAINTS = "CA:FALSE"
 CERTIFICATE_KEY_USAGE_FLAGS = "digitalSignature,keyEncipherment"
 CERTIFICATE_EXTENDED_KEY_USAGE_FLAGS = "clientAuth"
 CERTIFICATE_LIFETIME = int(cp.get("signature", "certificate lifetime"))
+CERTIFICATE_AUTHORITY_URL = cp.get("signature", "certificate url")
+CERTIFICATE_CRL_URL = cp.get("signature", "revoked url")
 
 REVOCATION_LIST_LIFETIME = int(cp.get("signature", "revocation list lifetime"))
 

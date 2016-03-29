@@ -777,13 +777,14 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 @click.option("--organization", "-o", default=None, help="Company or organization name")
 @click.option("--organizational-unit", "-ou", default=None)
 @click.option("--pkcs11", default=False, is_flag=True, help="Use PKCS#11 token instead of files")
-@click.option("--crl-distribution-url", default=None, help="CRL distribution URL")
+@click.option("--revoked-url", default=None, help="CRL distribution URL")
+@click.option("--certificate-url", default=None, help="Authority certificate URL")
 @click.option("--ocsp-responder-url", default=None, help="OCSP responder URL")
-@click.option("--push-server", default="", help="Streaming nginx push server")
+@click.option("--push-server", default="http://push.%s" % constants.DOMAIN, help="Push server, http://push.%s by default" % constants.DOMAIN)
 @click.option("--email-address", default="certidude@" + FQDN, help="E-mail address of the CA")
 @click.option("--directory", default=os.path.join("/var/lib/certidude", FQDN), help="Directory for authority files, /var/lib/certidude/ by default")
 @click.option("--outbox", default="smtp://smtp.%s" % constants.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % constants.DOMAIN)
-def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, crl_distribution_url, ocsp_responder_url, push_server, email_address, outbox):
+def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, pkcs11, revoked_url, certificate_url, ocsp_responder_url, push_server, email_address, outbox):
 
     # Make sure common_name is valid
     if not re.match(r"^[\.\-_a-zA-Z0-9]+$", common_name):
@@ -806,14 +807,14 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
         key = crypto.PKey()
         key.generate_key(crypto.TYPE_RSA, 4096)
 
-    if not crl_distribution_url:
-        crl_distribution_url = "http://%s/api/revoked/" % common_name
+    if not revoked_url:
+        revoked_url = "http://%s/api/revoked/" % common_name
+    if not certificate_url:
+        certificate_url = "http://%s/api/certificate/" % common_name
 
     # File paths
     ca_key = os.path.join(directory, "ca_key.pem")
     ca_crt = os.path.join(directory, "ca_crt.pem")
-    ca_crl = os.path.join(directory, "ca_crl.pem")
-    crl_distribution_points = "URI:%s" % crl_distribution_url
 
     ca = crypto.X509()
     ca.set_version(2) # This corresponds to X.509v3
@@ -846,7 +847,7 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
         crypto.X509Extension(
             b"keyUsage",
             True,
-            b"keyCertSign, cRLSign"),
+            b"digitalSignature, keyCertSign, cRLSign"),
         crypto.X509Extension(
             b"extendedKeyUsage",
             False,
@@ -856,10 +857,6 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
             False,
             b"hash",
             subject = ca),
-        crypto.X509Extension(
-            b"crlDistributionPoints",
-            False,
-            crl_distribution_points.encode("ascii")),
         crypto.X509Extension(
             b"subjectAltName",
             False,
@@ -905,17 +902,9 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
 
     # Create subdirectories with 770 permissions
     os.umask(0o007)
-    for subdir in ("signed", "requests", "revoked"):
+    for subdir in ("signed", "requests", "revoked", "expired"):
         if not os.path.exists(os.path.join(directory, subdir)):
             os.mkdir(os.path.join(directory, subdir))
-
-    # Create CRL and serial file with 644 permissions
-    os.umask(0o133)
-    with open(ca_crl, "wb") as fh:
-        crl = crypto.CRL()
-        fh.write(crl.export(ca, key, days=revocation_list_lifetime))
-    with open(os.path.join(directory, "serial"), "w") as fh:
-        fh.write("1")
 
     # Set permission bits to 640
     os.umask(0o137)
@@ -932,7 +921,6 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     click.echo()
     click.echo("Use following commands to inspect the newly created files:")
     click.echo()
-    click.echo("  openssl crl -inform PEM -text -noout -in %s | less" % ca_crl)
     click.echo("  openssl x509 -text -noout -in %s | less" % ca_crt)
     click.echo("  openssl rsa -check -in %s" % ca_key)
     click.echo("  openssl verify -CAfile %s %s" % (ca_crt, ca_crt))

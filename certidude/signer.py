@@ -14,7 +14,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.serialization import Encoding
 from datetime import datetime, timedelta
-from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
+from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID, AuthorityInformationAccessOID
 import random
 
 DN_WHITELIST = NameOID.COMMON_NAME, NameOID.GIVEN_NAME, NameOID.SURNAME, \
@@ -49,7 +49,15 @@ def raw_sign(private_key, ca_cert, request, basic_constraints, lifetime, key_usa
             b"authorityKeyIdentifier",
             False,
             b"keyid:always",
-            issuer = ca_cert)
+            issuer = ca_cert),
+        crypto.X509Extension(
+            b"authorityInfoAccess",
+            False,
+            ("caIssuers;URI: %s" % config.CERTIFICATE_AUTHORITY_URL).encode("ascii")),
+        crypto.X509Extension(
+            b"crlDistributionPoints",
+            False,
+            ("URI: %s" % config.CERTIFICATE_CRL_URL).encode("ascii"))
     ])
 
 
@@ -101,7 +109,7 @@ def raw_sign(private_key, ca_cert, request, basic_constraints, lifetime, key_usa
 
     # Generate random serial
     cert.set_serial_number(random.randint(SERIAL_MIN, SERIAL_MAX))
-    cert.sign(private_key, 'sha256')
+    cert.sign(private_key, 'sha512')
     return cert
 
 
@@ -174,6 +182,26 @@ class SignHandler(asynchat.async_chat):
                 ), critical=True,
                 ).add_extension(
                     x509.SubjectKeyIdentifier.from_public_key(request.public_key()),
+                    critical=False
+                ).add_extension(
+                    x509.AuthorityInformationAccess([
+                        x509.AccessDescription(
+                            AuthorityInformationAccessOID.CA_ISSUERS,
+                            x509.UniformResourceIdentifier(
+                                config.CERTIFICATE_AUTHORITY_URL)
+                        )
+                    ]),
+                    critical=False
+                ).add_extension(
+                    x509.CRLDistributionPoints([
+                        x509.DistributionPoint(
+                            full_name=[
+                                x509.UniformResourceIdentifier(
+                                    config.CERTIFICATE_CRL_URL)],
+                            relative_name=None,
+                            crl_issuer=None,
+                            reasons=None)
+                    ]),
                     critical=False
                 ).add_extension(
                     x509.AuthorityKeyIdentifier.from_issuer_public_key(
