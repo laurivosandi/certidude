@@ -29,7 +29,7 @@ def csrf_protection(func):
                 return func(self, req, resp, *args, **kwargs)
 
         # Kaboom!
-        logger.warning("Prevented clickbait from '%s' with user agent '%s'",
+        logger.warning(u"Prevented clickbait from '%s' with user agent '%s'",
             referrer or "-", req.user_agent)
         raise falcon.HTTPUnauthorized("Forbidden",
             "No suitable UA or referrer provided, cross-site scripting disabled")
@@ -105,12 +105,12 @@ def serialize(func):
                     ("attachment; filename=%s" % r.suggested_filename).encode("ascii"))
                 resp.body = r.dump()
             elif hasattr(r, "content_type"):
-                logger.debug("Client did not accept application/json or %s, "
+                logger.debug(u"Client did not accept application/json or %s, "
                     "client expected %s", r.content_type, req.accept)
                 raise falcon.HTTPUnsupportedMediaType(
                     "Client did not accept application/json or %s" % r.content_type)
             else:
-                logger.debug("Client did not accept application/json, client expected %s", req.accept)
+                logger.debug(u"Client did not accept application/json, client expected %s", req.accept)
                 raise falcon.HTTPUnsupportedMediaType(
                     "Client did not accept application/json")
         return r

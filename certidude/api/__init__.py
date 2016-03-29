@@ -31,7 +31,7 @@ class CertificateStatusResource(object):
 
 class CertificateAuthorityResource(object):
     def on_get(self, req, resp):
-        logger.info("Served CA certificate to %s", req.context.get("remote_addr"))
+        logger.info(u"Served CA certificate to %s", req.context.get("remote_addr"))
         resp.stream = open(config.AUTHORITY_CERTIFICATE_PATH, "rb")
         resp.append_header("Content-Type", "application/x-x509-ca-cert")
         resp.append_header("Content-Disposition", "attachment; filename=%s.crt" %
@@ -104,7 +104,7 @@ class BundleResource(object):
     @login_required
     def on_get(self, req, resp):
         common_name = req.context["user"].mail
-        logger.info("Signing bundle %s for %s", common_name, req.context.get("user"))
+        logger.info(u"Signing bundle %s for %s", common_name, req.context.get("user"))
         resp.set_header("Content-Type", "application/x-pkcs12")
         resp.set_header("Content-Disposition", "attachment; filename=%s.p12" % common_name.encode("ascii"))
         resp.body, cert = authority.generate_pkcs12_bundle(common_name,

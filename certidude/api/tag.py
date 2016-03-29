@@ -26,7 +26,7 @@ class TagResource(RelationalMixin):
         args = req.get_param("cn"), req.get_param("key"), req.get_param("value")
         rowid = self.sql_execute("tag_insert.sql", *args)
         push.publish("tag-added", str(rowid))
-        logger.debug("Tag cn=%s, key=%s, value=%s added" % args)
+        logger.debug(u"Tag cn=%s, key=%s, value=%s added" % args)
 
 
 class TagDetailResource(RelationalMixin):
@@ -60,7 +60,7 @@ class TagDetailResource(RelationalMixin):
         from certidude import push
         args = req.get_param("value"), identifier
         self.sql_execute("tag_update.sql", *args)
-        logger.debug("Tag %s updated, value set to %s",
+        logger.debug(u"Tag %s updated, value set to %s",
             identifier, req.get_param("value"))
         push.publish("tag-updated", identifier)
 
@@ -73,4 +73,4 @@ class TagDetailResource(RelationalMixin):
         from certidude import push
         self.sql_execute("tag_delete.sql", identifier)
         push.publish("tag-removed", identifier)
-        logger.debug("Tag %s removed" % identifier)
+        logger.debug(u"Tag %s removed" % identifier)

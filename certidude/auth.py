@@ -131,7 +131,7 @@ def authenticate(optional=False):
                     conn.simple_bind_s(user if "@" in user else "%s@%s" % (user, constants.DOMAIN), passwd)
                 except ldap.LDAPError, e:
                     resp.append_header("WWW-Authenticate", "Basic")
-                    logger.critical("LDAP bind authentication failed for user %s from  %s",
+                    logger.critical(u"LDAP bind authentication failed for user %s from  %s",
                         repr(user), req.context.get("remote_addr"))
                     raise falcon.HTTPUnauthorized("Forbidden",
                         "Please authenticate with %s domain account or supply UPN" % constants.DOMAIN)
@@ -166,7 +166,7 @@ def authenticate(optional=False):
 
             import simplepam
             if not simplepam.authenticate(user, passwd, "sshd"):
-                logger.critical("Basic authentication failed for user %s from  %s",
+                logger.critical(u"Basic authentication failed for user %s from  %s",
                     repr(user), req.context.get("remote_addr"))
                 raise falcon.HTTPUnauthorized("Forbidden", "Invalid password")
 
@@ -194,7 +194,7 @@ def authorize_admin(func):
     def whitelist_authorize_admin(resource, req, resp, *args, **kwargs):
         # Check for username whitelist
         if not req.context.get("user") or req.context.get("user") not in config.ADMIN_WHITELIST:
-            logger.info("Rejected access to administrative call %s by %s from %s, user not whitelisted",
+            logger.info(u"Rejected access to administrative call %s by %s from %s, user not whitelisted",
                 req.env["PATH_INFO"], req.context.get("user"), req.context.get("remote_addr"))
             raise falcon.HTTPForbidden("Forbidden", "User %s not whitelisted" % req.context.get("user"))
         return func(resource, req, resp, *args, **kwargs)
@@ -203,7 +203,7 @@ def authorize_admin(func):
         if req.context.get("user").is_admin():
             req.context["admin_authorized"] = True
             return func(resource, req, resp, *args, **kwargs)
-        logger.info("User '%s' not authorized to access administrative API", req.context.get("user").name)
+        logger.info(u"User '%s' not authorized to access administrative API", req.context.get("user").name)
         raise falcon.HTTPForbidden("Forbidden", "User not authorized to perform administrative operations")
 
     if config.AUTHORIZATION_BACKEND == "whitelist":

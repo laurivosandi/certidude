@@ -32,7 +32,7 @@ class RequestListResource(object):
         csr = Request(body)
 
         if not csr.common_name:
-            logger.warning("Rejected signing request without common name from %s",
+            logger.warning(u"Rejected signing request without common name from %s",
                 req.context.get("remote_addr"))
             raise falcon.HTTPBadRequest(
                 "Bad request",
@@ -71,7 +71,7 @@ class RequestListResource(object):
             pass
         except errors.DuplicateCommonNameError:
             # TODO: Certificate renewal
-            logger.warning("Rejected signing request with overlapping common name from %s",
+            logger.warning(u"Rejected signing request with overlapping common name from %s",
                 req.context.get("remote_addr"))
             raise falcon.HTTPConflict(
                 "CSR with such CN already exists",
@@ -86,11 +86,11 @@ class RequestListResource(object):
             click.echo("Redirecting to: %s"  % url)
             resp.status = falcon.HTTP_SEE_OTHER
             resp.set_header("Location", url.encode("ascii"))
-            logger.debug("Redirecting signing request from %s to %s", req.context.get("remote_addr"), url)
+            logger.debug(u"Redirecting signing request from %s to %s", req.context.get("remote_addr"), url)
         else:
             # Request was accepted, but not processed
             resp.status = falcon.HTTP_202
-            logger.info("Signing request from %s stored", req.context.get("remote_addr"))
+            logger.info(u"Signing request from %s stored", req.context.get("remote_addr"))
 
 
 class RequestDetailResource(object):
@@ -100,7 +100,7 @@ class RequestDetailResource(object):
         Fetch certificate signing request as PEM
         """
         csr = authority.get_request(cn)
-        logger.debug("Signing request %s was downloaded by %s",
+        logger.debug(u"Signing request %s was downloaded by %s",
             csr.common_name, req.context.get("remote_addr"))
         return csr
 
@@ -118,7 +118,7 @@ class RequestDetailResource(object):
         resp.body = "Certificate successfully signed"
         resp.status = falcon.HTTP_201
         resp.location = os.path.join(req.relative_uri, "..", "..", "signed", cn)
-        logger.info("Signing request %s signed by %s from %s", csr.common_name,
+        logger.info(u"Signing request %s signed by %s from %s", csr.common_name,
             req.context.get("user"), req.context.get("remote_addr"))
 
 
@@ -131,6 +131,6 @@ class RequestDetailResource(object):
             # Logging implemented in the function above
         except EnvironmentError as e:
             resp.body = "No certificate CN=%s found" % cn
-            logger.warning("User %s failed to delete signing request %s from %s, reason: %s",
+            logger.warning(u"User %s failed to delete signing request %s from %s, reason: %s",
                 req.context["user"], cn, req.context.get("remote_addr"), e)
             raise falcon.HTTPNotFound()
