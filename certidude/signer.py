@@ -129,7 +129,8 @@ class SignHandler(asynchat.async_chat):
 
             builder = x509.CertificateRevocationListBuilder(
                 ).last_update(now
-                ).next_update(now + timedelta(days=1)
+                ).next_update(
+                    now + timedelta(seconds=config.REVOCATION_LIST_LIFETIME)
                 ).issuer_name(self.server.certificate.issuer
                 ).add_extension(
                     x509.AuthorityKeyIdentifier.from_issuer_public_key(
