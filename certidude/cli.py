@@ -236,10 +236,9 @@ def certidude_request_spawn(fork):
         os.unlink(pid_path)
 
 
-@click.command("spawn", help="Run privilege isolated signer process")
-@click.option("-k", "--kill", default=False, is_flag=True, help="Kill previous instance")
+@click.command("spawn", help="Restart privilege isolated signer process")
 @click.option("-n", "--no-interaction", default=True, is_flag=True, help="Don't load password protected keys")
-def certidude_signer_spawn(kill, no_interaction):
+def certidude_signer_spawn(no_interaction):
     """
     Spawn privilege isolated signer process
     """
@@ -284,15 +283,14 @@ def certidude_signer_spawn(kill, no_interaction):
         pid = 0
 
     if pid > 0:
-        if kill:
-            try:
-                click.echo("Killing %d" % pid)
-                os.kill(pid, signal.SIGTERM)
-                sleep(1)
-                os.kill(pid, signal.SIGKILL)
-                sleep(1)
-            except EnvironmentError:
-                pass
+        try:
+            click.echo("Killing %d" % pid)
+            os.kill(pid, signal.SIGTERM)
+            sleep(1)
+            os.kill(pid, signal.SIGKILL)
+            sleep(1)
+        except EnvironmentError:
+            pass
 
     child_pid = os.fork()
 
@@ -693,71 +691,19 @@ def certidude_setup_openvpn_networkmanager(server, email_address, common_name, o
         services.set(endpoint, "service", "network-manager/openvpn")
         services.write(open("/etc/certidude/services.conf", "w"))
 
-@click.command("production", help="Set up nginx, uwsgi and cron")
+
+@click.command("authority", help="Set up Certificate Authority in a directory")
 @click.option("--username", default="certidude", help="Service user account, created if necessary, 'certidude' by default")
-@click.option("--hostname", default=HOSTNAME, help="nginx hostname, '%s' by default" % HOSTNAME)
-@click.option("--static-path", default=os.path.join(os.path.dirname(__file__), "static"), help="Static files")
-@click.option("--kerberos-keytab", default="/etc/certidude/server.keytab", help="Specify Kerberos keytab")
-@click.option("--push-server", default=None, help="Push server URL")
+@click.option("--static-path", default=os.path.join(os.path.dirname(__file__), "static"), help="Path to Certidude's static JS/CSS/etc")
+@click.option("--kerberos-keytab", default="/etc/certidude/server.keytab", help="Kerberos keytab for using 'kerberos' authentication backend, /etc/certidude/server.keytab by default")
 @click.option("--nginx-config", "-n",
-    default="/etc/nginx/nginx.conf",
+    default="/etc/nginx/sites-available/certidude.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
-    help="nginx configuration, /etc/nginx/nginx.conf by default")
+    help="nginx site config for serving Certidude, /etc/nginx/sites-available/certidude by default")
 @click.option("--uwsgi-config", "-u",
     default="/etc/uwsgi/apps-available/certidude.ini",
     type=click.File(mode="w", atomic=True, lazy=True),
-    help="uwsgi configuration, /etc/uwsgi/ by default")
-def certidude_setup_production(username, hostname, push_server, nginx_config, uwsgi_config, static_path, kerberos_keytab):
-    try:
-        pwd.getpwnam(username)
-        click.echo("Username '%s' already exists, excellent!" % username)
-    except KeyError:
-        cmd = "adduser", "--system",  "--no-create-home", "--group", username
-        subprocess.check_call(cmd)
-
-    if subprocess.call("net ads testjoin", shell=True):
-        click.echo("Domain membership check failed, 'net ads testjoin' returned non-zero value", err=True)
-        exit(255)
-
-    if not os.path.exists(kerberos_keytab):
-        subprocess.call("KRB5_KTNAME=FILE:" + kerberos_keytab + " net ads keytab add HTTP -P")
-        click.echo("Created service principal in Kerberos keytab '%s'" % kerberos_keytab)
-
-    if os.path.exists("/etc/krb5.keytab") and os.path.exists("/etc/samba/smb.conf"):
-        # Fetch Kerberos ticket for system account
-        cp = ConfigParser()
-        cp.read("/etc/samba/smb.conf")
-        domain = cp.get("global", "realm").lower()
-        base = ",".join(["dc=" + j for j in domain.split(".")])
-        with open("/etc/cron.hourly/certidude", "w") as fh:
-            fh.write("#!/bin/bash\n")
-            fh.write("KRB5CCNAME=/run/certidude/krb5cc-new kinit -k %s$\n" % cp.get("global", "netbios name"))
-            fh.write("chown certidude /run/certidude/krb5cc-new\n")
-            fh.write("mv /run/certidude/krb5cc-new /run/certidude/krb5cc\n")
-        os.chmod("/etc/cron.hourly/certidude", 0o755)
-        click.echo("Created /etc/cron.hourly/certidude for automatic Kerberos TGT renewal")
-    else:
-        click.echo("Warning: cronjob for Kerberos ticket renewal not created, LDAP with GSSAPI will not be available!")
-
-
-    if not static_path.endswith("/"):
-        static_path += "/"
-
-    nginx_config.write(env.get_template("nginx.conf").render(vars()))
-    click.echo("Generated: %s" % nginx_config.name)
-    uwsgi_config.write(env.get_template("uwsgi.ini").render(vars()))
-    click.echo("Generated: %s" % uwsgi_config.name)
-
-    if os.path.exists("/etc/uwsgi/apps-enabled/certidude.ini"):
-        os.unlink("/etc/uwsgi/apps-enabled/certidude.ini")
-    os.symlink(uwsgi_config.name, "/etc/uwsgi/apps-enabled/certidude.ini")
-    click.echo("Symlinked %s -> /etc/uwsgi/apps-enabled/certidude.ini" % uwsgi_config.name)
-
-    if not push_server:
-        click.echo("Remember to install nchan instead of regular nginx!")
-
-
-@click.command("authority", help="Set up Certificate Authority in a directory")
+    help="uwsgi configuration for serving Certidude API, /etc/uwsgi/apps-available/certidude.ini by default")
 @click.option("--parent", "-p", help="Parent CA, none by default")
 @click.option("--common-name", "-cn", default=FQDN, help="Common name, fully qualified hostname by default")
 @click.option("--country", "-c", default=None, help="Country, none by default")
@@ -775,7 +721,70 @@ def certidude_setup_production(username, hostname, push_server, nginx_config, uw
 @click.option("--directory", default=os.path.join("/var/lib/certidude", FQDN), help="Directory for authority files, /var/lib/certidude/%s/ by default" % FQDN)
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % constants.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % constants.DOMAIN)
-def certidude_setup_authority(parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, revoked_url, certificate_url, push_server, email_address, outbox, server_flags):
+def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_config, uwsgi_config, parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, revoked_url, certificate_url, push_server, email_address, outbox, server_flags):
+
+    # Expand variables
+    ca_key = os.path.join(directory, "ca_key.pem")
+    ca_crt = os.path.join(directory, "ca_crt.pem")
+    if not static_path.endswith("/"):
+        static_path += "/"
+    certidude_conf = os.path.join("/etc/certidude/server.conf")
+
+    try:
+        pwd.getpwnam("certidude")
+    except KeyError:
+        cmd = "adduser", "--system", "--no-create-home", "--group", "certidude"
+        if subprocess.call(cmd):
+            click.echo("Failed to create system user 'certidude'")
+            return 255
+
+    if not os.path.exists("/etc/certidude"):
+        click.echo("Creating /etc/certidude")
+        os.makedirs("/etc/certidude")
+
+    if os.path.exists(kerberos_keytab):
+        click.echo("Service principal keytab found in '%s'" % kerberos_keytab)
+    else:
+        click.echo("To use 'kerberos' authentication backend create service principal with:")
+        click.echo()
+        click.echo("  KRB5_KTNAME=FILE:%s net ads keytab add HTTP -P" % kerberos_keytab)
+        click.echo("  chown %s %s" % (username, kerberos_keytab))
+        click.echo()
+
+    if os.path.exists("/etc/krb5.keytab") and os.path.exists("/etc/samba/smb.conf"):
+
+        # Fetch Kerberos ticket for system account
+        cp = ConfigParser()
+        cp.read("/etc/samba/smb.conf")
+        domain = cp.get("global", "realm").lower()
+        base = ",".join(["dc=" + j for j in domain.split(".")])
+        with open("/etc/cron.hourly/certidude", "w") as fh:
+            fh.write("#!/bin/bash\n")
+            fh.write("KRB5CCNAME=/run/certidude/krb5cc-new kinit -k %s$\n" % cp.get("global", "netbios name"))
+            fh.write("chown certidude /run/certidude/krb5cc-new\n")
+            fh.write("mv /run/certidude/krb5cc-new /run/certidude/krb5cc\n")
+        os.chmod("/etc/cron.hourly/certidude", 0o755)
+        click.echo("Created /etc/cron.hourly/certidude for automatic Kerberos TGT renewal")
+    else:
+        click.echo("Warning: /etc/krb5.keytab or /etc/samba/smb.conf not found, Kerberos unconfigured")
+
+    nginx_config.write(env.get_template("nginx.conf").render(vars()))
+    click.echo("Generated: %s" % nginx_config.name)
+    uwsgi_config.write(env.get_template("uwsgi.ini").render(vars()))
+    click.echo("Generated: %s" % uwsgi_config.name)
+
+    if not os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
+        os.symlink("../sites-available/certidude.conf", "/etc/nginx/sites-enabled/certidude.conf")
+        click.echo("Symlinked %s -> /etc/nginx/sites-enabled/" % nginx_config.name)
+    if not os.path.exists("/etc/uwsgi/apps-enabled/certidude.ini"):
+        os.symlink("../apps-available/certidude.ini", "/etc/uwsgi/apps-enabled/certidude.ini")
+        click.echo("Symlinked %s -> /etc/uwsgi/apps-enabled/" % uwsgi_config.name)
+    if os.path.exists("/etc/nginx/sites-enabled/default"):
+        os.unlink("/etc/nginx/sites-enabled/default")
+
+
+    if not push_server:
+        click.echo("Remember to install nchan instead of regular nginx!")
 
     from cryptography import x509
     from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
@@ -783,16 +792,19 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     from cryptography.hazmat.primitives import hashes, serialization
     from cryptography.hazmat.primitives.asymmetric import rsa
 
-    # Make sure common_name is valid
-    if not re.match(r"^[\.\-_a-zA-Z0-9]+$", common_name):
-        raise click.ClickException("CA name can contain only alphanumeric, '_' and '-' characters")
+    _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
+    os.setgid(gid)
+
+    if os.path.exists(certidude_conf):
+        click.echo("Configuration file %s already exists, remove to regenerate" % certidude_conf)
+    else:
+        os.umask(0o137)
+        with open(certidude_conf, "w") as fh:
+            fh.write(env.get_template("certidude.conf").render(vars()))
+        click.echo("Generated %s" % certidude_conf)
 
     if os.path.lexists(directory):
-        raise click.ClickException("Output directory {} already exists.".format(directory))
-
-    certidude_conf = os.path.join("/etc/certidude/server.conf")
-    if os.path.exists(certidude_conf):
-        raise click.ClickException("Configuration file %s already exists" % certidude_conf)
+        raise click.ClickException("CA directory %s already exists, remove to regenerate" % directory)
 
     click.echo("CA configuration files are saved to: {}".format(directory))
 
@@ -808,11 +820,6 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
         revoked_url = "http://%s/api/revoked/" % common_name
     if not certificate_url:
         certificate_url = "http://%s/api/certificate/" % common_name
-
-    # File paths
-    ca_key = os.path.join(directory, "ca_key.pem")
-    ca_crt = os.path.join(directory, "ca_crt.pem")
-
 
     subject = issuer = x509.Name([
         x509.NameAttribute(o, value) for o, value in (
@@ -867,9 +874,6 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
 
     click.echo("Signing %s..." % cert.subject)
 
-    _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
-    os.setgid(gid)
-
     # Create authority directory with 750 permissions
     os.umask(0o027)
     if not os.path.exists(directory):
@@ -883,8 +887,6 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
 
     # Set permission bits to 640
     os.umask(0o137)
-    with open(certidude_conf, "w") as fh:
-        fh.write(env.get_template("certidude.conf").render(vars()))
     with open(ca_crt, "wb") as fh:
         fh.write(cert.public_bytes(serialization.Encoding.PEM))
 
@@ -906,7 +908,7 @@ def certidude_setup_authority(parent, country, state, locality, organization, or
     click.echo()
     click.echo("Use following to launch privilege isolated signer processes:")
     click.echo()
-    click.echo("  certidude signer spawn -k")
+    click.echo("  certidude signer spawn")
     click.echo()
     click.echo("Use following command to serve CA read-only:")
     click.echo()
@@ -1157,7 +1159,6 @@ certidude_setup.add_command(certidude_setup_authority)
 certidude_setup.add_command(certidude_setup_openvpn)
 certidude_setup.add_command(certidude_setup_strongswan)
 certidude_setup.add_command(certidude_setup_client)
-certidude_setup.add_command(certidude_setup_production)
 certidude_setup.add_command(certidude_setup_nginx)
 certidude_request.add_command(certidude_request_spawn)
 certidude_signer.add_command(certidude_signer_spawn)

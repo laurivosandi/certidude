@@ -74,22 +74,13 @@ To install Certidude:
 
 .. code:: bash
 
-    apt-get install -y python python-pip python-dev cython python-configparser \
+    apt-get install -y python python-pip python-dev cython \
+        python-cffi python-configparser \
         python-pysqlite2 python-mysql.connector python-ldap \
         build-essential libffi-dev libssl-dev libkrb5-dev \
         ldap-utils krb5-user \
         libsasl2-modules-gssapi-mit
     pip install certidude
-
-Make sure you're running PyOpenSSL 0.15+ from PyPI,
-not the outdated one provided by APT.
-
-Create a system user for ``certidude``:
-
-.. code:: bash
-
-    adduser --system --no-create-home --group certidude
-    mkdir /etc/certidude
 
 
 Setting up authority
@@ -103,27 +94,46 @@ You can check it with:
 
     hostname -f
 
-The command should return ca.example.com
+The command should return ``ca.example.com``.
 
-Certidude can set up certificate authority relatively easily,
-following will set up certificate authority in /var/lib/certidude/hostname.domain.tld:
+If necessary tweak machine's fully qualified hostname in ``/etc/hosts``:
+
+.. code::
+
+    127.0.0.1 localhost
+    127.0.1.1 ca.example.com ca
+
+Then proceed to install `nchan <https://nchan.slact.net/>`_ and ``uwsgi``:
+
+.. code:: bash
+
+    wget https://nchan.slact.net/download/nginx-common.deb https://nchan.slact.net/download/nginx-extras.deb
+    dpkg -i nginx-common.deb nginx-extras.deb
+    apt-get install nginx uwsgi uwsgi-plugin-python
+
+Certidude can set up certificate authority relatively easily.
+Following will set up certificate authority in ``/var/lib/certidude/hostname.domain.tld``,
+configure uWSGI in ``/etc/uwsgi/apps-available/certidude.ini``,
+nginx in ``/etc/nginx/sites-available/certidude.conf``,
+cronjobs in ``/etc/cron.hourly/certidude`` and much more:
 
 .. code:: bash
 
     certidude setup authority
 
-Tweak the configuration in /etc/certidude/server.conf until you meet your requirements and
+Tweak the configuration in ``/etc/certidude/server.conf`` until you meet your requirements and
 spawn the signer process:
 
 .. code:: bash
 
     certidude signer spawn
 
-Finally serve the certificate authority via web:
+Finally restart services:
 
 .. code:: bash
 
-    certidude serve
+    service nginx restart
+    service uwsgi restart
 
 
 Certificate management
@@ -148,137 +158,6 @@ Use web interface or following to sign a certificate on server:
     certidude sign client-hostname-or-common-name
 
 
-Production deployment
----------------------
-
-Install ``nginx`` and ``uwsgi``:
-
-.. code:: bash
-
-    apt-get install nginx uwsgi uwsgi-plugin-python
-
-For easy setup following is reccommended:
-
-.. code:: bash
-
-    certidude setup production
-
-Otherwise manually configure ``uwsgi`` application in ``/etc/uwsgi/apps-available/certidude.ini``:
-
-.. code:: ini
-
-    [uwsgi]
-    master = true
-    processes = 1
-    vaccum = true
-    uid = certidude
-    gid = certidude
-    plugins = python
-    chdir = /tmp
-    module = certidude.wsgi
-    callable = app
-    chmod-socket = 660
-    chown-socket = certidude:www-data
-    buffer-size = 32768
-    env = LANG=C.UTF-8
-    env = LC_ALL=C.UTF-8
-    env = KRB5_KTNAME=/etc/certidude/server.keytab
-    env = KRB5CCNAME=/run/certidude/krb5cc
-
-Also enable the application:
-
-.. code:: bash
-
-    ln -s ../apps-available/certidude.ini /etc/uwsgi/apps-enabled/certidude.ini
-
-We support `nchan <https://nchan.slact.net/>`_,
-configure the site in /etc/nginx/sites-available/certidude:
-
-.. code::
-
-    upstream certidude_api {
-        server unix:///run/uwsgi/app/certidude/socket;
-    }
-
-    server {
-        server_name localhost;
-        listen 80 default_server;
-        listen [::]:80 default_server ipv6only=on;
-        root /usr/local/lib/python2.7/dist-packages/certidude/static;
-
-        location /api/ {
-            include uwsgi_params;
-            uwsgi_pass certidude_api;
-        }
-
-        # Add following three if you wish to enable push server on this machine
-        location /pub {
-            allow 127.0.0.1;
-            nchan_publisher http;
-            nchan_store_messages off;
-            nchan_channel_id $arg_id;
-        }
-
-        location ~ "^/lp/(.*)" {
-            nchan_subscriber longpoll;
-            nchan_channel_id $1;
-        }
-
-        location ~ "^/ev/(.*)" {
-            nchan_subscriber eventsource;
-            nchan_channel_id $1;
-        }
-    }
-
-Enable the site:
-
-.. code:: bash
-
-    ln -s ../sites-available/certidude /etc/nginx/sites-enabled/certidude
-
-Also adjust ``/etc/nginx/nginx.conf``:
-
-.. code::
-
-    user www-data;
-    worker_processes 4;
-    pid /run/nginx.pid;
-
-    events {
-        worker_connections 768;
-    }
-
-    http {
-        sendfile on;
-        tcp_nopush on;
-        tcp_nodelay on;
-        keepalive_timeout 65;
-        types_hash_max_size 2048;
-        include /etc/nginx/mime.types;
-        default_type application/octet-stream;
-        access_log /var/log/nginx/access.log;
-        error_log /var/log/nginx/error.log;
-        gzip on;
-        gzip_disable "msie6";
-        include /etc/nginx/conf.d/*;
-        include /etc/nginx/sites-enabled/*;
-    }
-
-In your Certidude server's /etc/certidude/server.conf make sure Certidude
-is aware of your nginx setup:
-
-.. code::
-
-    push_server = http://push.example.com/
-
-Restart the services:
-
-.. code:: bash
-
-    service uwsgi restart
-    service nginx restart
-
-
 Setting up Active Directory authentication
 ------------------------------------------
 
@@ -291,13 +170,6 @@ Install dependencies:
 
     apt-get install samba-common-bin krb5-user ldap-utils
 
-Make sure Certidude machine's fully qualified hostname is correct in ``/etc/hosts``:
-
-.. code::
-
-    127.0.0.1 localhost
-    127.0.1.1 ca.example.lan ca
-
 Reset Samba client configuration in ``/etc/samba/smb.conf``:
 
 .. code:: ini
@@ -306,7 +178,7 @@ Reset Samba client configuration in ``/etc/samba/smb.conf``:
     security = ads
     netbios name = CA
     workgroup = EXAMPLE
-    realm = EXAMPLE.LAN
+    realm = EXAMPLE.COM
     kerberos method = system keytab
 
 Reset Kerberos configuration in ``/etc/krb5.conf``:
@@ -314,7 +186,7 @@ Reset Kerberos configuration in ``/etc/krb5.conf``:
 .. code:: ini
 
     [libdefaults]
-    default_realm = EXAMPLE.LAN
+    default_realm = EXAMPLE.COM
     dns_lookup_realm = true
     dns_lookup_kdc = true
 
@@ -417,7 +289,7 @@ To run from source tree:
 
 .. code:: bash
 
-    PYTHONPATH=. KRB5_KTNAME=/etc/certidude/server.keytab LANG=C.UTF-8 python misc/certidude
+    PYTHONPATH=. KRB5CCNAME=/run/certidude/krb5cc KRB5_KTNAME=/etc/certidude/server.keytab LANG=C.UTF-8 python misc/certidude
 
 To install the package from the source:
 
