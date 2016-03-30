@@ -716,7 +716,7 @@ def certidude_setup_openvpn_networkmanager(server, email_address, common_name, o
 @click.option("--organizational-unit", "-ou", default=None)
 @click.option("--revoked-url", default=None, help="CRL distribution URL")
 @click.option("--certificate-url", default=None, help="Authority certificate URL")
-@click.option("--push-server", default="http://push.%s" % constants.DOMAIN, help="Push server, http://push.%s by default" % constants.DOMAIN)
+@click.option("--push-server", default="http://" + constants.FQDN, help="Push server, by default http://%s" % constants.FQDN)
 @click.option("--email-address", default="certidude@" + FQDN, help="E-mail address of the CA")
 @click.option("--directory", default=os.path.join("/var/lib/certidude", FQDN), help="Directory for authority files, /var/lib/certidude/%s/ by default" % FQDN)
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
@@ -724,6 +724,10 @@ def certidude_setup_openvpn_networkmanager(server, email_address, common_name, o
 def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_config, uwsgi_config, parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, revoked_url, certificate_url, push_server, email_address, outbox, server_flags):
 
     # Expand variables
+    if not revoked_url:
+        revoked_url = "http://%s/api/revoked/" % common_name
+    if not certificate_url:
+        certificate_url = "http://%s/api/certificate/" % common_name
     ca_key = os.path.join(directory, "ca_key.pem")
     ca_crt = os.path.join(directory, "ca_crt.pem")
     if not static_path.endswith("/"):
@@ -815,11 +819,6 @@ def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_conf
         key_size=4096,
         backend=default_backend()
     )
-
-    if not revoked_url:
-        revoked_url = "http://%s/api/revoked/" % common_name
-    if not certificate_url:
-        certificate_url = "http://%s/api/certificate/" % common_name
 
     subject = issuer = x509.Name([
         x509.NameAttribute(o, value) for o, value in (

@@ -53,15 +53,9 @@ PUSH_TOKEN = "".join([choice(string.ascii_letters + string.digits) for j in rang
 
 PUSH_TOKEN = "ca"
 
-try:
-    PUSH_EVENT_SOURCE = cp.get("push", "event source")
-    PUSH_LONG_POLL = cp.get("push", "long poll")
-    PUSH_PUBLISH = cp.get("push", "publish")
-except configparser.NoOptionError:
-    PUSH_SERVER = cp.get("push", "server") or "http://localhost"
-    PUSH_EVENT_SOURCE = PUSH_SERVER + "/ev/%s"
-    PUSH_LONG_POLL = PUSH_SERVER + "/lp/%s"
-    PUSH_PUBLISH = PUSH_SERVER + "/pub?id=%s"
+PUSH_EVENT_SOURCE = cp.get("push", "event source")
+PUSH_LONG_POLL = cp.get("push", "long poll")
+PUSH_PUBLISH = cp.get("push", "publish")
 
 TAGGING_BACKEND = cp.get("tagging", "backend")
 LOGGING_BACKEND = cp.get("logging", "backend")
