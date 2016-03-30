@@ -149,8 +149,8 @@ as such require complete reset of X509 infrastructure if some of them needs to b
 
 <section id="revoked">
     <h1>Revoked certificates</h1>
-    <p>To fetch certificate revocation list:</p>
-    <pre>curl {{window.location.href}}api/revoked/ | openssl crl -text -noout</pre>
+    <p>To fetch <a href="{{window.location.href}}api/revoked/">certificate revocation list</a>:</p>
+    <pre>curl {{window.location.href}}api/revoked/ | openssl crl -inform der -text -noout</pre>
     <!--
     <p>To perform online certificate status request</p>
 
