@@ -39,6 +39,12 @@ SIGNED_DIR = cp.get("authority", "signed dir")
 REVOKED_DIR = cp.get("authority", "revoked dir")
 OUTBOX = cp.get("authority", "outbox")
 
+USER_CERTIFICATE_ENROLLMENT = {
+    "forbidden": False, "single allowed": True, "multiple allowed": True }[
+    cp.get("authority", "user certificate enrollment")]
+USER_MULTIPLE_CERTIFICATES = {
+    "forbidden": False, "single allowed": False, "multiple allowed": True }[
+    cp.get("authority", "user certificate enrollment")]
 
 CERTIFICATE_BASIC_CONSTRAINTS = "CA:FALSE"
 CERTIFICATE_KEY_USAGE_FLAGS = "digitalSignature,keyEncipherment"

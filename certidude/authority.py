@@ -26,10 +26,16 @@ def publish_certificate(func):
         cert = func(csr, *args, **kwargs)
         assert isinstance(cert, Certificate), "notify wrapped function %s returned %s" % (func, type(cert))
 
+        if cert.given_name and cert.surname and cert.email_address:
+            recipient = "%s %s <%s>" % (cert.given_name, cert.surname, cert.email_address)
+        elif cert.email_address:
+            recipient = cert.email_address
+        else:
+            recipient = None
+
         mailer.send(
             "certificate-signed.md",
-            to= "%s %s <%s>" % (cert.given_name, cert.surname, cert.email_address) if
-                cert.given_name and cert.surname else cert.email_address,
+            to=recipient,
             attachments=(cert,),
             certificate=cert)
 

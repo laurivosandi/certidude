@@ -469,11 +469,34 @@ output += " (";
 output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"user")),"name"), env.opts.autoescape);
 output += ") settings</h2>\n\n<p>Mails will be sent to: ";
 output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"user")),"mail"), env.opts.autoescape);
-output += "</p>\n\n<p>You can click <a href=\"/api/bundle/\">here</a> to generate bundle\nfor current user account.</p>\n\n";
+output += "</p>\n\n";
+if(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"user_certificate_enrollment")) {
+output += "\n<p>You can click <a href=\"/api/bundle/\">here</a> to generate bundle\nfor current user account.</p>\n";
+;
+}
+output += "\n\n";
 if(runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")) {
 output += "\n\n<h2>Authority certificate</h2>\n\n<p>Several things such as CRL location and e-mails are hardcoded into\nthe <a href=\"/api/certificate\">certificate</a> and\nas such require complete reset of X509 infrastructure if some of them needs to be changed:</p>\n\n<p>Mails will appear from: ";
 output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"certificate")),"email_address"), env.opts.autoescape);
-output += "</p>\n\n\n<h2>Authority settings</h2>\n\n<p>These can be reconfigured via /etc/certidude/server.conf on the server.</p>\n\n<p>Outgoing mail server:\n";
+output += "</p>\n\n\n<h2>Authority settings</h2>\n\n<p>These can be reconfigured via /etc/certidude/server.conf on the server.</p>\n\n<p>User certificate enrollment:\n";
+if(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"user_certificate_enrollment")) {
+output += "\n    ";
+if(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"user_mutliple_certificates")) {
+output += "\n    multiple\n    ";
+;
+}
+else {
+output += "\n    single\n    ";
+;
+}
+output += "\nallowed\n";
+;
+}
+else {
+output += "\nforbidden\n";
+;
+}
+output += "\n</p>\n\n<p>Outgoing mail server:\n";
 if(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"outbox")) {
 output += "\n    ";
 output += runtime.suppressValue(runtime.memberLookup((runtime.memberLookup((runtime.contextOrFrameLookup(context, frame, "session")),"authority")),"outbox"), env.opts.autoescape);

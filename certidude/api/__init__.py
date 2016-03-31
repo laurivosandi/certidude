@@ -56,6 +56,8 @@ class SessionResource(object):
                 [req.context.get("remote_addr") in j
                     for j in config.REQUEST_SUBNETS]),
             authority = dict(
+                user_certificate_enrollment=config.USER_CERTIFICATE_ENROLLMENT,
+                user_mutliple_certificates=config.USER_MULTIPLE_CERTIFICATES,
                 outbox = config.OUTBOX,
                 certificate = authority.certificate,
                 events = config.PUSH_EVENT_SOURCE % config.PUSH_TOKEN,
@@ -103,18 +105,6 @@ class StaticResource(object):
             resp.status = falcon.HTTP_404
             resp.body = "File '%s' not found" % req.path
 
-
-class BundleResource(object):
-    @login_required
-    def on_get(self, req, resp):
-        common_name = req.context["user"].mail
-        logger.info(u"Signing bundle %s for %s", common_name, req.context.get("user"))
-        resp.set_header("Content-Type", "application/x-pkcs12")
-        resp.set_header("Content-Disposition", "attachment; filename=%s.p12" % common_name.encode("ascii"))
-        resp.body, cert = authority.generate_pkcs12_bundle(common_name,
-                                owner=req.context.get("user"))
-
-
 import ipaddress
 
 class NormalizeMiddleware(object):
@@ -129,7 +119,7 @@ class NormalizeMiddleware(object):
 
 def certidude_app():
     from certidude import config
-
+    from .bundle import BundleResource
     from .revoked import RevocationListResource
     from .signed import SignedCertificateListResource, SignedCertificateDetailResource
     from .request import RequestListResource, RequestDetailResource
@@ -143,7 +133,6 @@ def certidude_app():
 
     # Certificate authority API calls
     app.add_route("/api/ocsp/", CertificateStatusResource())
-    app.add_route("/api/bundle/", BundleResource())
     app.add_route("/api/certificate/", CertificateAuthorityResource())
     app.add_route("/api/revoked/", RevocationListResource())
     app.add_route("/api/signed/{cn}/", SignedCertificateDetailResource())
@@ -155,6 +144,10 @@ def certidude_app():
     # Gateway API calls, should this be moved to separate project?
     app.add_route("/api/lease/", LeaseResource())
     app.add_route("/api/whois/", WhoisResource())
+
+    # Optional user enrollment API call
+    if config.USER_CERTIFICATE_ENROLLMENT:
+        app.add_route("/api/bundle/", BundleResource())
 
     log_handlers = []
     if config.LOGGING_BACKEND == "sql":

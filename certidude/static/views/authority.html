@@ -4,8 +4,10 @@
 
 <p>Mails will be sent to: {{ session.user.mail }}</p>
 
+{% if session.authority.user_certificate_enrollment %}
 <p>You can click <a href="/api/bundle/">here</a> to generate bundle
 for current user account.</p>
+{% endif %}
 
 {% if session.authority %}
 
@@ -21,6 +23,19 @@ as such require complete reset of X509 infrastructure if some of them needs to b
 <h2>Authority settings</h2>
 
 <p>These can be reconfigured via /etc/certidude/server.conf on the server.</p>
+
+<p>User certificate enrollment:
+{% if session.authority.user_certificate_enrollment %}
+    {% if session.authority.user_mutliple_certificates %}
+    multiple
+    {% else %}
+    single
+    {% endif %}
+allowed
+{% else %}
+forbidden
+{% endif %}
+</p>
 
 <p>Outgoing mail server:
 {% if session.authority.outbox %}
