@@ -914,6 +914,16 @@ def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_conf
     click.echo("  certidude serve")
 
 
+@click.command("users", help="List users")
+def certidude_users():
+    from certidude.user import User
+    admins = set(User.objects.filter_admins())
+    for user in User.objects.all():
+        print "%s;%s;%s;%s;%s" % (
+            "admin" if user in admins else "user",
+            user.name, user.given_name, user.surname, user.mail)
+    
+
 @click.command("list", help="List certificates")
 @click.option("--verbose", "-v", default=False, is_flag=True, help="Verbose output")
 @click.option("--show-key-type", "-k", default=False, is_flag=True, help="Show key type and length")
@@ -1167,3 +1177,4 @@ entry_point.add_command(certidude_signer)
 entry_point.add_command(certidude_request)
 entry_point.add_command(certidude_sign)
 entry_point.add_command(certidude_list)
+entry_point.add_command(certidude_users)
