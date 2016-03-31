@@ -8,4 +8,5 @@ include certidude/static/css/*.css
 include certidude/static/fonts/*.woff2
 include certidude/static/img/*.svg
 include certidude/static/*.html
+include certidude/static/robots.txt
 include certidude/sql/*/*.sql
