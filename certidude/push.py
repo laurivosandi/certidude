@@ -16,15 +16,18 @@ def publish(event_type, event_data):
         event_data = json.dumps(event_data, cls=MyEncoder)
 
     url = config.PUSH_PUBLISH % config.PUSH_TOKEN
-    click.echo("Publishing %s event %s on %s" % (event_type, event_data, url))
+    click.echo("Publishing %s event '%s' on %s" % (event_type, event_data, url))
 
     try:
         notification = requests.post(
             url,
             data=event_data,
             headers={"X-EventSource-Event": event_type, "User-Agent": "Certidude API"})
+        if notification.status_code != requests.codes.created:
+            click.echo("Failed to submit event to push server, server responded %d, expected %d" % (
+                notification.status_code, requests.codes.created))
     except requests.exceptions.ConnectionError:
-        click.echo("Failed to submit event to push server: %s" % repr(event_data))
+        click.echo("Failed to submit event to push server, connection error")
 
 class PushLogHandler(logging.Handler):
     """

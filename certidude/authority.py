@@ -169,7 +169,7 @@ def delete_request(common_name):
     push.publish("request-deleted", request.common_name)
 
     # Write empty certificate to long-polling URL
-    requests.delete(config.PUSH_PUBLISH % request.common_name,
+    requests.delete(config.PUSH_PUBLISH % request.fingerprint(),
         headers={"User-Agent": "Certidude API"})
 
 

@@ -67,6 +67,7 @@ function onRequestSubmitted(e) {
         url: "/api/request/" + e.data + "/",
         dataType: "json",
         success: function(request, status, xhr) {
+            onRequestDeleted(e); // Delete any existing ones just in case
             $("#pending_requests").prepend(
                 nunjucks.render('views/request.html', { request: request }));
         }
