@@ -36,7 +36,7 @@ class PushLogHandler(logging.Handler):
     def emit(self, record):
         from certidude.push import publish
         publish("log-entry", dict(
-            created = datetime.fromtimestamp(record.created),
+            created = datetime.utcfromtimestamp(record.created),
             message = record.msg % record.args,
             severity = record.levelname.lower()))
 

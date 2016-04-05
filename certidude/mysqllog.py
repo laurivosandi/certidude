@@ -1,6 +1,7 @@
 
 import logging
 import time
+from datetime import datetime
 from certidude.api.tag import RelationalMixin
  
 class LogHandler(logging.Handler, RelationalMixin):
@@ -12,7 +13,7 @@ class LogHandler(logging.Handler, RelationalMixin):
 
     def emit(self, record):
         self.sql_execute("log_insert_entry.sql",
-            time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(record.created)),
+            datetime.utcfromtimestamp(record.created),
             record.name,
             record.levelno,
             record.levelname.lower(),
