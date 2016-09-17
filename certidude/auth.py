@@ -1,14 +1,14 @@
 
 import click
 import falcon
-import kerberos
+import kerberos # If this fails pip install kerberos
 import logging
 import os
 import re
 import socket
 from certidude.user import User
 from certidude.firewall import whitelist_subnets
-from certidude import config, constants
+from certidude import config, const
 
 logger = logging.getLogger("api")
 
@@ -23,32 +23,34 @@ if "kerberos" in config.AUTHENTICATION_BACKENDS:
         exit(248)
 
     try:
-        principal = kerberos.getServerPrincipalDetails("HTTP", constants.FQDN)
+        principal = kerberos.getServerPrincipalDetails("HTTP", const.FQDN)
     except kerberos.KrbError as exc:
         click.echo("Failed to initialize Kerberos, service principal is HTTP/%s, reason: %s" % (
-            constants.FQDN, exc), err=True)
+            const.FQDN, exc), err=True)
         exit(249)
     else:
-        click.echo("Kerberos enabled, service principal is HTTP/%s" % constants.FQDN)
+        click.echo("Kerberos enabled, service principal is HTTP/%s" % const.FQDN)
 
 
 def authenticate(optional=False):
     def wrapper(func):
         def kerberos_authenticate(resource, req, resp, *args, **kwargs):
-            if optional and not req.get_param_as_bool("authenticate"):
-                return func(resource, req, resp, *args, **kwargs)
-
+            # Try pre-emptive authentication
             if not req.auth:
-                resp.append_header("WWW-Authenticate", "Negotiate")
+                if optional:
+                    req.context["user"] = None
+                    return func(resource, req, resp, *args, **kwargs)
+
                 logger.debug(u"No Kerberos ticket offered while attempting to access %s from %s",
                     req.env["PATH_INFO"], req.context.get("remote_addr"))
                 raise falcon.HTTPUnauthorized("Unauthorized",
-                    "No Kerberos ticket offered, are you sure you've logged in with domain user account?")
+                    "No Kerberos ticket offered, are you sure you've logged in with domain user account?",
+                    ["Negotiate"])
 
             token = ''.join(req.auth.split()[1:])
 
             try:
-                result, context = kerberos.authGSSServerInit("HTTP@" + constants.FQDN)
+                result, context = kerberos.authGSSServerInit("HTTP@" + const.FQDN)
             except kerberos.GSSError as ex:
                 # TODO: logger.error
                 raise falcon.HTTPForbidden("Forbidden",
@@ -59,22 +61,30 @@ def authenticate(optional=False):
             except kerberos.GSSError as ex:
                 kerberos.authGSSServerClean(context)
                 logger.error(u"Kerberos authentication failed from %s. "
-                    "Bad credentials: %s (%d)",
+                    "GSSAPI error: %s (%d), perhaps the clock skew it too large?",
                     req.context.get("remote_addr"),
                     ex.args[0][0], ex.args[0][1])
                 raise falcon.HTTPForbidden("Forbidden",
-                    "Bad credentials: %s (%d)" % (ex.args[0][0], ex.args[0][1]))
+                    "GSSAPI error: %s (%d), perhaps the clock skew it too large?" % (ex.args[0][0], ex.args[0][1]))
             except kerberos.KrbError as ex:
                 kerberos.authGSSServerClean(context)
                 logger.error(u"Kerberos authentication failed from  %s. "
-                    "Bad credentials: %s (%d)",
+                    "Kerberos error: %s (%d)",
                     req.context.get("remote_addr"),
                     ex.args[0][0], ex.args[0][1])
                 raise falcon.HTTPForbidden("Forbidden",
-                    "Bad credentials: %s" % (ex.args[0],))
+                    "Kerberos error: %s" % (ex.args[0],))
 
             user = kerberos.authGSSServerUserName(context)
-            req.context["user"] = User.objects.get(user)
+
+            if "$@" in user and optional:
+                # Extract machine hostname
+                # TODO: Assert LDAP group membership
+                req.context["machine"], _ = user.lower().split("$@", 1)
+                req.context["user"] = None
+            else:
+                # Attempt to look up real user
+                req.context["user"] = User.objects.get(user)
 
             try:
                 kerberos.authGSSServerClean(context)
@@ -114,7 +124,7 @@ def authenticate(optional=False):
             if not req.auth:
                 resp.append_header("WWW-Authenticate", "Basic")
                 raise falcon.HTTPUnauthorized("Forbidden",
-                    "Please authenticate with %s domain account or supply UPN" % constants.DOMAIN)
+                    "Please authenticate with %s domain account or supply UPN" % const.DOMAIN)
 
             if not req.auth.startswith("Basic "):
                 raise falcon.HTTPForbidden("Forbidden", "Bad header: %s" % req.auth)
@@ -128,13 +138,13 @@ def authenticate(optional=False):
                 conn = ldap.initialize(server)
                 conn.set_option(ldap.OPT_REFERRALS, 0)
                 try:
-                    conn.simple_bind_s(user if "@" in user else "%s@%s" % (user, constants.DOMAIN), passwd)
+                    conn.simple_bind_s(user if "@" in user else "%s@%s" % (user, const.DOMAIN), passwd)
                 except ldap.LDAPError, e:
                     resp.append_header("WWW-Authenticate", "Basic")
                     logger.critical(u"LDAP bind authentication failed for user %s from  %s",
                         repr(user), req.context.get("remote_addr"))
                     raise falcon.HTTPUnauthorized("Forbidden",
-                        "Please authenticate with %s domain account or supply UPN" % constants.DOMAIN)
+                        "Please authenticate with %s domain account or supply UPN" % const.DOMAIN)
 
                 req.context["ldap_conn"] = conn
                 break
@@ -154,8 +164,7 @@ def authenticate(optional=False):
                 return func(resource, req, resp, *args, **kwargs)
 
             if not req.auth:
-                resp.append_header("WWW-Authenticate", "Basic")
-                raise falcon.HTTPUnauthorized("Forbidden", "Please authenticate")
+                raise falcon.HTTPUnauthorized("Forbidden", "Please authenticate", ("Basic",))
 
             if not req.auth.startswith("Basic "):
                 raise falcon.HTTPForbidden("Forbidden", "Bad header: %s" % req.auth)
@@ -168,7 +177,7 @@ def authenticate(optional=False):
             if not simplepam.authenticate(user, passwd, "sshd"):
                 logger.critical(u"Basic authentication failed for user %s from  %s",
                     repr(user), req.context.get("remote_addr"))
-                raise falcon.HTTPUnauthorized("Forbidden", "Invalid password")
+                raise falcon.HTTPForbidden("Forbidden", "Invalid password")
 
             req.context["user"] = User.objects.get(user)
             return func(resource, req, resp, *args, **kwargs)

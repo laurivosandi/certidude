@@ -12,7 +12,7 @@ from certidude.auth import login_required, authorize_admin
 from certidude.user import User
 from certidude.decorators import serialize, event_source, csrf_protection
 from certidude.wrappers import Request, Certificate
-from certidude import constants, config
+from certidude import const, config
 
 logger = logging.getLogger("api")
 
@@ -35,7 +35,7 @@ class CertificateAuthorityResource(object):
         resp.stream = open(config.AUTHORITY_CERTIFICATE_PATH, "rb")
         resp.append_header("Content-Type", "application/x-x509-ca-cert")
         resp.append_header("Content-Disposition", "attachment; filename=%s.crt" %
-            constants.HOSTNAME.encode("ascii"))
+            const.HOSTNAME.encode("ascii"))
 
 
 class SessionResource(object):
@@ -112,7 +112,7 @@ class NormalizeMiddleware(object):
         assert not req.get_param("unicode") or req.get_param("unicode") == u"✓", "Unicode sanity check failed"
         req.context["remote_addr"] = ipaddress.ip_address(req.env["REMOTE_ADDR"].decode("utf-8"))
 
-    def process_response(self, req, resp, resource):
+    def process_response(self, req, resp, resource=None):
         # wtf falcon?!
         if isinstance(resp.location, unicode):
             resp.location = resp.location.encode("ascii")
@@ -125,7 +125,6 @@ def certidude_app():
     from .request import RequestListResource, RequestDetailResource
     from .lease import LeaseResource
     from .whois import WhoisResource
-    from .log import LogResource
     from .tag import TagResource, TagDetailResource
     from .cfg import ConfigResource, ScriptResource
 
@@ -149,19 +148,6 @@ def certidude_app():
     if config.USER_CERTIFICATE_ENROLLMENT:
         app.add_route("/api/bundle/", BundleResource())
 
-    log_handlers = []
-    if config.LOGGING_BACKEND == "sql":
-        from certidude.mysqllog import LogHandler
-        uri = config.cp.get("logging", "database")
-        log_handlers.append(LogHandler(uri))
-        app.add_route("/api/log/", LogResource(uri))
-    elif config.LOGGING_BACKEND == "syslog":
-        from logging.handlers import SyslogHandler
-        log_handlers.append(SysLogHandler())
-        # Browsing syslog via HTTP is obviously not possible out of the box
-    elif config.LOGGING_BACKEND:
-        raise ValueError("Invalid logging.backend = %s" % config.LOGGING_BACKEND)
-
     if config.TAGGING_BACKEND == "sql":
         uri = config.cp.get("tagging", "database")
         app.add_route("/api/tag/", TagResource(uri))
@@ -171,23 +157,5 @@ def certidude_app():
     elif config.TAGGING_BACKEND:
         raise ValueError("Invalid tagging.backend = %s" % config.TAGGING_BACKEND)
 
-    if config.PUSH_PUBLISH:
-        from certidude.push import PushLogHandler
-        log_handlers.append(PushLogHandler())
-
-    for facility in "api", "cli":
-        logger = logging.getLogger(facility)
-        logger.setLevel(logging.DEBUG)
-        for handler in log_handlers:
-            logger.addHandler(handler)
-
-    logging.getLogger("cli").debug("Started Certidude at %s", constants.FQDN)
-
-    import atexit
-
-    def exit_handler():
-        logging.getLogger("cli").debug("Shutting down Certidude")
-
-    atexit.register(exit_handler)
 
     return app

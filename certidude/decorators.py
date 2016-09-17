@@ -8,7 +8,7 @@ from datetime import date, time, datetime
 from OpenSSL import crypto
 from certidude.auth import User
 from certidude.wrappers import Request, Certificate
-from urllib.parse import urlparse
+from urlparse import urlparse
 
 logger = logging.getLogger("api")
 
@@ -23,15 +23,21 @@ def csrf_protection(func):
 
         # For everything else assert referrer
         referrer = req.headers.get("REFERER")
+
+
         if referrer:
             scheme, netloc, path, params, query, fragment = urlparse(referrer)
-            if netloc == req.host:
+            if ":" in netloc:
+                host, port = netloc.split(":", 1)
+            else:
+                host, port = netloc, None
+            if host == req.host:
                 return func(self, req, resp, *args, **kwargs)
 
         # Kaboom!
         logger.warning(u"Prevented clickbait from '%s' with user agent '%s'",
             referrer or "-", req.user_agent)
-        raise falcon.HTTPUnauthorized("Forbidden",
+        raise falcon.HTTPForbidden("Forbidden",
             "No suitable UA or referrer provided, cross-site scripting disabled")
     return wrapped
 

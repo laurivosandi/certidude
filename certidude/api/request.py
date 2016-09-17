@@ -10,6 +10,9 @@ from certidude.decorators import serialize, csrf_protection
 from certidude.wrappers import Request, Certificate
 from certidude.firewall import whitelist_subnets, whitelist_content_types
 
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
+
 logger = logging.getLogger("api")
 
 class RequestListResource(object):
@@ -29,6 +32,7 @@ class RequestListResource(object):
         """
 
         body = req.stream.read(req.content_length)
+
         csr = Request(body)
 
         if not csr.common_name:
@@ -37,6 +41,19 @@ class RequestListResource(object):
             raise falcon.HTTPBadRequest(
                 "Bad request",
                 "No common name specified!")
+
+        machine = req.context.get("machine")
+        if machine:
+            if csr.common_name != machine:
+                raise falcon.HTTPBadRequest(
+                    "Bad request",
+                    "Common name %s differs from Kerberos credential %s!" % (csr.common_name, machine))
+            if csr.signable:
+                # Automatic enroll with Kerberos machine cerdentials
+                resp.set_header("Content-Type", "application/x-x509-user-cert")
+                resp.body = authority.sign(csr, overwrite=True).dump()
+                return
+
 
         # Check if this request has been already signed and return corresponding certificte if it has been signed
         try:
@@ -51,8 +68,8 @@ class RequestListResource(object):
 
         # TODO: check for revoked certificates and return HTTP 410 Gone
 
-        # Process automatic signing if the IP address is whitelisted and autosigning was requested
-        if req.get_param_as_bool("autosign"):
+        # Process automatic signing if the IP address is whitelisted, autosigning was requested and certificate can be automatically signed
+        if req.get_param_as_bool("autosign") and csr.signable:
             for subnet in config.AUTOSIGN_SUBNETS:
                 if req.context.get("remote_addr") in subnet:
                     try:

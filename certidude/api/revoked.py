@@ -2,7 +2,7 @@
 import falcon
 import json
 import logging
-from certidude import constants
+from certidude import const
 from certidude.authority import export_crl, list_revoked
 from certidude.decorators import MyEncoder
 from cryptography import x509
@@ -21,7 +21,7 @@ class RevocationListResource(object):
             resp.set_header("Content-Type", "application/x-pkcs7-crl")
             resp.append_header(
                 "Content-Disposition",
-                ("attachment; filename=%s.crl" % constants.HOSTNAME).encode("ascii"))
+                ("attachment; filename=%s.crl" % const.HOSTNAME).encode("ascii"))
             # Convert PEM to DER
             resp.body = x509.load_pem_x509_crl(export_crl(),
                 default_backend()).public_bytes(Encoding.DER)
@@ -29,7 +29,7 @@ class RevocationListResource(object):
             resp.set_header("Content-Type", "application/x-pem-file")
             resp.append_header(
                 "Content-Disposition",
-                ("attachment; filename=%s-crl.pem" % constants.HOSTNAME).encode("ascii"))
+                ("attachment; filename=%s-crl.pem" % const.HOSTNAME).encode("ascii"))
             resp.body = export_crl()
         elif req.accept.startswith("application/json"):
             resp.set_header("Content-Type", "application/json")

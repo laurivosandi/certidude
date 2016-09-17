@@ -1,14 +1,11 @@
 
 
 import random
-import pwd
 import socket
 import os
 import asyncore
 import asynchat
-from certidude import constants, config
-from OpenSSL import crypto
-
+from certidude import const, config
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
@@ -19,99 +16,6 @@ import random
 
 DN_WHITELIST = NameOID.COMMON_NAME, NameOID.GIVEN_NAME, NameOID.SURNAME, \
     NameOID.EMAIL_ADDRESS
-
-SERIAL_MIN = 0x1000000000000000000000000000000000000000
-SERIAL_MAX = 0xffffffffffffffffffffffffffffffffffffffff
-
-def raw_sign(private_key, ca_cert, request, basic_constraints, lifetime, key_usage=None, extended_key_usage=None):
-    """
-    Sign certificate signing request directly with private key assuming it's readable by the process
-    """
-
-    # Initialize X.509 certificate object
-    cert = crypto.X509()
-    cert.set_version(2) # This corresponds to X.509v3
-
-    # Set public key
-    cert.set_pubkey(request.get_pubkey())
-
-    # Set issuer
-    cert.set_issuer(ca_cert.get_subject())
-
-    # Set SKID and AKID extensions
-    cert.add_extensions([
-        crypto.X509Extension(
-            b"subjectKeyIdentifier",
-            False,
-            b"hash",
-            subject = cert),
-        crypto.X509Extension(
-            b"authorityKeyIdentifier",
-            False,
-            b"keyid:always",
-            issuer = ca_cert),
-        crypto.X509Extension(
-            b"authorityInfoAccess",
-            False,
-            ("caIssuers;URI: %s" % config.CERTIFICATE_AUTHORITY_URL).encode("ascii")),
-        crypto.X509Extension(
-            b"crlDistributionPoints",
-            False,
-            ("URI: %s" % config.CERTIFICATE_CRL_URL).encode("ascii"))
-    ])
-
-
-    # Copy attributes from request
-    cert.get_subject().CN = request.get_subject().CN
-
-    if request.get_subject().SN:
-        cert.get_subject().SN = request.get_subject().SN
-    if request.get_subject().GN:
-        cert.get_subject().GN = request.get_subject().GN
-
-    if request.get_subject().OU:
-        cert.get_subject().OU = req_subject.OU
-
-    # Copy e-mail, key usage, extended key from request
-    for extension in request.get_extensions():
-        cert.add_extensions([extension])
-
-    # TODO: Set keyUsage and extendedKeyUsage defaults if none has been provided in the request
-
-    # Override basic constraints if nececssary
-    if basic_constraints:
-        cert.add_extensions([
-            crypto.X509Extension(
-                b"basicConstraints",
-                True,
-                basic_constraints.encode("ascii"))])
-
-    if key_usage:
-        try:
-            cert.add_extensions([
-                crypto.X509Extension(
-                    b"keyUsage",
-                    True,
-                    key_usage.encode("ascii"))])
-        except crypto.Error:
-            raise ValueError("Invalid value '%s' for keyUsage attribute" % key_usage)
-
-    if extended_key_usage:
-        cert.add_extensions([
-            crypto.X509Extension(
-                b"extendedKeyUsage",
-                True,
-                extended_key_usage.encode("ascii"))])
-
-    # Set certificate lifetime
-    cert.gmtime_adj_notBefore(-3600)
-    cert.gmtime_adj_notAfter(lifetime * 24 * 60 * 60)
-
-    # Generate random serial
-    cert.set_serial_number(random.randint(SERIAL_MIN, SERIAL_MAX))
-    cert.sign(private_key, 'sha512')
-    return cert
-
 
 class SignHandler(asynchat.async_chat):
     def __init__(self, sock, server):
@@ -162,7 +66,9 @@ class SignHandler(asynchat.async_chat):
 
             cert = x509.CertificateBuilder(
                 ).subject_name(subject
-                ).serial_number(random.randint(SERIAL_MIN, SERIAL_MAX)
+                ).serial_number(random.randint(
+                    0x1000000000000000000000000000000000000000,
+                    0xffffffffffffffffffffffffffffffffffffffff)
                 ).issuer_name(self.server.certificate.issuer
                 ).public_key(request.public_key()
                 ).not_valid_before(now - timedelta(hours=1)
@@ -224,32 +130,31 @@ class SignHandler(asynchat.async_chat):
     def collect_incoming_data(self, data):
         self.buffer.append(data)
 
+import signal
+import click
 
 class SignServer(asyncore.dispatcher):
     def __init__(self):
         asyncore.dispatcher.__init__(self)
 
-        # Bind to sockets
-        if os.path.exists(config.SIGNER_SOCKET_PATH):
-            os.unlink(config.SIGNER_SOCKET_PATH)
-        os.umask(0o007)
+        if os.path.exists(const.SIGNER_SOCKET_PATH):
+            os.unlink(const.SIGNER_SOCKET_PATH)
+
         self.create_socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.bind(config.SIGNER_SOCKET_PATH)
+        self.bind(const.SIGNER_SOCKET_PATH)
         self.listen(5)
 
         # Load CA private key and certificate
+        click.echo("Signer reading private key from %s" % config.AUTHORITY_PRIVATE_KEY_PATH)
         self.private_key = serialization.load_pem_private_key(
             open(config.AUTHORITY_PRIVATE_KEY_PATH).read(),
             password=None, # TODO: Ask password for private key?
             backend=default_backend())
+        click.echo("Signer reading certificate from %s" % config.AUTHORITY_CERTIFICATE_PATH)
         self.certificate = x509.load_pem_x509_certificate(
             open(config.AUTHORITY_CERTIFICATE_PATH).read(),
             backend=default_backend())
 
-        # Drop privileges
-        _, _, uid, gid, gecos, root, shell = pwd.getpwnam("nobody")
-        os.setgid(gid)
-        os.setuid(uid)
 
     def handle_accept(self):
         pair = self.accept()

@@ -23,11 +23,16 @@ def publish(event_type, event_data):
             url,
             data=event_data,
             headers={"X-EventSource-Event": event_type, "User-Agent": "Certidude API"})
-        if notification.status_code != requests.codes.created:
-            click.echo("Failed to submit event to push server, server responded %d, expected %d" % (
-                notification.status_code, requests.codes.created))
+        if notification.status_code == requests.codes.created:
+            pass # Sent to client
+        elif notification.status_code == requests.codes.accepted:
+            pass # Buffered in nchan
+        else:
+            click.echo("Failed to submit event to push server, server responded %d" % (
+                notification.status_code))
     except requests.exceptions.ConnectionError:
         click.echo("Failed to submit event to push server, connection error")
+
 
 class PushLogHandler(logging.Handler):
     """

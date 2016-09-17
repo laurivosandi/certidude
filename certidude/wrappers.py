@@ -3,7 +3,7 @@ import hashlib
 import re
 import click
 import io
-from certidude import constants
+from certidude import const
 from OpenSSL import crypto
 from datetime import datetime
 
@@ -228,7 +228,7 @@ class Request(CertificateBase):
     @property
     def signable(self):
         for key, value, data in self.extensions:
-            if key not in constants.EXTENSION_WHITELIST:
+            if key not in const.EXTENSION_WHITELIST:
                 return False
         return True
 

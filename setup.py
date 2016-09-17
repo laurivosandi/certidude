@@ -10,7 +10,7 @@ setup(
     author_email = "lauri.vosandi@gmail.com",
     description = "Certidude is a novel X.509 Certificate Authority management tool aiming to support PKCS#11 and in far future WebCrypto.",
     license = "MIT",
-    keywords = "falcon http jinja2 x509 pkcs11 webcrypto",
+    keywords = "falcon http jinja2 x509 pkcs11 webcrypto kerberos ldap",
     url = "http://github.com/laurivosandi/certidude",
     packages=[
         "certidude",
@@ -23,13 +23,9 @@ setup(
         "falcon",
         "jinja2",
         "pyopenssl",
-        "pycountry",
         "humanize",
-        "pycrypto",
         "cryptography",
         "markupsafe",
-        "ldap3",
-        "pykerberos",
     ],
     scripts=[
         "misc/certidude"

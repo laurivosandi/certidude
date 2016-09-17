@@ -1,13 +1,18 @@
 
 import click
 import os
+import random
 import re
-import socket
 import requests
-from OpenSSL import crypto
-from certidude import config, push, mailer
+import socket
+from datetime import datetime, timedelta
+from cryptography.hazmat.backends import default_backend
+from cryptography import x509
+from cryptography.x509.oid import NameOID, ExtensionOID, AuthorityInformationAccessOID
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives import hashes, serialization
+from certidude import config, push, mailer, const
 from certidude.wrappers import Certificate, Request
-from certidude.signer import raw_sign
 from certidude import errors
 
 RE_HOSTNAME =  "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])(@(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9]))?$"
@@ -46,7 +51,7 @@ def publish_certificate(func):
                 headers={"User-Agent": "Certidude API", "Content-Type": "application/x-x509-user-cert"})
 
             # For deleting request in the web view, use pubkey modulo
-            push.publish("request-signed", csr.common_name)
+            push.publish("request-signed", cert.common_name)
         return cert
     return wrapped
 
@@ -73,8 +78,16 @@ def store_request(buf, overwrite=False):
     """
     Store CSR for later processing
     """
-    request = crypto.load_certificate_request(crypto.FILETYPE_PEM, buf)
-    common_name = request.get_subject().CN
+
+    if not buf: return # No certificate supplied
+    csr = x509.load_pem_x509_csr(buf, backend=default_backend())
+    for name in csr.subject:
+        if name.oid == NameOID.COMMON_NAME:
+            common_name = name.value
+            break
+    else:
+        raise ValueError("No common name in %s" % csr.subject)
+
     request_path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
 
     if not re.match(RE_HOSTNAME, common_name):
@@ -98,7 +111,7 @@ def store_request(buf, overwrite=False):
 
 def signer_exec(cmd, *bits):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.connect(config.SIGNER_SOCKET_PATH)
+    sock.connect(const.SIGNER_SOCKET_PATH)
     sock.send(cmd.encode("ascii"))
     sock.send(b"\n")
     for bit in bits:
@@ -141,7 +154,7 @@ def list_revoked(directory=config.REVOKED_DIR):
 
 def export_crl():
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.connect(config.SIGNER_SOCKET_PATH)
+    sock.connect(const.SIGNER_SOCKET_PATH)
     sock.send(b"export-crl\n")
     for filename in os.listdir(config.REVOKED_DIR):
         if not filename.endswith(".pem"):
@@ -177,32 +190,49 @@ def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
     """
     Generate private key, sign certificate and return PKCS#12 bundle
     """
+
     # Construct private key
     click.echo("Generating %d-bit RSA key..." % key_size)
-    key = crypto.PKey()
-    key.generate_key(crypto.TYPE_RSA, key_size)
 
-    # Construct CSR
-    csr = crypto.X509Req()
-    csr.set_version(2) # Corresponds to X.509v3
-    csr.set_pubkey(key)
-    csr.get_subject().CN = common_name
+    key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=4096,
+        backend=default_backend()
+    )
+
+    csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
+        x509.NameAttribute(k, v) for k, v in (
+            (NameOID.COMMON_NAME, common_name),
+            (NameOID.GIVEN_NAME, owner and owner.given_name),
+            (NameOID.SURNAME, owner and owner.surname),
+        ) if v
+    ]))
+
     if owner:
-        if owner.given_name:
-            csr.get_subject().GN = owner.given_name
-        if owner.surname:
-            csr.get_subject().SN = owner.surname
-        csr.add_extensions([
-            crypto.X509Extension("subjectAltName", True, "email:%s" % owner.mail.encode("ascii"))])
-
-    buf = crypto.dump_certificate_request(crypto.FILETYPE_PEM, csr)
+        click.echo("Setting e-mail to: %s" % owner.mail)
+        csr = csr.add_extension(
+            x509.SubjectAlternativeName([
+                x509.RFC822Name(owner.mail)
+            ]),
+            critical=False)
 
     # Sign CSR
-    cert = sign(Request(buf), overwrite=True)
+    cert = sign(Request(
+        csr.sign(key, hashes.SHA512(), default_backend()).public_bytes(serialization.Encoding.PEM)), overwrite=True)
 
-    # Generate P12
+    # Generate P12, currently supported only by PyOpenSSL
+    from OpenSSL import crypto
     p12 = crypto.PKCS12()
-    p12.set_privatekey( key )
+    p12.set_privatekey(
+        crypto.load_privatekey(
+            crypto.FILETYPE_PEM,
+            key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.TraditionalOpenSSL,
+                    encryption_algorithm=serialization.NoEncryption()
+                )
+            )
+        )
     p12.set_certificate( cert._obj )
     p12.set_ca_certificates([certificate._obj])
     return p12.export(), cert
@@ -213,7 +243,6 @@ def sign(req, overwrite=False, delete=True):
     """
     Sign certificate signing request via signer process
     """
-
     cert_path = os.path.join(config.SIGNED_DIR, req.common_name + ".pem")
 
     # Move existing certificate if necessary
@@ -236,35 +265,95 @@ def sign(req, overwrite=False, delete=True):
 
 
 @publish_certificate
-def sign2(request, overwrite=False, delete=True, lifetime=None):
+def sign2(request, private_key, authority_certificate, overwrite=False, delete=True, lifetime=None):
     """
     Sign directly using private key, this is usually done by root.
     Basic constraints and certificate lifetime are copied from config,
     lifetime may be overridden on the command line,
     other extensions are copied as is.
     """
-    cert = raw_sign(
-        crypto.load_privatekey(crypto.FILETYPE_PEM, open(config.AUTHORITY_PRIVATE_KEY_PATH).read()),
-        crypto.load_certificate(crypto.FILETYPE_PEM, open(config.AUTHORITY_CERTIFICATE_PATH).read()),
-        request._obj,
-        config.CERTIFICATE_BASIC_CONSTRAINTS,
-        lifetime=lifetime or config.CERTIFICATE_LIFETIME)
 
-    path = os.path.join(config.SIGNED_DIR, request.common_name + ".pem")
-    if os.path.exists(path):
+    certificate_path = os.path.join(config.SIGNED_DIR, request.common_name + ".pem")
+    if os.path.exists(certificate_path):
         if overwrite:
             revoke_certificate(request.common_name)
         else:
-            raise EnvironmentError("File %s already exists!" % path)
+            raise errors.DuplicateCommonNameError("Valid certificate with common name %s already exists" % request.common_name)
 
-    buf = crypto.dump_certificate(crypto.FILETYPE_PEM, cert)
-    with open(path + ".part", "wb") as fh:
+    now = datetime.utcnow()
+    request_path = os.path.join(config.REQUESTS_DIR, request.common_name + ".pem")
+    request = x509.load_pem_x509_csr(open(request_path).read(), default_backend())
+
+    cert = x509.CertificateBuilder(
+        ).subject_name(x509.Name([n for n in request.subject])
+        ).serial_number(random.randint(
+            0x1000000000000000000000000000000000000000,
+            0xffffffffffffffffffffffffffffffffffffffff)
+        ).issuer_name(authority_certificate.issuer
+        ).public_key(request.public_key()
+        ).not_valid_before(now - timedelta(hours=1)
+        ).not_valid_after(now + timedelta(days=config.CERTIFICATE_LIFETIME)
+        ).add_extension(x509.KeyUsage(
+            digital_signature=True,
+            key_encipherment=True,
+            content_commitment=False,
+            data_encipherment=False,
+            key_agreement=False,
+            key_cert_sign=False,
+            crl_sign=False,
+            encipher_only=False,
+            decipher_only=False), critical=True
+        ).add_extension(
+            x509.SubjectKeyIdentifier.from_public_key(request.public_key()),
+            critical=False
+        ).add_extension(
+            x509.AuthorityInformationAccess([
+                x509.AccessDescription(
+                    AuthorityInformationAccessOID.CA_ISSUERS,
+                    x509.UniformResourceIdentifier(
+                        config.CERTIFICATE_AUTHORITY_URL)
+                )
+            ]),
+            critical=False
+        ).add_extension(
+            x509.CRLDistributionPoints([
+                x509.DistributionPoint(
+                    full_name=[
+                        x509.UniformResourceIdentifier(
+                            config.CERTIFICATE_CRL_URL)],
+                    relative_name=None,
+                    crl_issuer=None,
+                    reasons=None)
+            ]),
+            critical=False
+        ).add_extension(
+            x509.AuthorityKeyIdentifier.from_issuer_public_key(
+                authority_certificate.public_key()),
+            critical=False
+        )
+
+    # Append subject alternative name, extended key usage flags etc
+    for extension in request.extensions:
+        if extension.oid == ExtensionOID.SUBJECT_ALTERNATIVE_NAME:
+            click.echo("Appending subject alt name extension: %s" % extension)
+            cert = cert.add_extension(x509.SubjectAlternativeName(extension.value),
+                critical=extension.critical)
+        if extension.oid == ExtensionOID.EXTENDED_KEY_USAGE:
+            click.echo("Appending extended key usage flags extension: %s" % extension)
+            cert = cert.add_extension(x509.ExtendedKeyUsage(extension.value),
+                critical=extension.critical)
+
+
+    cert = cert.sign(private_key, hashes.SHA512(), default_backend())
+
+    buf = cert.public_bytes(serialization.Encoding.PEM)
+    with open(certificate_path + ".part", "wb") as fh:
         fh.write(buf)
-    os.rename(path + ".part", path)
-    click.echo("Wrote certificate to: %s" % path)
+    os.rename(certificate_path + ".part", certificate_path)
+    click.echo("Wrote certificate to: %s" % certificate_path)
     if delete:
-        os.unlink(request.path)
-        click.echo("Deleted request: %s" % request.path)
+        os.unlink(request_path)
+        click.echo("Deleted request: %s" % request_path)
 
-    return Certificate(open(path))
+    return Certificate(open(certificate_path))
 

@@ -79,7 +79,8 @@ To install Certidude:
         python-pysqlite2 python-mysql.connector python-ldap \
         build-essential libffi-dev libssl-dev libkrb5-dev \
         ldap-utils krb5-user \
-        libsasl2-modules-gssapi-mit
+        libsasl2-modules-gssapi-mit \
+        libsasl2-dev libldap2-dev
     pip install certidude
 
 
@@ -103,17 +104,18 @@ If necessary tweak machine's fully qualified hostname in ``/etc/hosts``:
     127.0.0.1 localhost
     127.0.1.1 ca.example.com ca
 
-Then proceed to install `nchan <https://nchan.slact.net/>`_ and ``uwsgi``:
+Then proceed to install `nchan <https://nchan.slact.net/>`_:
 
 .. code:: bash
 
-    wget https://nchan.slact.net/download/nginx-common.deb https://nchan.slact.net/download/nginx-extras.deb
+    wget https://nchan.slact.net/download/nginx-common.deb \
+      https://nchan.slact.net/download/nginx-extras.deb
     dpkg -i nginx-common.deb nginx-extras.deb
-    apt-get install nginx uwsgi uwsgi-plugin-python
+    apt-get -f install
 
 Certidude can set up certificate authority relatively easily.
 Following will set up certificate authority in ``/var/lib/certidude/hostname.domain.tld``,
-configure uWSGI in ``/etc/uwsgi/apps-available/certidude.ini``,
+configure gunicorn service for your platform,
 nginx in ``/etc/nginx/sites-available/certidude.conf``,
 cronjobs in ``/etc/cron.hourly/certidude`` and much more:
 
@@ -170,7 +172,8 @@ Install dependencies:
 
     apt-get install samba-common-bin krb5-user ldap-utils
 
-Reset Samba client configuration in ``/etc/samba/smb.conf``:
+Reset Samba client configuration in ``/etc/samba/smb.conf``, adjust
+workgroup and realm accordingly:
 
 .. code:: ini
 
@@ -189,6 +192,13 @@ Reset Kerberos configuration in ``/etc/krb5.conf``:
     default_realm = EXAMPLE.COM
     dns_lookup_realm = true
     dns_lookup_kdc = true
+
+Reset LDAP configuration in /etc/ldap/ldap.conf:
+
+.. code:: bash
+
+    BASE dc=example,dc=com
+    URI ldap://dc1.example.com
 
 Initialize Kerberos credentials:
 
@@ -230,6 +240,11 @@ Adjust admin filter according to your setup.
 Also make sure there is cron.hourly job for creating GSSAPI credential cache -
 that's necessary for querying LDAP using Certidude machine's credentials.
 
+Common pitfalls:
+
+* Following error message may mean that the IP address of the web server does not match the IP address used to join
+  the CA machine to domain, eg when you're running CA behind SSL terminating web server:
+  Bad credentials: Unspecified GSS failure.  Minor code may provide more information (851968)
 
 Automating certificate setup
 ----------------------------

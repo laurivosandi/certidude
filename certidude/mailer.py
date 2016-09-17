@@ -8,7 +8,7 @@ from jinja2 import Environment, PackageLoader
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
-from urllib.parse import urlparse
+from urlparse import urlparse
 
 env = Environment(loader=PackageLoader("certidude", "templates/mail"))
 

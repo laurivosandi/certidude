@@ -6,14 +6,19 @@ import subprocess
 import tempfile
 from certidude import errors
 from certidude.wrappers import Certificate, Request
+from cryptography import x509
+from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID, AuthorityInformationAccessOID
 from configparser import ConfigParser
 from OpenSSL import crypto
 
-def certidude_request_certificate(server, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, org_unit=None, email_address=None, given_name=None, surname=None, autosign=False, wait=False, key_usage=None, extended_key_usage=None, ip_address=None, dns=None, bundle=False):
+def certidude_request_certificate(server, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, extended_key_usage_flags=None, org_unit=None, email_address=None, given_name=None, surname=None, autosign=False, wait=False, ip_address=None, dns=None, bundle=False, insecure=False):
     """
     Exchange CSR for certificate using Certidude HTTP API server
     """
-
     # Set up URL-s
     request_params = set()
     if autosign:
@@ -22,9 +27,10 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
         request_params.add("wait=forever")
 
     # Expand ca.example.com
-    authority_url = "http://%s/api/certificate/" % server
-    request_url = "http://%s/api/request/" % server
-    revoked_url = "http://%s/api/revoked/" % server
+    scheme = "http" if insecure else "https" # TODO: Expose in CLI
+    authority_url = "%s://%s/api/certificate/" % (scheme, server)
+    request_url = "%s://%s/api/request/" % (scheme, server)
+    revoked_url = "%s://%s/api/revoked/" % (scheme, server)
 
     if request_params:
         request_url = request_url + "?" + "&".join(request_params)
@@ -103,54 +109,62 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
 
         # Construct private key
         click.echo("Generating 4096-bit RSA key...")
-        key = crypto.PKey()
-        key.generate_key(crypto.TYPE_RSA, 4096)
+        key = rsa.generate_private_key(
+            public_exponent=65537,
+            key_size=4096,
+            backend=default_backend()
+        )
 
         # Dump private key
         key_partial = tempfile.mktemp(prefix=key_path + ".part")
         os.umask(0o077)
         with open(key_partial, "wb") as fh:
-            fh.write(crypto.dump_privatekey(crypto.FILETYPE_PEM, key))
+            fh.write(key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.TraditionalOpenSSL,
+                encryption_algorithm=serialization.NoEncryption(),
+            ))
 
-        # Construct CSR
-        csr = crypto.X509Req()
-        csr.set_version(2) # Corresponds to X.509v3
-        csr.set_pubkey(key)
-        csr.get_subject().CN = common_name
-
-        request = Request(csr)
-
-        # Set subject attributes
+        # Set subject name attributes
+        names = [x509.NameAttribute(NameOID.COMMON_NAME, common_name.decode("utf-8"))]
         if given_name:
-            request.given_name = given_name
+            names.append(x509.NameAttribute(NameOID.GIVEN_NAME, given_name.decode("utf-8")))
         if surname:
-            request.surname = surname
+            names.append(x509.NameAttribute(NameOID.SURNAME, surname.decode("utf-8")))
         if org_unit:
-            request.organizational_unit = org_unit
+            names.append(x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT, org_unit.decode("utf-8")))
 
         # Collect subject alternative names
-        subject_alt_name = set()
+        subject_alt_names = set()
         if email_address:
-            subject_alt_name.add("email:%s" % email_address)
+            subject_alt_names.add(x509.RFC822Name(email_address))
         if ip_address:
-            subject_alt_name.add("IP:%s" % ip_address)
+            subject_alt_names.add("IP:%s" % ip_address)
         if dns:
-            subject_alt_name.add("DNS:%s" % dns)
+            subject_alt_names.add(x509.DNSName(dns))
 
-        # Set extensions
-        extensions = []
-        if key_usage:
-            extensions.append(("keyUsage", key_usage, True))
-        if extended_key_usage:
-            extensions.append(("extendedKeyUsage", extended_key_usage, False))
-        if subject_alt_name:
-            extensions.append(("subjectAltName", ", ".join(subject_alt_name), False))
-        request.set_extensions(extensions)
 
-        # Dump CSR
+        # Construct CSR
+        csr = x509.CertificateSigningRequestBuilder(
+            ).subject_name(x509.Name(names))
+
+
+        if extended_key_usage_flags:
+            click.echo("Adding extended key usage extension: %s" % extended_key_usage_flags)
+            csr = csr.add_extension(x509.ExtendedKeyUsage(
+                extended_key_usage_flags), critical=True)
+
+        if subject_alt_names:
+            click.echo("Adding subject alternative name extension: %s" % subject_alt_names)
+            csr = csr.add_extension(
+                x509.SubjectAlternativeName(subject_alt_names),
+                critical=False)
+
+
+        # Sign & dump CSR
         os.umask(0o022)
-        with open(request_path + ".part", "w") as fh:
-            fh.write(request.dump())
+        with open(request_path + ".part", "wb") as f:
+            f.write(csr.sign(key, hashes.SHA256(), default_backend()).public_bytes(serialization.Encoding.PEM))
 
         click.echo("Writing private key to: %s" % key_path)
         os.rename(key_partial, key_path)
@@ -160,36 +174,35 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
     # We have CSR now, save the paths to client.conf so we could:
     # Update CRL, renew certificate, maybe something extra?
 
-    if not os.path.exists("/etc/certidude"):
-        os.makedirs("/etc/certidude")
-
-    clients = ConfigParser()
-    if os.path.exists("/etc/certidude/client.conf"):
-        clients.readfp(open("/etc/certidude/client.conf"))
-
-    if clients.has_section(server):
-        click.echo("Section %s already exists in /etc/certidude/client.conf, not reconfiguring" % server)
-    else:
-        clients.add_section(server)
-        clients.set(server, "trigger", "interface up")
-        clients.set(server, "key_path", key_path)
-        clients.set(server, "request_path", request_path)
-        clients.set(server, "certificate_path", certificate_path)
-        clients.set(server, "authority_path", authority_path)
-        clients.set(server, "key_path", key_path)
-        clients.set(server, "revocations_path", revocations_path)
-        clients.write(open("/etc/certidude/client.conf", "w"))
-        click.echo("Section %s added to /etc/certidude/client.conf" % repr(server))
-
     if os.path.exists(certificate_path):
         click.echo("Found certificate: %s" % certificate_path)
         # TODO: Check certificate validity, download CRL?
         return
 
+    # If machine is joined to domain attempt to present machine credentials for authentication
+    if os.path.exists("/etc/krb5.keytab") and os.path.exists("/etc/samba/smb.conf"):
+        # Get HTTP service ticket
+        from configparser import ConfigParser
+        cp = ConfigParser(delimiters=("="))
+        cp.readfp(open("/etc/samba/smb.conf"))
+        name = cp.get("global", "netbios name")
+        realm = cp.get("global", "realm")
+        os.environ["KRB5CCNAME"]="/tmp/ca.ticket"
+        os.system("kinit -k %s$ -S HTTP/%s@%s -t /etc/krb5.keytab" % (name, server, realm))
+        from requests_kerberos import HTTPKerberosAuth, OPTIONAL
+        auth = HTTPKerberosAuth(mutual_authentication=OPTIONAL, force_preemptive=True)
+    else:
+        auth = None
+
     click.echo("Submitting to %s, waiting for response..." % request_url)
     submission = requests.post(request_url,
+        auth=auth,
         data=open(request_path),
         headers={"Content-Type": "application/pkcs10", "Accept": "application/x-x509-user-cert,application/x-pem-file"})
+
+    # Destroy service ticket
+    if os.path.exists("/tmp/ca.ticket"):
+        os.system("kdestroy")
 
     if submission.status_code == requests.codes.ok:
         pass

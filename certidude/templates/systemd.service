@@ -1,0 +1,15 @@
+[Unit]
+Description=Certidude server
+After=network.target
+
+[Service]
+Environment=PYTHON_EGG_CACHE=/tmp/.cache
+Environment=KRB5_KTNAME={{kerberos_keytab}}
+PIDFile=/run/certidude/server.pid
+ExecStart={{ certidude_path }} serve {% if listen} -l {{listen}}{% endif %}{% if port %} -p {{port}}{% endif %}
+ExecReload=/bin/kill -s HUP $MAINPID
+ExecStop=/bin/kill -s TERM $MAINPID
+
+[Install]
+WantedBy=multi-user.target
+

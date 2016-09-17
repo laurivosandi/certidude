@@ -36,8 +36,6 @@ join
 	tag on device_tag.tag_id = tag.id
 join
 	device on device_tag.device_id = device.id
-where
-    device.cn = %s
 """
 
 
@@ -63,7 +61,7 @@ class ConfigResource(RelationalMixin):
     @login_required
     @authorize_admin
     def on_get(self, req, resp):
-        return self.iterfetch(SQL_SELECT_RULES)
+        return self.iterfetch(SQL_SELECT_TAGS)
 
 
 class ScriptResource(RelationalMixin):

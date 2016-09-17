@@ -1,4 +1,6 @@
 include README.rst
+include certidude/templates/*.sh
+include certidude/templates/*.service
 include certidude/templates/*.ovpn
 include certidude/templates/*.conf
 include certidude/templates/*.ini

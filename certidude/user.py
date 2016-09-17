@@ -5,7 +5,7 @@ import ldap
 import ldap.sasl
 import os
 import pwd
-from certidude import constants, config
+from certidude import const, config
 
 class User(object):
     def __init__(self, username, mail, given_name="", surname=""):
@@ -46,7 +46,7 @@ class PosixUserManager(object):
         _, _, _, _, gecos, _, _ = pwd.getpwnam(username)
         gecos = gecos.decode("utf-8").split(",")
         full_name = gecos[0]
-        mail = username + "@" + constants.DOMAIN
+        mail = username + "@" + const.DOMAIN
         if full_name and " " in full_name:
             given_name, surname = full_name.split(" ", 1)
             return User(username, mail, given_name, surname)
@@ -67,8 +67,8 @@ class DirectoryConnection(object):
     def __enter__(self):
         # TODO: Implement simple bind
         if not os.path.exists(config.LDAP_GSSAPI_CRED_CACHE):
-            raise ValueError("Ticket cache not initialized, unable to "
-                "authenticate with computer account against LDAP server!")
+            raise ValueError("Ticket cache at %s not initialized, unable to "
+                "authenticate with computer account against LDAP server!" % config.LDAP_GSSAPI_CRED_CACHE)
         os.environ["KRB5CCNAME"] = config.LDAP_GSSAPI_CRED_CACHE
         for server in config.LDAP_SERVERS:
             self.conn = ldap.initialize(server)
@@ -106,7 +106,7 @@ class ActiveDirectoryUserManager(object):
                     else:
                         given_name, surname = cn, ""
 
-                mail, = entry.get("mail") or entry.get("userPrincipalName") or (username + "@" + constants.DOMAIN,)
+                mail, = entry.get("mail") or entry.get("userPrincipalName") or (username + "@" + const.DOMAIN,)
                 return User(username.decode("utf-8"), mail.decode("utf-8"),
                     given_name.decode("utf-8"), surname.decode("utf-8"))
             raise User.DoesNotExist("User %s does not exist" % username)
@@ -121,7 +121,7 @@ class ActiveDirectoryUserManager(object):
                     continue
                 username, = entry.get("sAMAccountName")
                 cn, = entry.get("cn")
-                mail, = entry.get("mail") or entry.get("userPrincipalName") or (username + "@" + constants.DOMAIN,)
+                mail, = entry.get("mail") or entry.get("userPrincipalName") or (username + "@" + const.DOMAIN,)
                 if entry.get("givenName") and entry.get("sn"):
                     given_name, = entry.get("givenName")
                     surname, = entry.get("sn")

@@ -5,11 +5,13 @@ import configparser
 import ipaddress
 import os
 import string
+import const
 from random import choice
-from urllib.parse import urlparse
 
-cp = configparser.ConfigParser()
-cp.readfp(codecs.open("/etc/certidude/server.conf", "r", "utf8"))
+# Options that are parsed from config file are fetched here
+
+cp = configparser.RawConfigParser()
+cp.readfp(codecs.open(const.CONFIG_PATH, "r", "utf8"))
 
 AUTHENTICATION_BACKENDS = set([j for j in
     cp.get("authentication", "backends").split(" ") if j])   # kerberos, pam, ldap
@@ -27,9 +29,6 @@ AUTOSIGN_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "autosign subnets").split(" ") if j])
 REQUEST_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "request subnets").split(" ") if j]).union(AUTOSIGN_SUBNETS)
-
-SIGNER_SOCKET_PATH = "/run/certidude/signer.sock"
-SIGNER_PID_PATH = "/run/certidude/signer.pid"
 
 AUTHORITY_DIR = "/var/lib/certidude"
 AUTHORITY_PRIVATE_KEY_PATH = cp.get("authority", "private key path")
@@ -49,16 +48,13 @@ USER_MULTIPLE_CERTIFICATES = {
 CERTIFICATE_BASIC_CONSTRAINTS = "CA:FALSE"
 CERTIFICATE_KEY_USAGE_FLAGS = "digitalSignature,keyEncipherment"
 CERTIFICATE_EXTENDED_KEY_USAGE_FLAGS = "clientAuth"
-CERTIFICATE_LIFETIME = int(cp.get("signature", "certificate lifetime"))
+CERTIFICATE_LIFETIME = cp.getint("signature", "certificate lifetime")
 CERTIFICATE_AUTHORITY_URL = cp.get("signature", "certificate url")
 CERTIFICATE_CRL_URL = cp.get("signature", "revoked url")
 
-REVOCATION_LIST_LIFETIME = int(cp.get("signature", "revocation list lifetime"))
+REVOCATION_LIST_LIFETIME = cp.getint("signature", "revocation list lifetime")
 
-PUSH_TOKEN = "".join([choice(string.ascii_letters + string.digits) for j in range(0,32)])
-
-PUSH_TOKEN = "ca"
-
+PUSH_TOKEN = cp.get("push", "token")
 PUSH_EVENT_SOURCE = cp.get("push", "event source")
 PUSH_LONG_POLL = cp.get("push", "long poll")
 PUSH_PUBLISH = cp.get("push", "publish")
