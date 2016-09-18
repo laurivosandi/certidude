@@ -16,8 +16,7 @@ cache:
   directories:
     - $HOME/.cache/pip
 addons:
-  hostname:
-    buildbot
+  hostname: buildbot
   apt:
     packages:
     - python-ldap
