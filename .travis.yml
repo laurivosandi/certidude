@@ -18,11 +18,5 @@ cache:
 addons:
   apt:
     packages:
-    - python-configparser
-    - python-setuptools
     - python-ldap
-    - python-mysql.connector
-    - python-pysqlite2
-    - python-cffi
-    - cython
 #  - pip install codecov pytest-cov
