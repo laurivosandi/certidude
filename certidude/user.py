@@ -46,7 +46,7 @@ class PosixUserManager(object):
         _, _, _, _, gecos, _, _ = pwd.getpwnam(username)
         gecos = gecos.decode("utf-8").split(",")
         full_name = gecos[0]
-        mail = username + "@" + const.DOMAIN
+        mail = u"%s@%s" % (username, const.DOMAIN)
         if full_name and " " in full_name:
             given_name, surname = full_name.split(" ", 1)
             return User(username, mail, given_name, surname)

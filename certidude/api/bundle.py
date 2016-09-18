@@ -8,10 +8,10 @@ from certidude.auth import login_required
 logger = logging.getLogger("api")
 
 KEYWORDS = (
-    ("Android", "android"),
-    ("iPhone", "iphone"),
-    ("iPad", "ipad"),
-    ("Ubuntu", "ubuntu"),
+    (u"Android", u"android"),
+    (u"iPhone", u"iphone"),
+    (u"iPad", u"ipad"),
+    (u"Ubuntu", u"ubuntu"),
 )
 
 class BundleResource(object):
@@ -24,9 +24,10 @@ class BundleResource(object):
                     device_identifier = value
                     break
             else:
-                device_identifier = "unknown-device"
-            common_name += "@" + device_identifier + "-" + \
-                hashlib.sha256(req.user_agent).hexdigest()[:8]
+                device_identifier = u"unknown-device"
+            common_name = u"%s@%s-%s" % (common_name, device_identifier, \
+                hashlib.sha256(req.user_agent).hexdigest()[:8])
+
         logger.info(u"Signing bundle %s for %s", common_name, req.context.get("user"))
         resp.set_header("Content-Type", "application/x-pkcs12")
         resp.set_header("Content-Disposition", "attachment; filename=%s.p12" % common_name.encode("ascii"))
