@@ -70,7 +70,7 @@ TODO
 Install
 -------
 
-To install Certidude:
+To install Certidude server:
 
 .. code:: bash
 
@@ -81,7 +81,7 @@ To install Certidude:
         ldap-utils krb5-user \
         libsasl2-modules-gssapi-mit \
         libsasl2-dev libldap2-dev
-    pip install certidude
+    pip install simplepam pykerberos certidude
 
 
 Setting up authority
@@ -115,7 +115,7 @@ Then proceed to install `nchan <https://nchan.slact.net/>`_:
 
 Certidude can set up certificate authority relatively easily.
 Following will set up certificate authority in ``/var/lib/certidude/hostname.domain.tld``,
-configure gunicorn service for your platform,
+configure systemd service for your platform,
 nginx in ``/etc/nginx/sites-available/certidude.conf``,
 cronjobs in ``/etc/cron.hourly/certidude`` and much more:
 
@@ -123,19 +123,12 @@ cronjobs in ``/etc/cron.hourly/certidude`` and much more:
 
     certidude setup authority
 
-Tweak the configuration in ``/etc/certidude/server.conf`` until you meet your requirements and
-spawn the signer process:
+Tweak the configuration in ``/etc/certidude/server.conf`` until you meet your requirements
+and start the services:
 
 .. code:: bash
 
-    certidude signer spawn
-
-Finally restart services:
-
-.. code:: bash
-
-    service nginx restart
-    service uwsgi restart
+    systemctl restart certidude
 
 
 Certificate management
