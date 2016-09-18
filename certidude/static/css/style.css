@@ -168,8 +168,8 @@ pre {
 
 .icon{
     background-size: 24px;
-    background-position: 6px 2px;
-    padding-left: 32px;
+    background-position: 8px 5px;
+    padding-left: 36px;
     background-repeat: no-repeat;
     display: block;
     vertical-align: text-bottom;
@@ -224,6 +224,8 @@ select {
 
 .icon.wireless { background-image: url("../img/iconmonstr-wireless-6.svg"); }
 .icon.password { background-image: url("../img/iconmonstr-lock-3.svg"); }
+
+.icon.upload { background-image: url("../img/iconmonstr-upload-17.svg"); }
 
 /* Make sure this is the last one */
 .icon.busy{background-image:url("https://software.opensuse.org/assets/ajax-loader-ea46060b6c9f42822a3d58d075c83ea2.gif");}

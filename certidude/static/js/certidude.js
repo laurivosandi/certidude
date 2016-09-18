@@ -287,6 +287,33 @@ $(document).ready(function() {
                 });
             }
 
+
+            if (session.request_submission_allowed) {
+                $("#request_submit").click(function() {
+                    $(this).addClass("busy");
+                    $.ajax({
+                        method: "POST",
+                        contentType: "application/pkcs10",
+                        url: "/api/request/",
+                        data: $("#request_body").val(),
+                        dataType: "text",
+                        complete: function(xhr, status) {
+                            console.info("Request submitted successfully, server returned", xhr.status,  status);
+                            $("#request_submit").removeClass("busy");
+                        },
+                        success: function() {
+                            // Clear textarea on success
+                            $("#request_body").val("");
+                        },
+                        error: function(xhr, status, e) {
+                            console.info("Submitting request failed with:", status, e);
+                            alert(e);
+                        }
+                    });
+
+                });
+            }
+
             /**
              * Fetch leases associated with certificates
              */

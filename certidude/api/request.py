@@ -33,6 +33,10 @@ class RequestListResource(object):
 
         body = req.stream.read(req.content_length)
 
+        # Normalize body, TODO: newlines
+        if not body.endswith("\n"):
+            body += "\n"
+
         csr = Request(body)
 
         if not csr.common_name:

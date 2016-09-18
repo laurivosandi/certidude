@@ -126,13 +126,29 @@ forbidden
 <section id="requests">
     <h1>Pending requests</h1>
 
-    <p>Submit a certificate signing request with Certidude:</p>
-    <pre>certidude setup client {{session.common_name}}</pre>
+    {% if session.request_submission_allowed %}
+      <p>Generate private key and certificate signing request:</p>
+
+      <pre>
+openssl genrsa -out example.key 2048
+openssl req -new -sha256 -key example.key -out example.csr
+cat example.csr
+</pre>
+
+      <p>Paste the contents here and click submit:</p>
+      <textarea id="request_body" style="width:100%; min-height: 4em;" placeholder="-----BEGIN CERTIFICATE REQUEST-----
+...
+-----END CERTIFICATE REQUEST-----"></textarea>
+      <button class="icon upload" id="request_submit" style="float:none;">Submit</button>
+    {% else %}
+      <p>Submit a certificate signing request with Certidude:</p>
+      <pre>certidude setup client {{session.common_name}}</pre>
+    {% endif %}
 
     <ul id="pending_requests">
-        {% for request in session.authority.requests %}
+      {% for request in session.authority.requests %}
              {% include "views/request.html" %}
-	    {% endfor %}
+      {% endfor %}
         <li class="notify">
             <p>No certificate signing requests to sign!</p>
         </li>
