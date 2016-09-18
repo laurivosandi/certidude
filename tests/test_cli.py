@@ -1,6 +1,6 @@
-import os
 from click.testing import CliRunner
 from certidude.cli import entry_point as cli
+from datetime import datetime, timedelta
 
 runner = CliRunner()
 
@@ -13,28 +13,13 @@ def test_cli_setup_authority():
     # {crl-distribution,ocsp-responder}-url
     # email-address
     # inbox, outbox
-    with runner.isolated_filesystem():
-        result = runner.invoke(cli, ['setup', 'authority', 'ca'])
 
-        assert not result.exception
-        # Check whether required files were generated
-        for f in ('ca_key.pem', 'ca_crt.pem', 'ca_crl.pem',
-                  'serial', 'openssl.cnf.example'):
-            assert os.path.isfile(os.path.join('ca', f))
-        for d in ('requests', 'revoked', 'signed'):
-            assert os.path.isdir(os.path.join('ca', d))
+    result = runner.invoke(cli, ['setup', 'authority'])
+    assert not result.exception
 
-def test_cli_setup_authority_invalid_name():
-    with runner.isolated_filesystem():
-        result = runner.invoke(cli, ['setup', 'authority'])
-        assert result.exception
+    from certidude import authority
+    assert authority.certificate.serial_number == '0000000000000000000000000000000000000001'
+    assert authority.certificate.signed < datetime.now()
+    assert authority.certificate.expires > datetime.now() + timedelta(days=7000)
 
-        result = runner.invoke(cli, ['setup', 'authority', '""'])
-        assert result.exception
-
-def test_cli_setup_authority_overwrite():
-    with runner.isolated_filesystem():
-        os.mkdir('foo')
-
-        result = runner.invoke(cli, ['setup', 'authority', 'foo'])
-        assert result.exception
+        
