@@ -13,7 +13,12 @@ SIGNER_SOCKET_PATH = os.path.join(CONFIG_DIR, "signer.sock") if os.getuid() else
 SIGNER_PID_PATH = os.path.join(CONFIG_DIR, "signer.pid") if os.getuid() else "/run/certidude/signer.pid"
 SIGNER_LOG_PATH = os.path.join(CONFIG_DIR, "signer.log") if os.getuid() else "/var/log/certidude-signer.log"
 
-FQDN = socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, 0, 0, socket.AI_CANONNAME)[0][3]
+# Work around the 'asn1 encoding routines:ASN1_mbstring_ncopy:string too long'
+# issue within OpenSSL ASN1 parser while running on Travis
+if os.getenv("TRAVIS"):
+    FQDN = "buildbot"
+else:
+    FQDN = socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, 0, 0, socket.AI_CANONNAME)[0][3]
 
 if "." in FQDN:
     HOSTNAME, DOMAIN = FQDN.split(".", 1)
