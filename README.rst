@@ -30,26 +30,34 @@ Usecases
 
 Following usecases are covered:
 
-I am a sysadmin. I want to allow my Ubuntu roadwarriors to
-connect to network services at headquarters via OpenVPN.
-I want to make use of domain membership trust to automatically sign the certificates.
-Common name is set to computers hostname without the domain suffix.
-NetworkManager integration is necessary so the user can see the VPN connection state.
-Software installation and one simple configuration file should suffice to get up and running.
+* I am a sysadmin. Employees with different operating systems need to access
+  internal network services over OpenVPN.
+  I want to provide web interface for submitting the certificate signing request online.
+  I want to get notified via e-mail when a user submits a certificate.
+  Once I have signed the certificate I want the user to have easy way to download
+  the signed certificate from the same web interface.
+  Request submission and signing has to be visible in the web interface
+  immediately. Common name is set to username.
 
-I am a sysadmin. Employees with different operating systems need to access
-internal network services over IPSec.
-I want to provide web interface for submitting the certificate signing request online.
-I want to get notified via e-mail when a user submits a certificate.
-Once I have signed the certificate I want the user to have easy way to download
-the signed certificate from the same web interface.
-Common name is set to username.
+* I am a sysadmin. I want to allow my Ubuntu roadwarriors to
+  connect to network services at headquarters via IPSec.
+  I want to make use of domain membership trust to automatically sign the certificates.
+  Common name is set to computers hostname without the domain suffix.
+  NetworkManager integration is necessary so the user can see the VPN connection state.
+  Software installation and one simple configuration file should suffice to get up and running.
 
-I am a sysadmin. Employees need to get access to intranet wiki using
-HTTPS certificates possibly with multiple devices.
-Common name is set to username@device-identifier.
-The user logs in using domain account in the web interface and can automatically
-retrieve a P12 bundle which can be installed on her Android device.
+* I am a sysadmin. Employees need to get access to intranet wiki using
+  HTTPS certificates possibly with multiple devices.
+  Common name is set to username@device-identifier.
+  The user logs in using domain account in the web interface and can automatically
+  retrieve a P12 bundle which can be installed on her Android device.
+
+Future usecases:
+
+* I want to store the private key of my CA on a SmartCard.
+  I want to make use of it while I log in to my CA web interface.
+  When I am asked to sign a certificate I have to enter PIN code to unlock the
+  SmartCard.
 
 
 Features
