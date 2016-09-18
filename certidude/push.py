@@ -11,6 +11,10 @@ def publish(event_type, event_data):
     """
     Publish event on push server
     """
+    if not config.PUSH_PUBLISH:
+        # Push server disabled
+        return
+
     if not isinstance(event_data, basestring):
         from certidude.decorators import MyEncoder
         event_data = json.dumps(event_data, cls=MyEncoder)
