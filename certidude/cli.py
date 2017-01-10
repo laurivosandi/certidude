@@ -258,11 +258,12 @@ def certidude_request(fork):
                 with open(os.path.join("/etc/NetworkManager/system-connections", endpoint), "w") as fh:
                     nm_config.write(fh)
                     click.echo("Created %s" % fh.name)
+                os.system("nmcli con reload")
                 continue
 
 
             # IPSec set up with NetworkManager
-            if service_config.get(endpoint, "service") == "network-manager/strongswan":
+            elif service_config.get(endpoint, "service") == "network-manager/strongswan":
                 client_config = ConfigParser()
                 nm_config.add_section("connection")
                 nm_config.set("connection", "id", endpoint)
@@ -293,6 +294,7 @@ def certidude_request(fork):
                 with open(os.path.join("/etc/NetworkManager/system-connections", endpoint), "w") as fh:
                     nm_config.write(fh)
                     click.echo("Created %s" % fh.name)
+                os.system("nmcli con reload")
                 continue
 
             # TODO: Puppet, OpenLDAP, <insert awesomeness here>
