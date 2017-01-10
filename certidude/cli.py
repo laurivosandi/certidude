@@ -82,6 +82,10 @@ def certidude_request(fork):
 
     for authority in clients.sections():
         try:
+            endpoint_insecure = clients.getboolean(authority, "insecure")
+        except NoOptionError:
+            endpoint_insecure = False
+        try:
             endpoint_common_name = clients.get(authority, "common name")
         except NoOptionError:
             endpoint_common_name = const.HOSTNAME
@@ -166,6 +170,7 @@ def certidude_request(fork):
                     endpoint_common_name,
                     extended_key_usage_flags,
                     None,
+                    insecure=endpoint_insecure,
                     autosign=True,
                     wait=True)
                 break
