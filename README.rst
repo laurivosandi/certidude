@@ -325,8 +325,9 @@ To generate templates:
 
     apt-get install npm nodejs
     sudo ln -s nodejs /usr/bin/node # Fix 'env node' on Ubuntu 14.04
-    npm install -g nunjucks
+    npm install -g nunjucks@2.5.2
     nunjucks-precompile --include "\\.html$" --include "\\.svg$" certidude/static/ > certidude/static/js/templates.js
+    cp /usr/local/lib/node_modules/nunjucks/browser/*.js certidude/static/js/
 
 To run from source tree:
 
