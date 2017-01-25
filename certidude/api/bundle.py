@@ -12,6 +12,8 @@ KEYWORDS = (
     (u"iPhone", u"iphone"),
     (u"iPad", u"ipad"),
     (u"Ubuntu", u"ubuntu"),
+    (u"Fedora", u"fedora"),
+    (u"Linux", u"linux"),
 )
 
 class BundleResource(object):
@@ -29,8 +31,15 @@ class BundleResource(object):
                 hashlib.sha256(req.user_agent).hexdigest()[:8])
 
         logger.info(u"Signing bundle %s for %s", common_name, req.context.get("user"))
-        resp.set_header("Content-Type", "application/x-pkcs12")
-        resp.set_header("Content-Disposition", "attachment; filename=%s.p12" % common_name.encode("ascii"))
-        resp.body, cert = authority.generate_pkcs12_bundle(common_name,
-                                owner=req.context.get("user"))
-
+        if config.BUNDLE_FORMAT == "p12":
+            resp.set_header("Content-Type", "application/x-pkcs12")
+            resp.set_header("Content-Disposition", "attachment; filename=%s.p12" % common_name.encode("ascii"))
+            resp.body, cert = authority.generate_pkcs12_bundle(common_name,
+                owner=req.context.get("user"))
+        elif config.BUNDLE_FORMAT == "ovpn":
+            resp.set_header("Content-Type", "application/x-openvpn")
+            resp.set_header("Content-Disposition", "attachment; filename=%s.ovpn" % common_name.encode("ascii"))
+            resp.body, cert = authority.generate_ovpn_bundle(common_name,
+                owner=req.context.get("user"))
+        else:
+            raise ValueError("Unknown bundle format %s" % config.BUNDLE_FORMAT)

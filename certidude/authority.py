@@ -14,13 +14,13 @@ from cryptography.hazmat.primitives import hashes, serialization
 from certidude import config, push, mailer, const
 from certidude.wrappers import Certificate, Request
 from certidude import errors
+from jinja2 import Template
 
 RE_HOSTNAME =  "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])(@(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9]))?$"
 
 # https://securityblog.redhat.com/2014/06/18/openssl-privilege-separation-analysis/
 # https://jamielinux.com/docs/openssl-certificate-authority/
 # http://pycopia.googlecode.com/svn/trunk/net/pycopia/ssl/certs.py
-
 
 # Cache CA certificate
 certificate = Certificate(open(config.AUTHORITY_CERTIFICATE_PATH))
@@ -185,6 +185,39 @@ def delete_request(common_name):
     requests.delete(config.PUSH_PUBLISH % request.fingerprint(),
         headers={"User-Agent": "Certidude API"})
 
+def generate_ovpn_bundle(common_name, owner=None):
+    # Construct private key
+    click.echo("Generating 4096-bit RSA key...")
+
+    key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=4096,
+        backend=default_backend()
+    )
+
+    csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
+        x509.NameAttribute(k, v) for k, v in (
+            (NameOID.COMMON_NAME, common_name),
+            (NameOID.GIVEN_NAME, owner and owner.given_name),
+            (NameOID.SURNAME, owner and owner.surname),
+        ) if v
+    ]))
+
+    # Sign CSR
+    cert = sign(Request(
+        csr.sign(key, hashes.SHA512(), default_backend()).public_bytes(serialization.Encoding.PEM)), overwrite=True)
+
+    bundle = Template(open(config.OPENVPN_BUNDLE_TEMPLATE).read()).render(
+        ca = certificate.dump(),
+        key = key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption()
+        ),
+        cert = cert.dump(),
+        crl=export_crl(),
+    )
+    return bundle, cert
 
 def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
     """

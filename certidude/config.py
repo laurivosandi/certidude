@@ -40,6 +40,9 @@ SIGNED_DIR = cp.get("authority", "signed dir")
 REVOKED_DIR = cp.get("authority", "revoked dir")
 OUTBOX = cp.get("authority", "outbox")
 
+BUNDLE_FORMAT = cp.get("authority", "bundle format")
+OPENVPN_BUNDLE_TEMPLATE = cp.get("authority", "openvpn bundle template")
+
 USER_CERTIFICATE_ENROLLMENT = {
     "forbidden": False, "single allowed": True, "multiple allowed": True }[
     cp.get("authority", "user certificate enrollment")]
