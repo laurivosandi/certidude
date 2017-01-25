@@ -18,8 +18,10 @@ AUTHENTICATION_BACKENDS = set([j for j in
 AUTHORIZATION_BACKEND = cp.get("authorization", "backend")  # whitelist, ldap, posix
 ACCOUNTS_BACKEND = cp.get("accounts", "backend")             # posix, ldap
 
-if ACCOUNTS_BACKEND == "ldap":
-    LDAP_GSSAPI_CRED_CACHE = cp.get("accounts", "ldap gssapi credential cache")
+LDAP_AUTHENTICATION_URI = cp.get("authentication", "ldap uri")
+LDAP_GSSAPI_CRED_CACHE = cp.get("accounts", "ldap gssapi credential cache")
+LDAP_ACCOUNTS_URI = cp.get("accounts", "ldap uri")
+LDAP_BASE = cp.get("accounts", "ldap base")
 
 USER_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "user subnets").split(" ") if j])
@@ -77,18 +79,5 @@ elif "ldap" == AUTHORIZATION_BACKEND:
     if "%s" not in LDAP_ADMIN_FILTER: raise ValueError("No placeholder %s for username in 'ldap admin filter'")
 else:
     raise NotImplementedError("Unknown authorization backend '%s'" % AUTHORIZATION_BACKEND)
-
-for line in open("/etc/ldap/ldap.conf"):
-    line = line.strip().lower()
-    if "#" in line:
-        line, _ = line.split("#", 1)
-    if not " " in line:
-        continue
-    key, value = line.split(" ", 1)
-    if key == "uri":
-        LDAP_SERVERS = set([j for j in value.split(" ") if j])
-        click.echo("LDAP servers: %s" % " ".join(LDAP_SERVERS))
-    elif key == "base":
-        LDAP_BASE = value
 
 # TODO: Check if we don't have base or servers

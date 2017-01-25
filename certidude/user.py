@@ -70,17 +70,15 @@ class DirectoryConnection(object):
             raise ValueError("Ticket cache at %s not initialized, unable to "
                 "authenticate with computer account against LDAP server!" % config.LDAP_GSSAPI_CRED_CACHE)
         os.environ["KRB5CCNAME"] = config.LDAP_GSSAPI_CRED_CACHE
-        for server in config.LDAP_SERVERS:
-            self.conn = ldap.initialize(server)
-            self.conn.set_option(ldap.OPT_REFERRALS, 0)
-            click.echo("Connecing to %s using Kerberos ticket cache from %s" %
-                (server, config.LDAP_GSSAPI_CRED_CACHE))
-            self.conn.sasl_interactive_bind_s('', ldap.sasl.gssapi())
-            return self.conn
-        raise ValueError("No LDAP servers specified!")
+        self.conn = ldap.initialize(config.LDAP_ACCOUNTS_URI)
+        self.conn.set_option(ldap.OPT_REFERRALS, 0)
+        click.echo("Connecing to %s using Kerberos ticket cache from %s" %
+            (config.LDAP_ACCOUNTS_URI, config.LDAP_GSSAPI_CRED_CACHE))
+        self.conn.sasl_interactive_bind_s('', ldap.sasl.gssapi())
+        return self.conn
 
     def __exit__(self, type, value, traceback):
-        self.conn.unbind_s
+        self.conn.unbind_s()
 
 
 class ActiveDirectoryUserManager(object):
