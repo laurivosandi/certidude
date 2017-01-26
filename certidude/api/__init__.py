@@ -75,7 +75,7 @@ class SessionResource(object):
             ) if req.context.get("user").is_admin() else None,
             features=dict(
                 tagging=config.TAGGING_BACKEND,
-                leases=False, #config.LEASES_BACKEND,
+                leases=config.LEASES_BACKEND,
                 logging=config.LOGGING_BACKEND))
 
 
@@ -122,7 +122,7 @@ def certidude_app():
     from .revoked import RevocationListResource
     from .signed import SignedCertificateListResource, SignedCertificateDetailResource
     from .request import RequestListResource, RequestDetailResource
-    from .lease import LeaseResource
+    from .lease import LeaseResource, StatusFileLeaseResource
     from .whois import WhoisResource
     from .tag import TagResource, TagDetailResource
     from .cfg import ConfigResource, ScriptResource
@@ -140,8 +140,11 @@ def certidude_app():
     app.add_route("/api/", SessionResource())
 
     # Gateway API calls, should this be moved to separate project?
-    app.add_route("/api/lease/", LeaseResource())
-    app.add_route("/api/whois/", WhoisResource())
+    if config.LEASES_BACKEND == "openvpn-status":
+        app.add_route("/api/lease/", StatusFileLeaseResource(config.OPENVPN_STATUS_URI))
+    elif config.LEASES_BACKEND == "sql":
+        app.add_route("/api/lease/", LeaseResource())
+        app.add_route("/api/whois/", WhoisResource())
 
     # Optional user enrollment API call
     if config.USER_CERTIFICATE_ENROLLMENT:

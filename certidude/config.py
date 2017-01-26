@@ -68,6 +68,8 @@ TAGGING_BACKEND = cp.get("tagging", "backend")
 LOGGING_BACKEND = cp.get("logging", "backend")
 LEASES_BACKEND = cp.get("leases", "backend")
 
+OPENVPN_STATUS_URI = cp.get("leases", "openvpn status uri")
+
 
 if "whitelist" == AUTHORIZATION_BACKEND:
     USERS_WHITELIST = set([j for j in  cp.get("authorization", "users whitelist").split(" ") if j])
