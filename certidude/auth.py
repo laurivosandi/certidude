@@ -122,9 +122,9 @@ def authenticate(optional=False):
             import ldap
 
             if not req.auth:
-                resp.append_header("WWW-Authenticate", "Basic")
-                raise falcon.HTTPUnauthorized("Forbidden",
-                    "Please authenticate with %s domain account or supply UPN" % const.DOMAIN)
+                raise falcon.HTTPUnauthorized("Unauthorized",
+                    "No authentication header provided",
+                    ("Basic",))
 
             if not req.auth.startswith("Basic "):
                 raise falcon.HTTPForbidden("Forbidden", "Bad header: %s" % req.auth)
@@ -133,26 +133,35 @@ def authenticate(optional=False):
             basic, token = req.auth.split(" ", 1)
             user, passwd = b64decode(token).split(":", 1)
 
-            for server in config.LDAP_SERVERS:
-                click.echo("Connecting to %s as %s" % (server, user))
-                conn = ldap.initialize(server)
-                conn.set_option(ldap.OPT_REFERRALS, 0)
-                try:
-                    conn.simple_bind_s(user if "@" in user else "%s@%s" % (user, const.DOMAIN), passwd)
-                except ldap.LDAPError, e:
-                    resp.append_header("WWW-Authenticate", "Basic")
-                    logger.critical(u"LDAP bind authentication failed for user %s from  %s",
-                        repr(user), req.context.get("remote_addr"))
-                    raise falcon.HTTPUnauthorized("Forbidden",
-                        "Please authenticate with %s domain account or supply UPN" % const.DOMAIN)
+            click.echo("Connecting to %s as %s" % (config.LDAP_AUTHENTICATION_URI, user))
+            conn = ldap.initialize(config.LDAP_AUTHENTICATION_URI)
+            conn.set_option(ldap.OPT_REFERRALS, 0)
 
-                req.context["ldap_conn"] = conn
-                break
-            else:
-                raise ValueError("No LDAP servers!")
+            if "@" not in user:
+                user = "%s@%s" % (user, const.DOMAIN)
+                logger.debug("Expanded username to %s", user)
 
+            try:
+                conn.simple_bind_s(user, passwd)
+            except ldap.STRONG_AUTH_REQUIRED:
+                logger.critical("LDAP server demands encryption, use ldaps:// instead of ldaps://")
+                raise
+            except ldap.SERVER_DOWN:
+                logger.critical("Failed to connect LDAP server at %s, are you sure LDAP server's CA certificate has been copied to this machine?",
+                    config.LDAP_AUTHENTICATION_URI)
+                raise
+            except ldap.INVALID_CREDENTIALS:
+                logger.critical(u"LDAP bind authentication failed for user %s from  %s",
+                    repr(user), req.context.get("remote_addr"))
+                raise falcon.HTTPUnauthorized("Forbidden",
+                    "Please authenticate with %s domain account or supply UPN" % const.DOMAIN,
+		("Basic",))
+
+            req.context["ldap_conn"] = conn
             req.context["user"] = User.objects.get(user)
-            return func(resource, req, resp, *args, **kwargs)
+            retval = func(resource, req, resp, *args, **kwargs)
+            conn.unbind_s()
+            return retval
 
 
         def pam_authenticate(resource, req, resp, *args, **kwargs):

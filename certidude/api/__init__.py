@@ -44,7 +44,6 @@ class SessionResource(object):
     @login_required
     @event_source
     def on_get(self, req, resp):
-
         return dict(
             user = dict(
                 name=req.context.get("user").name,
