@@ -1,7 +1,6 @@
 
 import click
 import falcon
-import kerberos # If this fails pip install kerberos
 import logging
 import os
 import re
@@ -13,6 +12,7 @@ from certidude import config, const
 logger = logging.getLogger("api")
 
 if "kerberos" in config.AUTHENTICATION_BACKENDS:
+    import kerberos # If this fails pip install kerberos
     ktname = os.getenv("KRB5_KTNAME")
 
     if not ktname:
@@ -186,7 +186,7 @@ def authenticate(optional=False):
             if not simplepam.authenticate(user, passwd, "sshd"):
                 logger.critical(u"Basic authentication failed for user %s from  %s",
                     repr(user), req.context.get("remote_addr"))
-                raise falcon.HTTPForbidden("Forbidden", "Invalid password")
+                raise falcon.HTTPUnauthorized("Forbidden", "Invalid password", ("Basic",))
 
             req.context["user"] = User.objects.get(user)
             return func(resource, req, resp, *args, **kwargs)
