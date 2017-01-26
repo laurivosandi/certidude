@@ -1,7 +1,6 @@
 
 import click
 import falcon
-import kerberos # If this fails pip install kerberos
 import logging
 import os
 import re
@@ -13,6 +12,7 @@ from certidude import config, const
 logger = logging.getLogger("api")
 
 if "kerberos" in config.AUTHENTICATION_BACKENDS:
+    import kerberos # If this fails pip install kerberos
     ktname = os.getenv("KRB5_KTNAME")
 
     if not ktname:

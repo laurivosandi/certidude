@@ -1174,10 +1174,11 @@ def certidude_serve(port, listen):
     from certidude import config
 
     # Fetch UID, GID of certidude user
-    import pwd
-    _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
-    restricted_groups = []
-    restricted_groups.append(gid)
+    if os.getuid() == 0:
+        import pwd
+        _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
+        restricted_groups = []
+        restricted_groups.append(gid)
 
     """
     Spawn signer process
