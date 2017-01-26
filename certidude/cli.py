@@ -239,7 +239,7 @@ def certidude_request(fork):
                 nm_config.set("vpn", "connection-type", "tls")
                 nm_config.set("vpn", "comp-lzo", "yes")
                 nm_config.set("vpn", "cert-pass-flags", "0")
-                nm_config.set("vpn", "tap-dev", "yes")
+                nm_config.set("vpn", "tap-dev", "no")
                 nm_config.set("vpn", "remote-cert-tls", "server") # Assert TLS Server flag of X.509 certificate
                 nm_config.set("vpn", "remote", service_config.get(endpoint, "remote"))
                 nm_config.set("vpn", "key", endpoint_key_path)
