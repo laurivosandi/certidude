@@ -39,11 +39,14 @@
 
     #}
 
+    {% if session.features.tagging %}
     <div class="tags">
         <select class="icon tag" data-cn="{{ certificate.common_name }}" onChange="onNewTagClicked();">
         <option value="">Add tag...</option>
             {% include 'views/tagtypes.html' %}
         </select>
     </div>
+    {% endif %}
+
     <div class="status"></div>
 </li>
