@@ -186,7 +186,7 @@ def authenticate(optional=False):
             if not simplepam.authenticate(user, passwd, "sshd"):
                 logger.critical(u"Basic authentication failed for user %s from  %s",
                     repr(user), req.context.get("remote_addr"))
-                raise falcon.HTTPForbidden("Forbidden", "Invalid password")
+                raise falcon.HTTPUnauthorized("Forbidden", "Invalid password", ("Basic",))
 
             req.context["user"] = User.objects.get(user)
             return func(resource, req, resp, *args, **kwargs)
