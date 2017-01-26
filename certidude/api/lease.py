@@ -1,9 +1,12 @@
 
 from datetime import datetime
+from dateutil import tz
 from pyasn1.codec.der import decoder
 from certidude import config
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize
+
+localtime = tz.tzlocal()
 
 OIDS = {
     (2, 5, 4,  3) : 'CN',   # common name
@@ -39,10 +42,12 @@ class StatusFileLeaseResource(object):
         from openvpn_status import parse_status
         from urllib import urlopen
         fh = urlopen(self.uri)
+        # openvpn-status.log has no information about timezone
+        # and dates marked there use local time instead of UTC
         status = parse_status(fh.read())
         for cn, e in status.routing_table.items():
             yield {
-                "acquired": status.client_list[cn].connected_since,
+                "acquired": status.client_list[cn].connected_since.replace(tzinfo=localtime)
                 "released": None,
                 "address":  e.virtual_address,
                 "identity": "CN=%s" % cn, # BUGBUG
