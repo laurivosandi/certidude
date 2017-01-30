@@ -180,15 +180,18 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
         return
 
     # If machine is joined to domain attempt to present machine credentials for authentication
-    if os.path.exists("/etc/krb5.keytab") and os.path.exists("/etc/samba/smb.conf"):
-        # Get HTTP service ticket
-        from configparser import ConfigParser
-        cp = ConfigParser(delimiters=("="))
-        cp.readfp(open("/etc/samba/smb.conf"))
-        name = cp.get("global", "netbios name")
-        realm = cp.get("global", "realm")
+    if os.path.exists("/etc/krb5.keytab"):
         os.environ["KRB5CCNAME"]="/tmp/ca.ticket"
-        os.system("kinit -k %s$ -S HTTP/%s@%s -t /etc/krb5.keytab" % (name, server, realm))
+        # If Samba configuration exists assume NetBIOS name was used in keytab
+        if os.path.exists("/etc/samba/smb.conf"):
+            from configparser import ConfigParser
+            cp = ConfigParser(delimiters=("="))
+            cp.readfp(open("/etc/samba/smb.conf"))
+            name = cp.get("global", "netbios name")
+            os.system("kinit -S HTTP/%s -k %s$" % (name, server))
+        else:
+            os.system("kinit -S HTTP/%s -k %s$" % (const.HOSTNAME.lower(), server) # Mac OS X
+            os.system("kinit -S HTTP/%s -k %s$" % (const.HOSTNAME.upper(), server) # Fedora /w SSSD
         from requests_kerberos import HTTPKerberosAuth, OPTIONAL
         auth = HTTPKerberosAuth(mutual_authentication=OPTIONAL, force_preemptive=True)
     else:
