@@ -47,7 +47,7 @@ class StatusFileLeaseResource(object):
         status = parse_status(fh.read())
         for cn, e in status.routing_table.items():
             yield {
-                "acquired": status.client_list[cn].connected_since.replace(tzinfo=localtime)
+                "acquired": status.client_list[cn].connected_since.replace(tzinfo=localtime),
                 "released": None,
                 "address":  e.virtual_address,
                 "identity": "CN=%s" % cn, # BUGBUG

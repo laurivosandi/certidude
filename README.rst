@@ -114,7 +114,7 @@ System dependencies for Ubuntu 16.04:
 .. code:: bash
 
     apt install -y python python-pip python-dev cython \
-        python-cffi python-configparser \
+        python-cffi python-configparser python-dateutil \
         python-pysqlite2 python-mysql.connector python-ldap \
         build-essential libffi-dev libssl-dev libkrb5-dev \
         ldap-utils krb5-user \
