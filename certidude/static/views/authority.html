@@ -181,7 +181,8 @@ cat example.csr
 <section id="revoked">
     <h1>Revoked certificates</h1>
     <p>To fetch <a href="{{window.location.href}}api/revoked/">certificate revocation list</a>:</p>
-    <pre>curl {{window.location.href}}api/revoked/ | openssl crl -inform der -text -noout</pre>
+    <pre>curl {{window.location.href}}api/revoked/ > crl.der
+curl http://ca2.koodur.lan/api/revoked/?wait=yes -H "Accept: application/x-pem-file" > crl.pem</pre>
     <!--
     <p>To perform online certificate status request</p>
 

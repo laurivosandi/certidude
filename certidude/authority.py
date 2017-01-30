@@ -131,6 +131,14 @@ def revoke_certificate(common_name):
     revoked_filename = os.path.join(config.REVOKED_DIR, "%s.pem" % cert.serial_number)
     os.rename(cert.path, revoked_filename)
     push.publish("certificate-revoked", cert.common_name)
+
+    # Publish CRL for long polls
+    if config.PUSH_PUBLISH:
+        url = config.PUSH_PUBLISH % "crl"
+        click.echo("Publishing CRL at %s ..." % url)
+        requests.post(url, data=export_crl(),
+            headers={"User-Agent": "Certidude API", "Content-Type": "application/x-pem-file"})
+
     mailer.send("certificate-revoked.md", attachments=(cert,), certificate=cert)
 
 

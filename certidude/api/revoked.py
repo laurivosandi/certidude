@@ -2,7 +2,7 @@
 import falcon
 import json
 import logging
-from certidude import const
+from certidude import const, config
 from certidude.authority import export_crl, list_revoked
 from certidude.decorators import MyEncoder
 from cryptography import x509
@@ -26,11 +26,17 @@ class RevocationListResource(object):
             resp.body = x509.load_pem_x509_crl(export_crl(),
                 default_backend()).public_bytes(Encoding.DER)
         elif req.client_accepts("application/x-pem-file"):
-            resp.set_header("Content-Type", "application/x-pem-file")
-            resp.append_header(
-                "Content-Disposition",
-                ("attachment; filename=%s-crl.pem" % const.HOSTNAME).encode("ascii"))
-            resp.body = export_crl()
+            if req.get_param_as_bool("wait"):
+                url = config.PUSH_LONG_POLL % "crl"
+                resp.status = falcon.HTTP_SEE_OTHER
+                resp.set_header("Location", url.encode("ascii"))
+                logger.debug(u"Redirecting to CRL request to %s", url)
+            else:
+                resp.set_header("Content-Type", "application/x-pem-file")
+                resp.append_header(
+                    "Content-Disposition",
+                    ("attachment; filename=%s-crl.pem" % const.HOSTNAME).encode("ascii"))
+                resp.body = export_crl()
         elif req.accept.startswith("application/json"):
             resp.set_header("Content-Type", "application/json")
             resp.set_header("Content-Disposition", "inline")
