@@ -14,11 +14,9 @@ MarkupSafe==0.23
 ndg-httpsclient==0.4.2
 pyasn1==0.1.9
 pycparser==2.14
-pyOpenSSL==16.0.0
 python-ldap==2.4.25
 python-mimeparse==1.5.2
 requests==2.10.0
 setproctitle==1.1.10
-six==1.10.0
 urllib3==1.16
 wsgiref==0.1.2

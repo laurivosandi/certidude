@@ -4,7 +4,7 @@ import os
 import requests
 import subprocess
 import tempfile
-from certidude import errors
+from certidude import errors, const
 from certidude.wrappers import Certificate, Request
 from cryptography import x509
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -188,10 +188,10 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
             cp = ConfigParser(delimiters=("="))
             cp.readfp(open("/etc/samba/smb.conf"))
             name = cp.get("global", "netbios name")
-            os.system("kinit -S HTTP/%s -k %s$" % (name, server))
+            os.system("kinit -S HTTP/%s -k %s$" % (server, name))
         else:
-            os.system("kinit -S HTTP/%s -k %s$" % (const.HOSTNAME.lower(), server) # Mac OS X
-            os.system("kinit -S HTTP/%s -k %s$" % (const.HOSTNAME.upper(), server) # Fedora /w SSSD
+            os.system("kinit -S HTTP/%s -k %s$" % (server, const.HOSTNAME.lower())) # Mac OS X
+            os.system("kinit -S HTTP/%s -k %s$" % (server, const.HOSTNAME.upper())) # Fedora /w SSSD
         from requests_kerberos import HTTPKerberosAuth, OPTIONAL
         auth = HTTPKerberosAuth(mutual_authentication=OPTIONAL, force_preemptive=True)
     else:
