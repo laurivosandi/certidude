@@ -15,10 +15,10 @@
     <div class="person">{% include 'img/iconmonstr-user-5.svg' %} {{ certificate.given_name }} {{ certificate.surname }}</div>
     {% endif %}
 
-    <div class="lifetime" title="Valid from {{ certificate.signed }} to {{ certificate.expires }}">
+    <div class="lifetime">
         {% include 'img/iconmonstr-calendar-6.svg' %}
-        <time>{{ certificate.signed }}</time> -
-        <time>{{ certificate.expires }}</time>
+        Signed <time class="timeago" datetime="{{ certificate.signed }}">Certificate was signed {{ certificate.signed }}</time>,
+        expires <time class="timeago" datetime="{{ certificate.expires }}">Certificate expires {{ certificate.expires }}</time>
     </div>
 
     {#

@@ -1,3 +1,4 @@
+jQuery.timeago.settings.allowFuture = true;
 
 function onTagClicked() {
     var value = $(this).html();
@@ -184,7 +185,7 @@ $(document).ready(function() {
              * Render authority views
              **/
             $("#container").html(nunjucks.render('views/authority.html', { session: session, window: window }));
-
+            $("time").timeago();
             if (session.authority) {
                 $("#log input").each(function(i, e) {
                     console.info("e.checked:", e.checked , "and", e.id, "@localstorage is", localStorage[e.id], "setting to:", localStorage[e.id] || e.checked, "bool:", localStorage[e.id] || e.checked == "true");
