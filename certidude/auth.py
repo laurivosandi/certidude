@@ -35,6 +35,12 @@ if "kerberos" in config.AUTHENTICATION_BACKENDS:
 def authenticate(optional=False):
     def wrapper(func):
         def kerberos_authenticate(resource, req, resp, *args, **kwargs):
+            # If LDAP enabled and device is not Kerberos capable fall
+            # back to LDAP bind authentication
+            if "ldap" in config.AUTHENTICATION_BACKENDS:
+                if "Android" in req.user_agent:
+                    return ldap_authenticate(resource, req, resp, *args, **kwargs)
+
             # Try pre-emptive authentication
             if not req.auth:
                 if optional:
@@ -191,7 +197,7 @@ def authenticate(optional=False):
             req.context["user"] = User.objects.get(user)
             return func(resource, req, resp, *args, **kwargs)
 
-        if config.AUTHENTICATION_BACKENDS == {"kerberos"}:
+        if "kerberos" in config.AUTHENTICATION_BACKENDS:
             return kerberos_authenticate
         elif config.AUTHENTICATION_BACKENDS == {"pam"}:
             return pam_authenticate
