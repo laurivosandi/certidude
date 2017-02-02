@@ -14,6 +14,7 @@ KEYWORDS = (
     (u"Ubuntu", u"ubuntu"),
     (u"Fedora", u"fedora"),
     (u"Linux", u"linux"),
+    (u"Macintosh", u"mac"),
 )
 
 class BundleResource(object):
