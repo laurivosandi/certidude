@@ -9,9 +9,9 @@ from certidude import config
 
 def publish(event_type, event_data):
     """
-    Publish event on push server
+    Publish event on nchan EventSource publisher
     """
-    if not config.PUSH_PUBLISH:
+    if not config.EVENT_SOURCE_PUBLISH:
         # Push server disabled
         return
 
@@ -19,7 +19,7 @@ def publish(event_type, event_data):
         from certidude.decorators import MyEncoder
         event_data = json.dumps(event_data, cls=MyEncoder)
 
-    url = config.PUSH_PUBLISH % config.PUSH_TOKEN
+    url = config.EVENT_SOURCE_PUBLISH % config.EVENT_SOURCE_TOKEN
     click.echo("Publishing %s event '%s' on %s" % (event_type, event_data, url))
 
     try:
@@ -38,12 +38,11 @@ def publish(event_type, event_data):
         click.echo("Failed to submit event to push server, connection error")
 
 
-class PushLogHandler(logging.Handler):
+class EventSourceLogHandler(logging.Handler):
     """
     To be used with Python log handling framework for publishing log entries
     """
     def emit(self, record):
-        from certidude.push import publish
         publish("log-entry", dict(
             created = datetime.utcfromtimestamp(record.created),
             message = record.msg % record.args,

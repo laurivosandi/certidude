@@ -52,12 +52,12 @@ def event_source(func):
     return wrapped
 
 class MyEncoder(json.JSONEncoder):
-    REQUEST_ATTRIBUTES = "signable", "identity", "changed", "common_name", \
-        "organizational_unit", "given_name", "surname", "fqdn", "email_address", \
+    REQUEST_ATTRIBUTES = "is_client", "identity", "changed", "common_name", \
+        "organizational_unit", "fqdn", \
         "key_type", "key_length", "md5sum", "sha1sum", "sha256sum", "key_usage"
 
     CERTIFICATE_ATTRIBUTES = "revokable", "identity", "common_name", \
-        "organizational_unit", "given_name", "surname", "fqdn", "email_address", \
+        "organizational_unit", "fqdn", \
         "key_type", "key_length", "sha256sum", "serial_number", "key_usage", \
         "signed", "expires"
 

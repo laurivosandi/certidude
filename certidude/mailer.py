@@ -70,7 +70,7 @@ def send(template, to=None, attachments=(), **context):
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = authority.certificate.email_address
+    msg["From"] = "%s <%s>" % (config.OUTBOX_NAME, config.OUTBOX_MAIL)
     msg["To"] = recipients
 
     part1 = MIMEText(text, "plain")
@@ -93,4 +93,4 @@ def send(template, to=None, attachments=(), **context):
     if username and password:
         conn.login(username, password)
 
-    conn.sendmail(authority.certificate.email_address, recipients, msg.as_string())
+    conn.sendmail(config.OUTBOX_MAIL, recipients, msg.as_string())

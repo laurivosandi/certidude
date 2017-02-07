@@ -38,7 +38,10 @@ AUTHORITY_CERTIFICATE_PATH = cp.get("authority", "certificate path")
 REQUESTS_DIR = cp.get("authority", "requests dir")
 SIGNED_DIR = cp.get("authority", "signed dir")
 REVOKED_DIR = cp.get("authority", "revoked dir")
-OUTBOX = cp.get("authority", "outbox")
+
+OUTBOX = cp.get("authority", "outbox uri")
+OUTBOX_NAME = cp.get("authority", "outbox sender name")
+OUTBOX_MAIL = cp.get("authority", "outbox sender address")
 
 BUNDLE_FORMAT = cp.get("authority", "bundle format")
 OPENVPN_BUNDLE_TEMPLATE = cp.get("authority", "openvpn bundle template")
@@ -59,10 +62,11 @@ CERTIFICATE_CRL_URL = cp.get("signature", "revoked url")
 
 REVOCATION_LIST_LIFETIME = cp.getint("signature", "revocation list lifetime")
 
-PUSH_TOKEN = cp.get("push", "token")
-PUSH_EVENT_SOURCE = cp.get("push", "event source")
-PUSH_LONG_POLL = cp.get("push", "long poll")
-PUSH_PUBLISH = cp.get("push", "publish")
+EVENT_SOURCE_TOKEN = cp.get("push", "event source token")
+EVENT_SOURCE_PUBLISH = cp.get("push", "event source publish")
+EVENT_SOURCE_SUBSCRIBE = cp.get("push", "event source subscribe")
+LONG_POLL_PUBLISH = cp.get("push", "long poll publish")
+LONG_POLL_SUBSCRIBE = cp.get("push", "long poll subscribe")
 
 TAGGING_BACKEND = cp.get("tagging", "backend")
 LOGGING_BACKEND = cp.get("logging", "backend")

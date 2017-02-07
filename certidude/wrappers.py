@@ -23,68 +23,12 @@ class CertificateBase:
         return self.buf
 
     @property
-    def given_name(self):
-        return self.subject.GN
-
-    @given_name.setter
-    def given_name(self, value):
-        return setattr(self.subject, "GN", value)
-
-    @property
-    def surname(self):
-        return self.subject.SN
-
-    @surname.setter
-    def surname(self, value):
-        return setattr(self.subject, "SN", value)
-
-    @property
     def common_name(self):
         return self.subject.CN
 
     @common_name.setter
     def common_name(self, value):
         self.subject.CN = value
-
-    @property
-    def country_code(self):
-        return getattr(self._obj.get_subject(), "C", None)
-
-    @property
-    def state_or_county(self):
-        return getattr(self._obj.get_subject(), "S", None)
-
-    @property
-    def city(self):
-        return getattr(self._obj.get_subject(), "L", None)
-
-    @property
-    def organization(self):
-        return getattr(self._obj.get_subject(), "O", None)
-
-    @property
-    def organizational_unit(self):
-        return getattr(self._obj.get_subject(), "OU", None)
-
-    @country_code.setter
-    def country_code(self, value):
-        return setattr(self._obj.get_subject(), "C", value)
-
-    @state_or_county.setter
-    def state_or_county(self, value):
-        return setattr(self._obj.get_subject(), "S", value)
-
-    @city.setter
-    def city(self, value):
-        return setattr(self._obj.get_subject(), "L", value)
-
-    @organization.setter
-    def organization(self, value):
-        return setattr(self._obj.get_subject(), "O", value)
-
-    @organizational_unit.setter
-    def organizational_unit(self, value):
-        return setattr(self._obj.get_subject(), "OU", value)
 
     @property
     def key_usage(self):
@@ -140,29 +84,11 @@ class CertificateBase:
                 value.encode("ascii")) for (key,value,critical) in extensions])
 
     @property
-    def email_address(self):
-        for bit in self.subject_alt_name.split(", "):
-            if bit.startswith("email:"):
-                return bit[6:]
-        return ""
-
-    @property
     def fqdn(self):
         for bit in self.subject_alt_name.split(", "):
             if bit.startswith("DNS:"):
                 return bit[4:]
         return ""
-
-    @property
-    def subject_alt_name(self):
-        for key, value, data in self.extensions:
-            if key == "subjectAltName":
-                return value
-        return ""
-
-    @subject_alt_name.setter
-    def subject_alt_name(self, value):
-        self.set_extension("subjectAltName", value, False)
 
     @property
     def pubkey(self):
@@ -226,11 +152,12 @@ class Request(CertificateBase):
         assert not self.buf or self.buf == self.dump(), "%s is not %s" % (repr(self.buf), repr(self.dump()))
 
     @property
-    def signable(self):
-        for key, value, data in self.extensions:
-            if key not in const.EXTENSION_WHITELIST:
-                return False
-        return True
+    def is_server(self):
+        return "." in self.common_name
+
+    @property
+    def is_client(self):
+        return not self.is_server
 
     def dump(self):
         return crypto.dump_certificate_request(crypto.FILETYPE_PEM, self._obj).decode("ascii")

@@ -61,34 +61,67 @@ class SignHandler(asynchat.async_chat):
             NotImplemented # TODO: Implement OCSP
 
         elif cmd == "sign-request":
+            # Only common name and public key are used from request
             request = x509.load_pem_x509_csr(body, default_backend())
-            subject = x509.Name([n for n in request.subject if n.oid in DN_WHITELIST])
+            common_name, = request.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+
+
+            #subject = x509.Name([n for n in request.subject if n.oid in DN_WHITELIST])
+
+            # If common name is a fully qualified name assume it has to be signed
+            # with server certificate flags
+            server_flags = "." in common_name.value
+
+            # TODO: For fqdn allow autosign with validation
+
+            extended_key_usage_flags = []
+            if server_flags:
+                extended_key_usage_flags.append( # IKE intermediate for IPSec
+                    x509.ObjectIdentifier("1.3.6.1.5.5.8.2.2"))
+                extended_key_usage_flags.append( # OpenVPN server
+                    ExtendedKeyUsageOID.SERVER_AUTH)
+            else:
+                extended_key_usage_flags.append( # OpenVPN client
+                    ExtendedKeyUsageOID.CLIENT_AUTH)
 
             cert = x509.CertificateBuilder(
-                ).subject_name(subject
+                ).subject_name(
+                    x509.Name([common_name])
                 ).serial_number(random.randint(
                     0x1000000000000000000000000000000000000000,
                     0xffffffffffffffffffffffffffffffffffffffff)
-                ).issuer_name(self.server.certificate.issuer
-                ).public_key(request.public_key()
-                ).not_valid_before(now - timedelta(hours=1)
-                ).not_valid_after(now + timedelta(days=config.CERTIFICATE_LIFETIME)
-                ).add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True,
-                ).add_extension(x509.KeyUsage(
-                    digital_signature=True,
-                    key_encipherment=True,
-                    content_commitment=False,
-                    data_encipherment=False,
-                    key_agreement=False,
-                    key_cert_sign=False,
-                    crl_sign=False,
-                    encipher_only=False,
-                    decipher_only=False), critical=True,
-                ).add_extension(x509.ExtendedKeyUsage(
-                    [ExtendedKeyUsageOID.CLIENT_AUTH]
-                ), critical=True,
+                ).issuer_name(
+                    self.server.certificate.issuer
+                ).public_key(
+                    request.public_key()
+                ).not_valid_before(
+                    now - timedelta(hours=1)
+                ).not_valid_after(
+                    now + timedelta(days=config.CERTIFICATE_LIFETIME)
                 ).add_extension(
-                    x509.SubjectKeyIdentifier.from_public_key(request.public_key()),
+                    x509.BasicConstraints(
+                        ca=False,
+                        path_length=None),
+                    critical=True,
+                ).add_extension(
+                    x509.KeyUsage(
+                        digital_signature=True,
+                        key_encipherment=True,
+                        content_commitment=False,
+                        data_encipherment=False,
+                        key_agreement=False,
+                        key_cert_sign=False,
+                        crl_sign=False,
+                        encipher_only=False,
+                        decipher_only=False),
+                    critical=True,
+                ).add_extension(
+                    x509.ExtendedKeyUsage(
+                        extended_key_usage_flags),
+                    critical=True,
+                ).add_extension(
+                    x509.SubjectKeyIdentifier.from_public_key(
+                        request.public_key()),
                     critical=False
                 ).add_extension(
                     x509.AuthorityInformationAccess([

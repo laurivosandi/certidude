@@ -27,7 +27,7 @@ class RevocationListResource(object):
                 default_backend()).public_bytes(Encoding.DER)
         elif req.client_accepts("application/x-pem-file"):
             if req.get_param_as_bool("wait"):
-                url = config.PUSH_LONG_POLL % "crl"
+                url = config.LONG_POLL_SUBSCRIBE % "crl"
                 resp.status = falcon.HTTP_SEE_OTHER
                 resp.set_header("Location", url.encode("ascii"))
                 logger.debug(u"Redirecting to CRL request to %s", url)

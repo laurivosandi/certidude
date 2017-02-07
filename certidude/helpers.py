@@ -15,7 +15,7 @@ from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID, AuthorityInforma
 from configparser import ConfigParser
 from OpenSSL import crypto
 
-def certidude_request_certificate(server, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, extended_key_usage_flags=None, org_unit=None, email_address=None, given_name=None, surname=None, autosign=False, wait=False, ip_address=None, dns=None, bundle=False, insecure=False):
+def certidude_request_certificate(server, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, autosign=False, wait=False, ip_address=None, bundle=False, insecure=False):
     """
     Exchange CSR for certificate using Certidude HTTP API server
     """
@@ -127,39 +127,10 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
 
         # Set subject name attributes
         names = [x509.NameAttribute(NameOID.COMMON_NAME, common_name.decode("utf-8"))]
-        if given_name:
-            names.append(x509.NameAttribute(NameOID.GIVEN_NAME, given_name.decode("utf-8")))
-        if surname:
-            names.append(x509.NameAttribute(NameOID.SURNAME, surname.decode("utf-8")))
-        if org_unit:
-            names.append(x509.NameAttribute(NameOID.ORGANIZATIONAL_UNIT, org_unit.decode("utf-8")))
-
-        # Collect subject alternative names
-        subject_alt_names = set()
-        if email_address:
-            subject_alt_names.add(x509.RFC822Name(email_address))
-        if ip_address:
-            subject_alt_names.add("IP:%s" % ip_address)
-        if dns:
-            subject_alt_names.add(x509.DNSName(dns))
-
 
         # Construct CSR
         csr = x509.CertificateSigningRequestBuilder(
             ).subject_name(x509.Name(names))
-
-
-        if extended_key_usage_flags:
-            click.echo("Adding extended key usage extension: %s" % extended_key_usage_flags)
-            csr = csr.add_extension(x509.ExtendedKeyUsage(
-                extended_key_usage_flags), critical=True)
-
-        if subject_alt_names:
-            click.echo("Adding subject alternative name extension: %s" % subject_alt_names)
-            csr = csr.add_extension(
-                x509.SubjectAlternativeName(subject_alt_names),
-                critical=False)
-
 
         # Sign & dump CSR
         os.umask(0o022)

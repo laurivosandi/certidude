@@ -52,11 +52,11 @@ class RequestListResource(object):
                 raise falcon.HTTPBadRequest(
                     "Bad request",
                     "Common name %s differs from Kerberos credential %s!" % (csr.common_name, machine))
-            if csr.signable:
-                # Automatic enroll with Kerberos machine cerdentials
-                resp.set_header("Content-Type", "application/x-x509-user-cert")
-                resp.body = authority.sign(csr, overwrite=True).dump()
-                return
+
+            # Automatic enroll with Kerberos machine cerdentials
+            resp.set_header("Content-Type", "application/x-x509-user-cert")
+            resp.body = authority.sign(csr, overwrite=True).dump()
+            return
 
 
         # Check if this request has been already signed and return corresponding certificte if it has been signed
@@ -73,7 +73,7 @@ class RequestListResource(object):
         # TODO: check for revoked certificates and return HTTP 410 Gone
 
         # Process automatic signing if the IP address is whitelisted, autosigning was requested and certificate can be automatically signed
-        if req.get_param_as_bool("autosign") and csr.signable:
+        if req.get_param_as_bool("autosign") and csr.is_client:
             for subnet in config.AUTOSIGN_SUBNETS:
                 if req.context.get("remote_addr") in subnet:
                     try:
@@ -103,7 +103,7 @@ class RequestListResource(object):
         # Wait the certificate to be signed if waiting is requested
         if req.get_param("wait"):
             # Redirect to nginx pub/sub
-            url = config.PUSH_LONG_POLL % csr.fingerprint()
+            url = config.LONG_POLL_SUBSCRIBE % csr.fingerprint()
             click.echo("Redirecting to: %s"  % url)
             resp.status = falcon.HTTP_SEE_OTHER
             resp.set_header("Location", url.encode("ascii"))

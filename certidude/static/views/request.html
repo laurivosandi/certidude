@@ -1,11 +1,7 @@
 <li id="request-{{ request.common_name | replace('@', '--') | replace('.', '-') }}" class="filterable">
 
 <a class="button icon download" href="/api/request/{{request.common_name}}/">Fetch</a>
-{% if request.signable %}
 <button class="icon sign" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/request/{{request.common_name}}/',type:'patch'});">Sign</button>
-{% else %}
-<button title="Please use certidude command-line utility to sign unusual requests" disabled>Sign</button>
-{% endif %}
 <button class="icon revoke" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/request/{{request.common_name}}/',type:'delete'});">Delete</button>
 
 

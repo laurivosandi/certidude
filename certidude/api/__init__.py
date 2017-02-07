@@ -59,7 +59,7 @@ class SessionResource(object):
                 user_mutliple_certificates=config.USER_MULTIPLE_CERTIFICATES,
                 outbox = config.OUTBOX,
                 certificate = authority.certificate,
-                events = config.PUSH_EVENT_SOURCE % config.PUSH_TOKEN,
+                events = config.EVENT_SOURCE_SUBSCRIBE % config.EVENT_SOURCE_TOKEN,
                 requests=authority.list_requests(),
                 signed=authority.list_signed(),
                 revoked=authority.list_revoked(),

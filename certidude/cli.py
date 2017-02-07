@@ -305,8 +305,6 @@ def certidude_request(fork):
 @click.command("client", help="Setup X.509 certificates for application")
 @click.argument("server")
 @click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, '%s' by default" % const.HOSTNAME)
-@click.option("--org-unit", "-ou", help="Organizational unit")
-@click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, '%s' by default" % EMAIL)
 @click.option("--given-name", "-gn", default=FIRST_NAME, help="Given name of the person associted with the certificate, '%s' by default" % FIRST_NAME)
 @click.option("--surname", "-sn", default=SURNAME, help="Surname of the person associted with the certificate, '%s' by default" % SURNAME)
 @click.option("--key-usage", "-ku", help="Key usage attributes, none requested by default")
@@ -325,8 +323,6 @@ def certidude_setup_client(quiet, **kwargs):
 
 @click.command("server", help="Set up OpenVPN server")
 @click.argument("authority")
-@click.option("--org-unit", "-ou", help="Organizational unit")
-@click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, '%s' by default" % EMAIL)
 @click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="OpenVPN subnet, 192.168.33.0/24 by default")
 @click.option("--local", "-l", default="0.0.0.0", help="OpenVPN listening address, defaults to all interfaces")
 @click.option("--port", "-p", default=1194, type=click.IntRange(1,60000), help="OpenVPN listening port, 1194 by default")
@@ -336,7 +332,7 @@ def certidude_setup_client(quiet, **kwargs):
     default="/etc/openvpn/site-to-client.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
-def certidude_setup_openvpn_server(authority, config, subnet, route, email_address, org_unit, local, proto, port):
+def certidude_setup_openvpn_server(authority, config, subnet, route, org_unit, local, proto, port):
 
     # TODO: Make dirs
     # TODO: Intelligent way of getting last IP address in the subnet
@@ -428,7 +424,6 @@ def certidude_setup_openvpn_server(authority, config, subnet, route, email_addre
 @click.command("nginx", help="Set up nginx as HTTPS server")
 @click.argument("server")
 @click.option("--common-name", "-cn", default=const.FQDN, help="Common name, %s by default" % const.FQDN)
-@click.option("--org-unit", "-ou", help="Organizational unit")
 @click.option("--tls-config",
     default="/etc/nginx/conf.d/tls.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
@@ -496,7 +491,6 @@ def certidude_setup_nginx(authority, site_config, tls_config, common_name, org_u
 @click.argument("authority")
 @click.argument("remote")
 @click.option('--proto', "-t", default="udp", type=click.Choice(['udp', 'tcp']), help="OpenVPN transport protocol, UDP by default")
-@click.option("--org-unit", "-ou", help="Organizational unit")
 @click.option("--config", "-o",
     default="/etc/openvpn/client-to-site.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
@@ -568,12 +562,10 @@ def certidude_setup_openvpn_client(authority, remote, config, org_unit, proto):
 
 @click.command("server", help="Set up strongSwan server")
 @click.argument("server")
-@click.option("--org-unit", "-ou", help="Organizational unit")
-@click.option("--email-address", "-m", default=EMAIL, help="E-mail associated with the request, %s by default" % EMAIL)
 @click.option("--subnet", "-sn", default=u"192.168.33.0/24", type=ip_network, help="IPsec virtual subnet, 192.168.33.0/24 by default")
 @click.option("--local", "-l", type=ip_address, help="IP address associated with the certificate, none by default")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
-def certidude_setup_strongswan_server(authority, config, secrets, subnet, route, email_address, org_unit, local, fqdn):
+def certidude_setup_strongswan_server(authority, config, secrets, subnet, route, local, fqdn):
     if "." not in common_name:
         raise ValueError("Hostname has to be fully qualified!")
     if not local:
@@ -627,7 +619,6 @@ def certidude_setup_strongswan_server(authority, config, secrets, subnet, route,
 @click.command("client", help="Set up strongSwan client")
 @click.argument("server")
 @click.argument("remote")
-@click.option("--org-unit", "-ou", help="Organizational unit")
 def certidude_setup_strongswan_client(authority, config, org_unit, remote, dpdaction):
     # Create corresponding section in /etc/certidude/client.conf
     client_config = ConfigParser()
@@ -675,7 +666,6 @@ def certidude_setup_strongswan_client(authority, config, org_unit, remote, dpdac
 @click.command("networkmanager", help="Set up strongSwan client via NetworkManager")
 @click.argument("server") # Certidude server
 @click.argument("remote") # StrongSwan gateway
-@click.option("--org-unit", "-ou", help="Organizational unit")
 def certidude_setup_strongswan_networkmanager(server,remote,  org_unit):
     endpoint = "IPSec to %s" % remote
 
@@ -721,9 +711,7 @@ def certidude_setup_strongswan_networkmanager(server,remote,  org_unit):
 @click.argument("server") # Certidude server
 @click.argument("remote") # OpenVPN gateway
 @click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
-@click.option("--org-unit", "-ou", help="Organizational unit")
-@click.option("--email-address", "-m", help="E-mail associated with the request, none by default")
-def certidude_setup_openvpn_networkmanager(authority, email_address, org_unit, remote):
+def certidude_setup_openvpn_networkmanager(authority, org_unit, remote):
     # Create corresponding section in /etc/certidude/client.conf
     client_config = ConfigParser()
     if os.path.exists(const.CLIENT_CONFIG_PATH):
@@ -781,11 +769,10 @@ def certidude_setup_openvpn_networkmanager(authority, email_address, org_unit, r
 @click.option("--revoked-url", default=None, help="CRL distribution URL")
 @click.option("--certificate-url", default=None, help="Authority certificate URL")
 @click.option("--push-server", default="http://" + const.FQDN, help="Push server, by default http://%s" % const.FQDN)
-@click.option("--email-address", default="certidude@" + const.FQDN, help="E-mail address of the CA")
 @click.option("--directory", help="Directory for authority files")
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
-def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_config, parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, revoked_url, certificate_url, push_server, email_address, outbox, server_flags):
+def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_config, parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, revoked_url, certificate_url, push_server, outbox, server_flags):
 
     if not directory:
         if os.getuid():
@@ -833,10 +820,11 @@ def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_conf
             name = cp.get("global", "netbios name")
 
             base = ",".join(["dc=" + j for j in domain.split(".")])
-            with open("/etc/cron.hourly/certidude", "w") as fh:
-                fh.write(env.get_template("ldap-ticket-renewal.sh").render(vars()))
-            os.chmod("/etc/cron.hourly/certidude", 0o755)
-            click.echo("Created /etc/cron.hourly/certidude for automatic LDAP service ticket renewal, inspect and adjust accordingly")
+            if not os.path.exists("/etc/cron.hourly/certidude"):
+                with open("/etc/cron.hourly/certidude", "w") as fh:
+                    fh.write(env.get_template("ldap-ticket-renewal.sh").render(vars()))
+                os.chmod("/etc/cron.hourly/certidude", 0o755)
+                click.echo("Created /etc/cron.hourly/certidude for automatic LDAP service ticket renewal, inspect and adjust accordingly")
             os.system("/etc/cron.hourly/certidude")
         else:
             click.echo("Warning: /etc/krb5.keytab or /etc/samba/smb.conf not found, Kerberos unconfigured")
@@ -919,10 +907,10 @@ def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_conf
             ).not_valid_after(
                 datetime.utcnow() + timedelta(days=authority_lifetime)
             ).serial_number(1
-            ).add_extension(x509.BasicConstraints(ca=True, path_length=None), critical=True,
+            ).add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True,
             ).add_extension(x509.KeyUsage(
-                digital_signature=True,
-                key_encipherment=False,
+                digital_signature=server_flags,
+                key_encipherment=server_flags,
                 content_commitment=False,
                 data_encipherment=False,
                 key_agreement=False,
@@ -930,12 +918,6 @@ def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_conf
                 crl_sign=True,
                 encipher_only=False,
                 decipher_only=False), critical=True,
-            ).add_extension(
-                x509.SubjectAlternativeName([
-                    x509.DNSName(common_name),
-                    x509.RFC822Name(email_address)
-                ]),
-                critical=False,
             ).add_extension(
                 x509.SubjectKeyIdentifier.from_public_key(key.public_key()),
                 critical=False
@@ -1132,34 +1114,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
 def certidude_sign(common_name, overwrite, lifetime):
     from certidude import authority, config
     request = authority.get_request(common_name)
-
-    # Use signer if this is regular client CSR
-    if request.signable:
-        # Sign via signer process
-        cert = authority.sign(request)
-
-    # Sign directly if it's eg. TLS server CSR
-    else:
-        # Load CA private key and certificate
-        private_key = serialization.load_pem_private_key(
-            open(config.AUTHORITY_PRIVATE_KEY_PATH).read(),
-            password=None, # TODO: Ask password for private key?
-            backend=default_backend())
-        authority_certificate = x509.load_pem_x509_certificate(
-            open(config.AUTHORITY_CERTIFICATE_PATH).read(),
-            backend=default_backend())
-
-        # Drop privileges
-        # to use LDAP service ticket to read usernames of the admins group
-        # in order to send e-mail
-        _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
-        os.setgroups([])
-        os.setgid(gid)
-        os.setuid(uid)
-
-        # Sign directly using private key
-        cert = authority.sign2(request, private_key, authority_certificate,
-            overwrite, True, lifetime)
+    cert = authority.sign(request)
 
 
 @click.command("serve", help="Run server")
@@ -1292,9 +1247,9 @@ def certidude_serve(port, listen):
     elif config.LOGGING_BACKEND:
         raise ValueError("Invalid logging.backend = %s" % config.LOGGING_BACKEND)
 
-    if config.PUSH_PUBLISH:
-        from certidude.push import PushLogHandler
-        log_handlers.append(PushLogHandler())
+    if config.EVENT_SOURCE_PUBLISH:
+        from certidude.push import EventSourceLogHandler
+        log_handlers.append(EventSourceLogHandler())
 
     for facility in "api", "cli":
         logger = logging.getLogger(facility)
@@ -1310,7 +1265,6 @@ def certidude_serve(port, listen):
     atexit.register(exit_handler)
 
     logging.getLogger("cli").debug("Started Certidude at %s", const.FQDN)
-    print "Ready"
     httpd.serve_forever()
 
 @click.group("strongswan", help="strongSwan helpers")

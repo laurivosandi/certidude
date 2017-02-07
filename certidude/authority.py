@@ -31,12 +31,7 @@ def publish_certificate(func):
         cert = func(csr, *args, **kwargs)
         assert isinstance(cert, Certificate), "notify wrapped function %s returned %s" % (func, type(cert))
 
-        if cert.given_name and cert.surname and cert.email_address:
-            recipient = "%s %s <%s>" % (cert.given_name, cert.surname, cert.email_address)
-        elif cert.email_address:
-            recipient = cert.email_address
-        else:
-            recipient = None
+        recipient = None
 
         mailer.send(
             "certificate-signed.md",
@@ -44,8 +39,8 @@ def publish_certificate(func):
             attachments=(cert,),
             certificate=cert)
 
-        if config.PUSH_PUBLISH:
-            url = config.PUSH_PUBLISH % csr.fingerprint()
+        if config.LONG_POLL_PUBLISH:
+            url = config.LONG_POLL_PUBLISH % csr.fingerprint()
             click.echo("Publishing certificate at %s ..." % url)
             requests.post(url, data=cert.dump(),
                 headers={"User-Agent": "Certidude API", "Content-Type": "application/x-x509-user-cert"})
@@ -133,8 +128,8 @@ def revoke_certificate(common_name):
     push.publish("certificate-revoked", cert.common_name)
 
     # Publish CRL for long polls
-    if config.PUSH_PUBLISH:
-        url = config.PUSH_PUBLISH % "crl"
+    if config.LONG_POLL_PUBLISH:
+        url = config.LONG_POLL_PUBLISH % "crl"
         click.echo("Publishing CRL at %s ..." % url)
         requests.post(url, data=export_crl(),
             headers={"User-Agent": "Certidude API", "Content-Type": "application/x-pem-file"})
@@ -190,7 +185,7 @@ def delete_request(common_name):
     push.publish("request-deleted", request.common_name)
 
     # Write empty certificate to long-polling URL
-    requests.delete(config.PUSH_PUBLISH % request.fingerprint(),
+    requests.delete(config.LONG_POLL_PUBLISH % request.fingerprint(),
         headers={"User-Agent": "Certidude API"})
 
 def generate_ovpn_bundle(common_name, owner=None):
@@ -206,8 +201,6 @@ def generate_ovpn_bundle(common_name, owner=None):
     csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
         x509.NameAttribute(k, v) for k, v in (
             (NameOID.COMMON_NAME, common_name),
-            (NameOID.GIVEN_NAME, owner and owner.given_name),
-            (NameOID.SURNAME, owner and owner.surname),
         ) if v
     ]))
 
@@ -244,8 +237,6 @@ def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
     csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
         x509.NameAttribute(k, v) for k, v in (
             (NameOID.COMMON_NAME, common_name),
-            (NameOID.GIVEN_NAME, owner and owner.given_name),
-            (NameOID.SURNAME, owner and owner.surname),
         ) if v
     ]))
 
@@ -262,21 +253,26 @@ def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
         csr.sign(key, hashes.SHA512(), default_backend()).public_bytes(serialization.Encoding.PEM)), overwrite=True)
 
     # Generate P12, currently supported only by PyOpenSSL
-    from OpenSSL import crypto
-    p12 = crypto.PKCS12()
-    p12.set_privatekey(
-        crypto.load_privatekey(
-            crypto.FILETYPE_PEM,
-            key.private_bytes(
-                    encoding=serialization.Encoding.PEM,
-                    format=serialization.PrivateFormat.TraditionalOpenSSL,
-                    encryption_algorithm=serialization.NoEncryption()
+    try:
+        from OpenSSL import crypto
+    except ImportError:
+        logger.error("For P12 bundles please install pyOpenSSL: pip install pyOpenSSL")
+        raise
+    else:
+        p12 = crypto.PKCS12()
+        p12.set_privatekey(
+            crypto.load_privatekey(
+                crypto.FILETYPE_PEM,
+                key.private_bytes(
+                        encoding=serialization.Encoding.PEM,
+                        format=serialization.PrivateFormat.TraditionalOpenSSL,
+                        encryption_algorithm=serialization.NoEncryption()
+                    )
                 )
             )
-        )
-    p12.set_certificate( cert._obj )
-    p12.set_ca_certificates([certificate._obj])
-    return p12.export(), cert
+        p12.set_certificate( cert._obj )
+        p12.set_ca_certificates([certificate._obj])
+        return p12.export(), cert
 
 
 @publish_certificate
