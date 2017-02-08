@@ -55,9 +55,13 @@ class SessionResource(object):
                 [req.context.get("remote_addr") in j
                     for j in config.REQUEST_SUBNETS]),
             authority = dict(
+                outbox = dict(
+                    server = config.OUTBOX,
+                    name = config.OUTBOX_NAME,
+                    mail = config.OUTBOX_MAIL
+                ),
                 user_certificate_enrollment=config.USER_CERTIFICATE_ENROLLMENT,
                 user_mutliple_certificates=config.USER_MULTIPLE_CERTIFICATES,
-                outbox = config.OUTBOX,
                 certificate = authority.certificate,
                 events = config.EVENT_SOURCE_SUBSCRIBE % config.EVENT_SOURCE_TOKEN,
                 requests=authority.list_requests(),

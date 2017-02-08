@@ -13,16 +13,20 @@ for current user account.</p>
 
 <h2>Authority certificate</h2>
 
-<p>Several things such as CRL location and e-mails are hardcoded into
-the <a href="/api/certificate">certificate</a> and
-as such require complete reset of X509 infrastructure if some of them needs to be changed:</p>
-
-<p>Mails will appear from: {{ session.authority.certificate.email_address }}</p>
-
+<p>Several things are hardcoded into the <a href="/api/certificate">certificate</a> and
+as such require complete reset of X509 infrastructure if some of them needs to be changed.</p>
 
 <h2>Authority settings</h2>
 
 <p>These can be reconfigured via /etc/certidude/server.conf on the server.</p>
+
+{% if session.authority.outbox %}
+    <p>Outgoing mail server: {{ session.authority.outbox.server }}</p>
+    <p>Mails will appear from: {{ session.authority.outbox.name }} &lt;{{ session.authority.outbox.mail }}&gt;</p>
+{% else %}
+    <p>E-mail disabled</p>
+{% endif %}
+
 
 <p>User certificate enrollment:
 {% if session.authority.user_certificate_enrollment %}
@@ -37,12 +41,6 @@ forbidden
 {% endif %}
 </p>
 
-<p>Outgoing mail server:
-{% if session.authority.outbox %}
-    {{ session.authority.outbox }}
-{% else %}
-    E-mail disabled
-{% endif %}</p>
 
 <p>Web signed certificate attributes:</p>
 
