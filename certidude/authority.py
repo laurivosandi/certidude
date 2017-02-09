@@ -235,18 +235,8 @@ def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
     )
 
     csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
-        x509.NameAttribute(k, v) for k, v in (
-            (NameOID.COMMON_NAME, common_name),
-        ) if v
+        x509.NameAttribute(NameOID.COMMON_NAME, common_name)
     ]))
-
-    if owner:
-        click.echo("Setting e-mail to: %s" % owner.mail)
-        csr = csr.add_extension(
-            x509.SubjectAlternativeName([
-                x509.RFC822Name(owner.mail)
-            ]),
-            critical=False)
 
     # Sign CSR
     cert = sign(Request(
