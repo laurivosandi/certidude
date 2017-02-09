@@ -14,9 +14,6 @@ from datetime import datetime, timedelta
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID, AuthorityInformationAccessOID
 import random
 
-DN_WHITELIST = NameOID.COMMON_NAME, NameOID.GIVEN_NAME, NameOID.SURNAME, \
-    NameOID.EMAIL_ADDRESS
-
 class SignHandler(asynchat.async_chat):
     def __init__(self, sock, server):
         asynchat.async_chat.__init__(self, sock=sock)
@@ -65,9 +62,6 @@ class SignHandler(asynchat.async_chat):
             request = x509.load_pem_x509_csr(body, default_backend())
             common_name, = request.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
 
-
-            #subject = x509.Name([n for n in request.subject if n.oid in DN_WHITELIST])
-
             # If common name is a fully qualified name assume it has to be signed
             # with server certificate flags
             server_flags = "." in common_name.value
@@ -89,7 +83,7 @@ class SignHandler(asynchat.async_chat):
                     x509.Name([common_name])
                 ).serial_number(random.randint(
                     0x1000000000000000000000000000000000000000,
-                    0xffffffffffffffffffffffffffffffffffffffff)
+                    0x7fffffffffffffffffffffffffffffffffffffff)
                 ).issuer_name(
                     self.server.certificate.issuer
                 ).public_key(
