@@ -272,7 +272,7 @@ def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
             )
         p12.set_certificate( cert._obj )
         p12.set_ca_certificates([certificate._obj])
-        return p12.export(), cert
+        return p12.export("1234"), cert
 
 
 @publish_certificate
