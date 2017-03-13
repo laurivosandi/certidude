@@ -33,11 +33,14 @@ def test_cli_setup_authority():
     csr = x509.CertificateSigningRequestBuilder(
         ).subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, u"test")]))
 
-    with open(os.path.join(config.REQUESTS_DIR, "test.pem"), "w") as f:
-        f.write(csr.sign(key, hashes.SHA256(), default_backend()).public_bytes(serialization.Encoding.PEM))
+    authority.store_request(
+        csr.sign(key, hashes.SHA256(), default_backend()).public_bytes(serialization.Encoding.PEM))
 
     result = runner.invoke(cli, ['sign', 'test', '-o'])
     assert not result.exception
 
     result = runner.invoke(cli, ['revoke', 'test'])
     assert not result.exception
+
+    authority.generate_ovpn_bundle(u"test2")
+    authority.generate_pkcs12_bundle(u"test3")
