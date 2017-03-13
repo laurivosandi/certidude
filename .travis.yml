@@ -12,7 +12,7 @@ install:
   - pip install --editable .
   - pip install codecov pytest-cov
 script:
-  - py.test && py.test --cov-report xml --cov=certidude tests/
+  - py.test --cov-report xml --cov=certidude tests/
 cache:
   directories:
     - $HOME/.cache/pip
