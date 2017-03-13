@@ -7,4 +7,5 @@ ipaddress==1.0.18
 Jinja2==2.9.5
 Markdown==2.6.8
 pyldap==2.4.28
+python-dateutil==2.6.0
 requests==2.10.0
