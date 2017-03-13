@@ -160,8 +160,8 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
         cert_buf = open(certificate_path).read()
         cert = x509.load_pem_x509_certificate(cert_buf, default_backend())
         lifetime = (cert.not_valid_after - cert.not_valid_before)
-        rollover = lifetime / 1 # TODO: Make rollover configurable
-        if datetime.now() > cert.not_valid_after - rollover:
+        overlap = lifetime / 4 # TODO: Make overlap configurable
+        if datetime.now() > cert.not_valid_after - overlap:
             click.echo("Certificate expired %s" % cert.not_valid_after)
             renew = True
         else:
