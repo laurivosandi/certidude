@@ -17,7 +17,7 @@ from configparser import ConfigParser
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
-def certidude_request_certificate(server, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, autosign=False, wait=False, bundle=False, insecure=False):
+def certidude_request_certificate(server, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, autosign=False, wait=False, bundle=False, renew=False, insecure=False):
     """
     Exchange CSR for certificate using Certidude HTTP API server
     """
@@ -27,8 +27,6 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
         request_params.add("autosign=true")
     if wait:
         request_params.add("wait=forever")
-
-    renew = False # Attempt to renew if certificate has expired
 
     # Expand ca.example.com
     scheme = "http" if insecure else "https" # TODO: Expose in CLI
@@ -166,7 +164,8 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
             renew = True
         else:
             click.echo("Found valid certificate: %s" % certificate_path)
-            return
+            if not renew: # Don't do anything if renewal wasn't requested explicitly
+                return
 
     # If machine is joined to domain attempt to present machine credentials for authentication
     if os.path.exists("/etc/krb5.keytab"):

@@ -62,8 +62,9 @@ ExecStart=%s request
 """
 
 @click.command("request", help="Run processes for requesting certificates and configuring services")
+@click.option("-r", "--renew", default=False, is_flag=True, help="Renew now")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
-def certidude_request(fork):
+def certidude_request(fork, renew):
     if not os.path.exists(const.CLIENT_CONFIG_PATH):
         click.echo("No %s!" % const.CLIENT_CONFIG_PATH)
         return 1
@@ -177,7 +178,8 @@ def certidude_request(fork):
                     endpoint_common_name,
                     insecure=endpoint_insecure,
                     autosign=True,
-                    wait=True)
+                    wait=True,
+                    renew=renew)
                 break
             except requests.exceptions.Timeout:
                 retries -= 1
