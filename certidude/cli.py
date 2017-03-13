@@ -1052,7 +1052,8 @@ def certidude_cron():
 @click.command("serve", help="Run server")
 @click.option("-p", "--port", default=8080 if os.getuid() else 80, help="Listen port")
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
-def certidude_serve(port, listen):
+@click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
+def certidude_serve(port, listen, fork):
     from certidude.signer import SignServer
     from certidude import const
     click.echo("Using configuration from: %s" % const.CONFIG_PATH)
@@ -1189,15 +1190,15 @@ def certidude_serve(port, listen):
         for handler in log_handlers:
             logger.addHandler(handler)
 
-    import atexit
 
     def exit_handler():
         logging.getLogger("cli").debug("Shutting down Certidude")
-
+    import atexit
     atexit.register(exit_handler)
-
     logging.getLogger("cli").debug("Started Certidude at %s", const.FQDN)
-    httpd.serve_forever()
+
+    if not fork or not os.fork():
+        httpd.serve_forever()
 
 @click.group("strongswan", help="strongSwan helpers")
 def certidude_setup_strongswan(): pass
