@@ -25,7 +25,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from datetime import datetime, timedelta
 from humanize import naturaltime
 from jinja2 import Environment, PackageLoader
-from time import sleep
 from setproctitle import setproctitle
 import const
 
@@ -38,22 +37,29 @@ env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=Tr
 
 # Parse command-line argument defaults from environment
 
-USERNAME = os.environ.get("USER")
 NOW = datetime.utcnow().replace(tzinfo=None)
-FIRST_NAME = None
-SURNAME = None
-EMAIL = None
 
-if USERNAME:
-    EMAIL = USERNAME + "@" + const.FQDN
+CERTIDUDE_TIMER = """
+[Unit]
+Description=Run certidude service weekly
 
-if os.getuid() >= 1000:
-    _, _, _, _, gecos, _, _ = pwd.getpwnam(USERNAME)
-    if " " in gecos:
-        FIRST_NAME, SURNAME = gecos.split(" ", 1)
-    else:
-        FIRST_NAME = gecos
+[Timer]
+OnCalendar=weekly
+Persistent=true
+Unit=certidude.service
 
+[Install]
+WantedBy=timers.target
+"""
+
+CERTIDUDE_SERVICE = """
+[Unit]
+Description=Renew certificates and update revocation lists
+
+[Service]
+Type=simple
+ExecStart=%s request
+"""
 
 @click.command("request", help="Run processes for requesting certificates and configuring services")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
@@ -80,7 +86,24 @@ def certidude_request(fork):
         click.echo("Creating: %s" % run_dir)
         os.makedirs(run_dir)
 
+    if not os.path.exists("/etc/systemd/system/certidude.timer"):
+        click.echo("Creating systemd timer...")
+        with open("/etc/systemd/system/certidude.timer", "w") as fh:
+            fh.write(CERTIDUDE_TIMER)
+    if not os.path.exists("/etc/systemd/system/certidude.service"):
+        click.echo("Creating systemd service...")
+        with open("/etc/systemd/system/certidude.service", "w") as fh:
+            fh.write(CERTIDUDE_SERVICE % sys.argv[0])
+
+
     for authority in clients.sections():
+        try:
+            endpoint_dhparam = clients.get(authority, "dhparam path")
+            if not os.path.exists(endpoint_dhparam):
+                cmd = "openssl", "dhparam", "-out", endpoint_dhparam, "2048"
+                subprocess.check_call(cmd)
+        except NoOptionError:
+            pass
         try:
             endpoint_insecure = clients.getboolean(authority, "insecure")
         except NoOptionError:
@@ -110,22 +133,6 @@ def certidude_request(fork):
         except NoOptionError:
             endpoint_revocations_path = "/var/lib/certidude/%s/ca_crl.pem" % authority
         # TODO: Create directories automatically
-
-        extended_key_usage_flags=[]
-        try:
-            endpoint_key_flags = set([j.strip() for j in clients.get(authority, "extended key usage flags").lower().split(",") if j.strip()])
-        except NoOptionError:
-            pass
-        else:
-            if "server auth" in endpoint_key_flags:
-                endpoint_key_flags -= set(["server auth"])
-                extended_key_usage_flags.append(ExtendedKeyUsageOID.SERVER_AUTH)
-            if "ike intermediate" in endpoint_key_flags:
-                endpoint_key_flags -= set(["ike intermediate"])
-                extended_key_usage_flags.append(x509.ObjectIdentifier("1.3.6.1.5.5.8.2.2"))
-            if endpoint_key_flags:
-                raise ValueError("Extended key usage flags %s not understood!" % endpoint_key_flags)
-            # TODO: IKE Intermediate
 
         if clients.get(authority, "trigger") == "domain joined":
             if not os.path.exists("/etc/krb5.keytab"):
@@ -168,8 +175,6 @@ def certidude_request(fork):
                     endpoint_authority_path,
                     endpoint_revocations_path,
                     endpoint_common_name,
-                    extended_key_usage_flags,
-                    None,
                     insecure=endpoint_insecure,
                     autosign=True,
                     wait=True)
@@ -229,6 +234,10 @@ def certidude_request(fork):
 
             # OpenVPN set up with NetworkManager
             if service_config.get(endpoint, "service") == "network-manager/openvpn":
+                nm_config_path = os.path.join("/etc/NetworkManager/system-connections", endpoint)
+                if os.path.exists(nm_config_path):
+                    click.echo("Not creating %s, remove to regenerate" % nm_config_path)
+                    continue
                 nm_config = ConfigParser()
                 nm_config.add_section("connection")
                 nm_config.set("connection", "id", endpoint)
@@ -242,6 +251,7 @@ def certidude_request(fork):
                 nm_config.set("vpn", "tap-dev", "no")
                 nm_config.set("vpn", "remote-cert-tls", "server") # Assert TLS Server flag of X.509 certificate
                 nm_config.set("vpn", "remote", service_config.get(endpoint, "remote"))
+                nm_config.set("vpn", "port", "51900")
                 nm_config.set("vpn", "key", endpoint_key_path)
                 nm_config.set("vpn", "cert", endpoint_certificate_path)
                 nm_config.set("vpn", "ca", endpoint_authority_path)
@@ -255,9 +265,9 @@ def certidude_request(fork):
                 os.umask(0o177)
 
                 # Write NetworkManager configuration
-                with open(os.path.join("/etc/NetworkManager/system-connections", endpoint), "w") as fh:
+                with open(nm_config_path, "w") as fh:
                     nm_config.write(fh)
-                    click.echo("Created %s" % fh.name)
+                    click.echo("Created %s" % nm_config_path)
                 os.system("nmcli con reload")
                 continue
 
@@ -302,50 +312,18 @@ def certidude_request(fork):
         os.unlink(pid_path)
 
 
-@click.command("client", help="Setup X.509 certificates for application")
-@click.argument("server")
-@click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, '%s' by default" % const.HOSTNAME)
-@click.option("--given-name", "-gn", default=FIRST_NAME, help="Given name of the person associted with the certificate, '%s' by default" % FIRST_NAME)
-@click.option("--surname", "-sn", default=SURNAME, help="Surname of the person associted with the certificate, '%s' by default" % SURNAME)
-@click.option("--key-usage", "-ku", help="Key usage attributes, none requested by default")
-@click.option("--extended-key-usage", "-eku", help="Extended key usage attributes, none requested by default")
-@click.option("--quiet", "-q", default=False, is_flag=True, help="Disable verbose output")
-@click.option("--autosign", "-s", default=False, is_flag=True, help="Request for automatic signing if available")
-@click.option("--wait", "-w", default=False, is_flag=True, help="Wait for certificate, by default return immideately")
-@click.option("--key-path", "-k", default=const.HOSTNAME + ".key", help="Key path, %s.key by default" % const.HOSTNAME)
-@click.option("--request-path", "-r", default=const.HOSTNAME + ".csr", help="Request path, %s.csr by default" % const.HOSTNAME)
-@click.option("--certificate-path", "-c", default=const.HOSTNAME + ".crt", help="Certificate path, %s.crt by default" % const.HOSTNAME)
-@click.option("--authority-path", "-a", default="ca.crt", help="Certificate authority certificate path, ca.crt by default")
-@click.option("--revocations-path", "-crl", default="ca.crl", help="Certificate revocation list, ca.crl by default")
-def certidude_setup_client(quiet, **kwargs):
-    return certidude_request_certificate(**kwargs)
-
-
 @click.command("server", help="Set up OpenVPN server")
 @click.argument("authority")
 @click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="OpenVPN subnet, 192.168.33.0/24 by default")
 @click.option("--local", "-l", default="0.0.0.0", help="OpenVPN listening address, defaults to all interfaces")
-@click.option("--port", "-p", default=1194, type=click.IntRange(1,60000), help="OpenVPN listening port, 1194 by default")
+@click.option("--port", "-p", default=51900, type=click.IntRange(1,60000), help="OpenVPN listening port, 51900 by default")
 @click.option('--proto', "-t", default="udp", type=click.Choice(['udp', 'tcp']), help="OpenVPN transport protocol, UDP by default")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
 @click.option("--config", "-o",
     default="/etc/openvpn/site-to-client.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
-def certidude_setup_openvpn_server(authority, config, subnet, route, org_unit, local, proto, port):
-
-    # TODO: Make dirs
-    # TODO: Intelligent way of getting last IP address in the subnet
-    subnet_first = None
-    subnet_last = None
-    subnet_second = None
-    for addr in subnet.hosts():
-        if not subnet_first:
-            subnet_first = addr
-            continue
-        if not subnet_second:
-            subnet_second = addr
-        subnet_last = addr
+def certidude_setup_openvpn_server(authority, config, subnet, route, local, proto, port):
 
     # Create corresponding section in Certidude client configuration file
     client_config = ConfigParser()
@@ -356,13 +334,12 @@ def certidude_setup_openvpn_server(authority, config, subnet, route, org_unit, l
     else:
         client_config.set(authority, "trigger", "interface up")
         client_config.set(authority, "common name", const.HOSTNAME)
-        client_config.set(authority, "subject alternative name dns", const.FQDN)
-        client_config.set(authority, "extended key usage flags", "server auth")
         client_config.set(authority, "request path", "/etc/openvpn/keys/%s.csr" % const.HOSTNAME)
         client_config.set(authority, "key path", "/etc/openvpn/keys/%s.key" % const.HOSTNAME)
         client_config.set(authority, "certificate path", "/etc/openvpn/keys/%s.crt" % const.HOSTNAME)
         client_config.set(authority, "authority path",  "/etc/openvpn/keys/ca.crt")
         client_config.set(authority, "revocations path",  "/etc/openvpn/keys/ca.crl")
+        client_config.set(authority, "dhparam path", "/etc/openvpn/keys/dhparam.pem")
         with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
             client_config.write(fh)
         os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
@@ -380,49 +357,38 @@ def certidude_setup_openvpn_server(authority, config, subnet, route, org_unit, l
         service_config.add_section(endpoint)
         service_config.set(endpoint, "authority", authority)
         service_config.set(endpoint, "service", "init/openvpn")
+
         with open(const.SERVICES_CONFIG_PATH + ".part", 'wb') as fh:
             service_config.write(fh)
         os.rename(const.SERVICES_CONFIG_PATH + ".part", const.SERVICES_CONFIG_PATH)
         click.echo("Section '%s' added to %s" % (endpoint, const.SERVICES_CONFIG_PATH))
 
-    dhparam_path = "/etc/openvpn/keys/dhparam.pem"
-    if not os.path.exists(dhparam_path):
-        cmd = "openssl", "dhparam", "-out", dhparam_path, "2048"
-        subprocess.check_call(cmd)
-
-    config.write("mode server\n")
-    config.write("tls-server\n")
+    authority_hostname = authority.split(".")[0]
+    config.write("server %s %s\n" % (subnet.network_address, subnet.netmask))
+    config.write("dev tun-%s\n" % authority_hostname)
     config.write("proto %s\n" % proto)
     config.write("port %d\n" % port)
-    config.write("dev tap\n")
     config.write("local %s\n" % local)
     config.write("key %s\n" % client_config.get(authority, "key path"))
     config.write("cert %s\n" % client_config.get(authority, "certificate path"))
     config.write("ca %s\n" % client_config.get(authority, "authority path"))
-    config.write("dh %s\n" % dhparam_path)
+    config.write("dh %s\n" % client_config.get(authority, "dhparam path"))
     config.write("comp-lzo\n")
     config.write("user nobody\n")
     config.write("group nogroup\n")
     config.write("persist-tun\n")
     config.write("persist-key\n")
-    config.write("ifconfig-pool-persist /tmp/openvpn-leases.txt\n")
-    config.write("ifconfig %s 255.255.255.0\n" % subnet_first)
-    config.write("server-bridge %s 255.255.255.0 %s %s\n" % (subnet_first, subnet_second, subnet_last))
+    config.write("#ifconfig-pool-persist /tmp/openvpn-leases.txt\n")
     config.write("#crl-verify %s\n" % client_config.get(authority, "revocations path"))
 
     click.echo("Generated %s" % config.name)
     click.echo("Inspect generated files and issue following to request certificate:")
     click.echo()
     click.echo("  certidude request")
-    click.echo()
-    click.echo("As OpenVPN server certificate needs specific key usage extensions please")
-    click.echo("use following command to sign on Certidude server instead of web interface:")
-    click.echo()
-    click.echo("  certidude sign %s" % const.HOSTNAME)
 
 
 @click.command("nginx", help="Set up nginx as HTTPS server")
-@click.argument("server")
+@click.argument("authority")
 @click.option("--common-name", "-cn", default=const.FQDN, help="Common name, %s by default" % const.FQDN)
 @click.option("--tls-config",
     default="/etc/nginx/conf.d/tls.conf",
@@ -439,51 +405,56 @@ def certidude_setup_openvpn_server(authority, config, subnet, route, org_unit, l
 @click.option("--dhparam-path", "-dh", default="dhparam2048.pem", help="Diffie/Hellman parameters path, dhparam2048.pem relative to -d by default")
 @click.option("--authority-path", "-ca", default="ca.crt", help="Certificate authority certificate path, ca.crt relative to -d by default")
 @click.option("--revocations-path", "-crl", default="ca.crl", help="Certificate revocation list, ca.crl relative to -d by default")
-@click.option("--verify-client", "-vc", type=click.Choice(['optional', 'on', 'off']))
+@click.option("--verify-client", "-vc", default="optional", type=click.Choice(['optional', 'on', 'off']))
 @expand_paths()
-def certidude_setup_nginx(authority, site_config, tls_config, common_name, org_unit, directory, key_path, request_path, certificate_path, authority_path, revocations_path, dhparam_path, verify_client):
-    # TODO: Intelligent way of getting last IP address in the subnet
-
-    if not os.path.exists(certificate_path):
-        click.echo("As HTTPS server certificate needs specific key usage extensions please")
-        click.echo("use following command to sign on Certidude server instead of web interface:")
-        click.echo()
-        click.echo("  certidude sign %s" % common_name)
-        click.echo()
-    retval = certidude_request_certificate(authority, key_path, request_path,
-        certificate_path, authority_path, revocations_path, common_name, org_unit,
-        extended_key_usage_flags = [ExtendedKeyUsageOID.SERVER_AUTH],
-        dns = const.FQDN, wait=True, bundle=True)
-
-    if not os.path.exists(dhparam_path):
-        cmd = "openssl", "dhparam", "-out", dhparam_path, "2048"
-        subprocess.check_call(cmd)
-
-    if retval:
-        return retval
+def certidude_setup_nginx(authority, site_config, tls_config, common_name, directory, key_path, request_path, certificate_path, authority_path, revocations_path, dhparam_path, verify_client):
+    if not os.path.exists("/etc/nginx"):
+        raise ValueError("nginx not installed")
+    if "." not in common_name:
+        raise ValueError("Fully qualified hostname not specified as common name, make sure hostname -f works")
+    client_config = ConfigParser()
+    if os.path.exists(const.CLIENT_CONFIG_PATH):
+        client_config.readfp(open(const.CLIENT_CONFIG_PATH))
+    if client_config.has_section(authority):
+        click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
+    else:
+        client_config.add_section(authority)
+        client_config.set(authority, "trigger", "interface up")
+        client_config.set(authority, "common name", common_name)
+        client_config.set(authority, "request path", request_path)
+        client_config.set(authority, "key path", key_path)
+        client_config.set(authority, "certificate path", certificate_path)
+        client_config.set(authority, "authority path",  authority_path)
+        client_config.set(authority, "dhparam path",  dhparam_path)
+        client_config.set(authority, "revocations path",  revocations_path)
+        with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
+            client_config.write(fh)
+        os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
+        click.echo("Section '%s' added to %s" % (authority, const.CLIENT_CONFIG_PATH))
 
     context = globals() # Grab const.BLAH
     context.update(locals())
 
-    if os.path.exists(site_client_config.name):
-        click.echo("Configuration file %s already exists, not overwriting" % site_client_config.name)
+    if os.path.exists(site_config.name):
+        click.echo("Configuration file %s already exists, not overwriting" % site_config.name)
     else:
-        site_client_config.write(env.get_template("nginx-https-site.conf").render(context))
-        click.echo("Generated %s" % site_client_config.name)
+        site_config.write(env.get_template("nginx-https-site.conf").render(context))
+        click.echo("Generated %s" % site_config.name)
 
-    if os.path.exists(tls_client_config.name):
-        click.echo("Configuration file %s already exists, not overwriting" % tls_client_config.name)
+    if os.path.exists(tls_config.name):
+        click.echo("Configuration file %s already exists, not overwriting" % tls_config.name)
     else:
-        tls_client_config.write(env.get_template("nginx-tls.conf").render(context))
-        click.echo("Generated %s" % tls_client_config.name)
+        tls_config.write(env.get_template("nginx-tls.conf").render(context))
+        click.echo("Generated %s" % tls_config.name)
+
 
     click.echo()
     click.echo("Inspect configuration files, enable it and start nginx service:")
     click.echo()
     click.echo("  ln -s %s /etc/nginx/sites-enabled/%s" % (
-        os.path.relpath(site_client_config.name, "/etc/nginx/sites-enabled"),
-        os.path.basename(site_client_config.name)))
-    click.secho("  service nginx restart", bold=True)
+        os.path.relpath(site_config.name, "/etc/nginx/sites-enabled"),
+        os.path.basename(site_config.name)))
+    click.echo("  service nginx restart")
     click.echo()
 
 
@@ -495,7 +466,7 @@ def certidude_setup_nginx(authority, site_config, tls_config, common_name, org_u
     default="/etc/openvpn/client-to-site.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
-def certidude_setup_openvpn_client(authority, remote, config, org_unit, proto):
+def certidude_setup_openvpn_client(authority, remote, config, proto):
 
     # Create corresponding section in Certidude client configuration file
     client_config = ConfigParser()
@@ -553,15 +524,10 @@ def certidude_setup_openvpn_client(authority, remote, config, org_unit, proto):
     click.echo("Inspect generated files and issue following to request certificate:")
     click.echo()
     click.echo("  certidude request")
-    click.echo()
-    click.echo("As OpenVPN server certificate needs specific key usage extensions please")
-    click.echo("use following command to sign on Certidude server instead of web interface:")
-    click.echo()
-    click.echo("  certidude sign %s" % const.HOSTNAME)
 
 
 @click.command("server", help="Set up strongSwan server")
-@click.argument("server")
+@click.argument("authority")
 @click.option("--subnet", "-sn", default=u"192.168.33.0/24", type=ip_network, help="IPsec virtual subnet, 192.168.33.0/24 by default")
 @click.option("--local", "-l", type=ip_address, help="IP address associated with the certificate, none by default")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
@@ -580,8 +546,6 @@ def certidude_setup_strongswan_server(authority, config, secrets, subnet, route,
     else:
         client_config.set(authority, "trigger", "interface up")
         client_config.set(authority, "common name", const.FQDN)
-        client_config.set(authority, "subject alternative name dns", const.FQDN)
-        client_config.set(authority, "extended key usage flags", "server auth, ike intermediate")
         client_config.set(authority, "request path", "/etc/ipsec.d/reqs/%s.pem" % const.HOSTNAME)
         client_config.set(authority, "key path", "/etc/ipsec.d/private/%s.pem" % const.HOSTNAME)
         client_config.set(authority, "certificate path", "/etc/ipsec.d/certs/%s.pem" % const.HOSTNAME)
@@ -617,9 +581,9 @@ def certidude_setup_strongswan_server(authority, config, secrets, subnet, route,
 
 
 @click.command("client", help="Set up strongSwan client")
-@click.argument("server")
+@click.argument("authority")
 @click.argument("remote")
-def certidude_setup_strongswan_client(authority, config, org_unit, remote, dpdaction):
+def certidude_setup_strongswan_client(authority, config, remote, dpdaction):
     # Create corresponding section in /etc/certidude/client.conf
     client_config = ConfigParser()
     if os.path.exists(const.CLIENT_CONFIG_PATH):
@@ -664,9 +628,9 @@ def certidude_setup_strongswan_client(authority, config, org_unit, remote, dpdac
 
 
 @click.command("networkmanager", help="Set up strongSwan client via NetworkManager")
-@click.argument("server") # Certidude server
+@click.argument("authority") # Certidude server
 @click.argument("remote") # StrongSwan gateway
-def certidude_setup_strongswan_networkmanager(server,remote,  org_unit):
+def certidude_setup_strongswan_networkmanager(authority, remote):
     endpoint = "IPSec to %s" % remote
 
     # Create corresponding section in /etc/certidude/client.conf
@@ -679,7 +643,6 @@ def certidude_setup_strongswan_networkmanager(server,remote,  org_unit):
         client_config.add_section(authority)
         client_config.set(authority, "trigger", "interface up")
         client_config.set(authority, "common name", const.HOSTNAME)
-        client_config.set(authority, "org unit", org_unit)
         client_config.set(authority, "request path", "/etc/ipsec.d/reqs/%s.pem" % const.HOSTNAME)
         client_config.set(authority, "key path", "/etc/ipsec.d/private/%s.pem" % const.HOSTNAME)
         client_config.set(authority, "certificate path", "/etc/ipsec.d/certs/%s.pem" % const.HOSTNAME)
@@ -708,10 +671,10 @@ def certidude_setup_strongswan_networkmanager(server,remote,  org_unit):
 
 
 @click.command("networkmanager", help="Set up OpenVPN client via NetworkManager")
-@click.argument("server") # Certidude server
+@click.argument("authority")
 @click.argument("remote") # OpenVPN gateway
 @click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
-def certidude_setup_openvpn_networkmanager(authority, org_unit, remote):
+def certidude_setup_openvpn_networkmanager(authority, remote):
     # Create corresponding section in /etc/certidude/client.conf
     client_config = ConfigParser()
     if os.path.exists(const.CLIENT_CONFIG_PATH):
@@ -750,29 +713,24 @@ def certidude_setup_openvpn_networkmanager(authority, org_unit, remote):
 
 @click.command("authority", help="Set up Certificate Authority in a directory")
 @click.option("--username", default="certidude", help="Service user account, created if necessary, 'certidude' by default")
-@click.option("--static-path", default=os.path.join(os.path.dirname(__file__), "static"), help="Path to Certidude's static JS/CSS/etc")
 @click.option("--kerberos-keytab", default="/etc/certidude/server.keytab", help="Kerberos keytab for using 'kerberos' authentication backend, /etc/certidude/server.keytab by default")
 @click.option("--nginx-config", "-n",
     default="/etc/nginx/sites-available/certidude.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="nginx site config for serving Certidude, /etc/nginx/sites-available/certidude by default")
-@click.option("--parent", "-p", help="Parent CA, none by default")
 @click.option("--common-name", "-cn", default=const.FQDN, help="Common name, fully qualified hostname by default")
 @click.option("--country", "-c", default=None, help="Country, none by default")
 @click.option("--state", "-s", default=None, help="State or country, none by default")
 @click.option("--locality", "-l", default=None, help="City or locality, none by default")
-@click.option("--authority-lifetime", default=20*365, help="Authority certificate lifetime in days, 7300 days (20 years) by default")
-@click.option("--certificate-lifetime", default=5*365, help="Certificate lifetime in days, 1825 days (5 years) by default")
-@click.option("--revocation-list-lifetime", default=20*60, help="Revocation list lifetime in days, 1200 seconds (20 minutes) by default")
+@click.option("--authority-lifetime", default=20*365, help="Authority certificate lifetime in days, 20 years by default")
 @click.option("--organization", "-o", default=None, help="Company or organization name")
 @click.option("--organizational-unit", "-ou", default=None)
-@click.option("--revoked-url", default=None, help="CRL distribution URL")
-@click.option("--certificate-url", default=None, help="Authority certificate URL")
 @click.option("--push-server", default="http://" + const.FQDN, help="Push server, by default http://%s" % const.FQDN)
 @click.option("--directory", help="Directory for authority files")
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
-def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_config, parent, country, state, locality, organization, organizational_unit, common_name, directory, certificate_lifetime, authority_lifetime, revocation_list_lifetime, revoked_url, certificate_url, push_server, outbox, server_flags):
+def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags):
+    openvpn_profile_template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates", "openvpn-client.conf")
 
     if not directory:
         if os.getuid():
@@ -781,17 +739,12 @@ def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_conf
             directory = os.path.join("/var/lib/certidude", const.FQDN)
 
     click.echo("Using fully qualified hostname: %s" % common_name)
+    certificate_url = "http://%s/api/certificate/" % common_name
+    revoked_url = "http://%s/api/revoked/" % common_name
 
     # Expand variables
-    if not revoked_url:
-        revoked_url = "http://%s/api/revoked/" % common_name
-    if not certificate_url:
-        certificate_url = "http://%s/api/certificate/" % common_name
     ca_key = os.path.join(directory, "ca_key.pem")
     ca_crt = os.path.join(directory, "ca_crt.pem")
-
-    if not static_path.endswith("/"):
-        static_path += "/"
 
     if os.getuid() == 0:
         try:
@@ -833,6 +786,7 @@ def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_conf
         working_directory = os.path.realpath(os.path.dirname(__file__))
         certidude_path = sys.argv[0]
 
+        # Push server config generation
         if not os.path.exists("/etc/nginx"):
             click.echo("Directory /etc/nginx does not exist, hence not creating nginx configuration")
             listen = "0.0.0.0"
@@ -924,7 +878,6 @@ def certidude_setup_authority(username, static_path, kerberos_keytab, nginx_conf
             ).add_extension(
                 x509.AuthorityKeyIdentifier.from_issuer_public_key(key.public_key()),
                 critical=False
-
             )
 
         if server_flags:
@@ -1002,120 +955,99 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
     from certidude import authority
     from pycountry import countries
 
-    def dump_common(j):
-
-        person = [j for j in (j.given_name, j.surname) if j]
-        if person:
-            click.echo("Associated person: %s" % " ".join(person) + (" <%s>" % j.email_address if j.email_address else ""))
-        elif j.email_address:
-            click.echo("Associated e-mail: " + j.email_address)
-
-        bits = [j for j in (
-            countries.get(alpha2=j.country_code.upper()).name if
-            j.country_code else "",
-            j.state_or_county,
-            j.city,
-            j.organization,
-            j.organizational_unit) if j]
-        if bits:
-            click.echo("Organization: %s" % ", ".join(bits))
-
-        if show_key_type:
-            click.echo("Key type: %s-bit %s" % (j.key_length, j.key_type))
-
-        if show_extensions:
-            for key, value, data in j.extensions:
-                click.echo(("Extension " + key + ":").ljust(50) + " " + value)
-        else:
-            if j.key_usage:
-                click.echo("Key usage: " + j.key_usage)
-            if j.fqdn:
-                click.echo("Associated hostname: " + j.fqdn)
-
+    def dump_common(common_name, path, cert):
+        click.echo("certidude revoke %s" % common_name)
+        with open(path, "rb") as fh:
+            buf = fh.read()
+            click.echo("md5sum: %s" % hashlib.md5(buf).hexdigest())
+            click.echo("sha1sum: %s" % hashlib.sha1(buf).hexdigest())
+            click.echo("sha256sum: %s" % hashlib.sha256(buf).hexdigest())
+        click.echo()
+        for ext in cert.extensions:
+            print " -", ext.value
+        click.echo()
 
     if not hide_requests:
-        for j in authority.list_requests():
-
+        for common_name, path, buf, csr, server in authority.list_requests():
+            created = 0
             if not verbose:
-                click.echo("s " + j.path + " " + j.identity)
+                click.echo("s " + path)
                 continue
-            click.echo(click.style(j.common_name, fg="blue"))
-            click.echo("=" * len(j.common_name))
-            click.echo("State: ? " + click.style("submitted", fg="yellow") + " " + naturaltime(j.created) + click.style(", %s" %j.created,  fg="white"))
+            click.echo(click.style(common_name, fg="blue"))
+            click.echo("=" * len(common_name))
+            click.echo("State: ? " + click.style("submitted", fg="yellow") + " " + naturaltime(created) + click.style(", %s" %created,  fg="white"))
+            click.echo("openssl req -in %s -text -noout" % path)
+            dump_common(common_name, path, cert)
 
-            dump_common(j)
-
-            # Calculate checksums for cross-checking
-            import hashlib
-            md5sum = hashlib.md5()
-            sha1sum = hashlib.sha1()
-            sha256sum = hashlib.sha256()
-            with open(j.path, "rb") as fh:
-                buf = fh.read()
-                md5sum.update(buf)
-                sha1sum.update(buf)
-                sha256sum.update(buf)
-            click.echo("MD5 checksum: %s" % md5sum.hexdigest())
-            click.echo("SHA-1 checksum: %s" % sha1sum.hexdigest())
-            click.echo("SHA-256 checksum: %s" % sha256sum.hexdigest())
-
-            if show_path:
-                click.echo("Details: openssl req -in %s -text -noout" % j.path)
-                click.echo("Sign: certidude sign %s" % j.path)
-            click.echo()
 
     if show_signed:
-        for j in authority.list_signed():
+        for common_name, path, buf, cert, server in authority.list_signed():
             if not verbose:
-                if j.signed < NOW and j.expires > NOW:
-                    click.echo("v " + j.path + " " + j.identity)
-                elif NOW > j.expires:
-                    click.echo("e " + j.path + " " + j.identity)
+                if cert.not_valid_before < NOW and cert.not_valid_after > NOW:
+                    click.echo("v " + path)
+                elif NOW > cert.not_valid_after:
+                    click.echo("e " + path)
                 else:
-                    click.echo("y " + j.path + " " + j.identity)
+                    click.echo("y " + path)
                 continue
 
-            click.echo(click.style(j.common_name, fg="blue") + " " + click.style(j.serial_number_hex, fg="white"))
-            click.echo("="*(len(j.common_name)+60))
-
-            if j.signed < NOW and j.expires > NOW:
-                click.echo("Status: \u2713 " + click.style("valid", fg="green") + " " + naturaltime(j.expires) + click.style(", %s" %j.expires,  fg="white"))
-            elif NOW > j.expires:
-                click.echo("Status: \u2717 " + click.style("expired", fg="red") + " " + naturaltime(j.expires) + click.style(", %s" %j.expires,  fg="white"))
+            click.echo(click.style(common_name, fg="blue") + " " + click.style("%x" % cert.serial_number, fg="white"))
+            click.echo("="*(len(common_name)+60))
+            expires = 0 # TODO
+            if cert.not_valid_before < NOW and cert.not_valid_after > NOW:
+                click.echo("Status: " + click.style("valid", fg="green") + " until " + naturaltime(cert.not_valid_after) + click.style(", %s" % cert.not_valid_after,  fg="white"))
+            elif NOW > cert.not_valid_after:
+                click.echo("Status: " + click.style("expired", fg="red") + " " + naturaltime(expires) + click.style(", %s" %expires,  fg="white"))
             else:
-                click.echo("Status: \u2717 " + click.style("not valid yet", fg="red") + click.style(", %s" %j.expires,  fg="white"))
-            dump_common(j)
-
-            if show_path:
-                click.echo("Details: openssl x509 -in %s -text -noout" % j.path)
-                click.echo("Revoke: certidude revoke %s" % j.path)
+                click.echo("Status: " + click.style("not valid yet", fg="red") + click.style(", %s" %expires,  fg="white"))
             click.echo()
+            click.echo("openssl x509 -in %s -text -noout" % path)
+            dump_common(common_name, path, cert)
 
     if show_revoked:
-        for j in authority.list_revoked():
+        for common_name, path, buf, cert, server in authority.list_revoked():
             if not verbose:
-                click.echo("r " + j.path + " " + j.identity)
+                click.echo("r " + path)
                 continue
-            click.echo(click.style(j.common_name, fg="blue") + " " + click.style(j.serial_number_hex, fg="white"))
-            click.echo("="*(len(j.common_name)+60))
-            click.echo("Status: \u2717 " + click.style("revoked", fg="red") + " %s%s" % (naturaltime(NOW-j.changed), click.style(", %s" % j.changed, fg="white")))
-            dump_common(j)
-            if show_path:
-                click.echo("Details: openssl x509 -in %s -text -noout" % j.path)
-            click.echo()
+
+            click.echo(click.style(common_name, fg="blue") + " " + click.style("%x" % cert.serial, fg="white"))
+            click.echo("="*(len(common_name)+60))
+
+            _, _, _, _, _, _, _, _, mtime, _ = os.stat(path)
+            changed = datetime.fromtimestamp(mtime)
+            click.echo("Status: " + click.style("revoked", fg="red") + " %s%s" % (naturaltime(NOW-changed), click.style(", %s" % changed, fg="white")))
+            click.echo("openssl x509 -in %s -text -noout" % path)
+            dump_common(common_name, path, cert)
 
     click.echo()
 
 
-@click.command("sign", help="Sign certificates")
+@click.command("sign", help="Sign certificate")
 @click.argument("common_name")
 @click.option("--overwrite", "-o", default=False, is_flag=True, help="Revoke valid certificate with same CN")
-@click.option("--lifetime", "-l", help="Lifetime")
-def certidude_sign(common_name, overwrite, lifetime):
-    from certidude import authority, config
-    request = authority.get_request(common_name)
-    cert = authority.sign(request)
+def certidude_sign(common_name, overwrite):
+    from certidude import authority
+    cert = authority.sign(common_name, overwrite)
 
+
+@click.command("revoke", help="Revoke certificate")
+@click.argument("common_name")
+def certidude_revoke(common_name):
+    from certidude import authority
+    authority.revoke(common_name)
+
+
+@click.command("cron", help="Run from cron to manage Certidude server")
+def certidude_cron():
+    import itertools
+    from certidude import authority, config
+    now = datetime.now()
+    for cn, path, buf, cert, server in itertools.chain(authority.list_signed(), authority.list_revoked()):
+        if cert.not_valid_after < now:
+            expired_path = os.path.join(config.EXPIRED_DIR, "%x.pem" % cert.serial)
+            assert not os.path.exists(expired_path)
+            os.rename(path, expired_path)
+            click.echo("Moved %s to %s" % (path, expired_path))
 
 @click.command("serve", help="Run server")
 @click.option("-p", "--port", default=8080 if os.getuid() else 80, help="Listen port")
@@ -1276,9 +1208,6 @@ def certidude_setup_openvpn(): pass
 @click.group("setup", help="Getting started section")
 def certidude_setup(): pass
 
-@click.group("signer", help="Signer process management")
-def certidude_signer(): pass
-
 @click.group()
 def entry_point(): pass
 
@@ -1291,15 +1220,15 @@ certidude_setup_openvpn.add_command(certidude_setup_openvpn_networkmanager)
 certidude_setup.add_command(certidude_setup_authority)
 certidude_setup.add_command(certidude_setup_openvpn)
 certidude_setup.add_command(certidude_setup_strongswan)
-certidude_setup.add_command(certidude_setup_client)
 certidude_setup.add_command(certidude_setup_nginx)
 entry_point.add_command(certidude_setup)
 entry_point.add_command(certidude_serve)
-entry_point.add_command(certidude_signer)
 entry_point.add_command(certidude_request)
 entry_point.add_command(certidude_sign)
+entry_point.add_command(certidude_revoke)
 entry_point.add_command(certidude_list)
 entry_point.add_command(certidude_users)
+entry_point.add_command(certidude_cron)
 
 if __name__ == "__main__":
     entry_point()

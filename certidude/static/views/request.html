@@ -1,13 +1,18 @@
 <li id="request-{{ request.common_name | replace('@', '--') | replace('.', '-') }}" class="filterable">
 
 <a class="button icon download" href="/api/request/{{request.common_name}}/">Fetch</a>
-<button class="icon sign" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/request/{{request.common_name}}/',type:'patch'});">Sign</button>
-<button class="icon revoke" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/request/{{request.common_name}}/',type:'delete'});">Delete</button>
+<button class="icon sign" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/request/{{request.common_name}}/?sha256sum={{ request.sha256sum }}',type:'patch'});">Sign</button>
+<button class="icon revoke" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/request/{{request.common_name}}/?sha256sum={{ request.sha256sum }}',type:'delete'});">Delete</button>
 
 
 <div class="monospace">
+{% if request.server %}
+{% include 'img/iconmonstr-server-1.svg' %}
+{% else %}
 {% include 'img/iconmonstr-certificate-15.svg' %}
-{{request.identity}}
+{% endif %}
+
+{{request.common_name}}
 </div>
 
 {% if request.email_address %}
@@ -16,7 +21,7 @@
 
 <div class="monospace">
 {% include 'img/iconmonstr-key-3.svg' %}
-<span title="SHA-1 of public key">
+<span title="SHA-256 of certificate signing request">
 {{ request.sha256sum }}
 </span>
 {{ request.key_length }}-bit

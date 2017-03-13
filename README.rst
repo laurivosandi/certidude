@@ -93,13 +93,9 @@ TODO
 ----
 
 * `OCSP <https://tools.ietf.org/html/rfc4557>`_ support, needs a bit hacking since OpenSSL wrappers are not exposing the functionality.
-* `SECP <https://tools.ietf.org/html/draft-nourse-scep-23>`_ support, a client implementation available `here <https://github.com/certnanny/sscep>`_. Not sure if we can implement server-side events within current standard.
-* Deep mailbox integration, eg fetch CSR-s from mailbox via IMAP.
+* `SCEP <https://tools.ietf.org/html/draft-nourse-scep-23>`_ support, a client implementation available `here <https://github.com/certnanny/sscep>`_. Not sure if we can implement server-side events within current standard.
 * WebCrypto support, meanwhile check out `hwcrypto.js <https://github.com/open-eid/hwcrypto.js>`_.
-* Certificate push/pull, making it possible to sign offline.
-* PKCS#11 hardware token support for signatures at command-line.
-* Ability to send ``.ovpn`` bundle URL tokens via e-mail, for simplified VPN adoption.
-* Cronjob for deleting expired certificates
+* Ability to send OpenVPN profile URL tokens via e-mail, for simplified VPN adoption.
 * Signer process logging.
 
 
@@ -384,15 +380,14 @@ as this information will already exist in AD and duplicating it in the certifica
 doesn't make sense. Additionally the information will get out of sync if
 attributes are changed in AD but certificates won't be updated.
 
-If machine is enrolled, eg by running certidude request:
+If machine is enrolled, eg by running ``certidude request`` as root on Ubuntu/Fedora/Mac OS X:
 
-* If Kerberos credentials are presented machine is automatically enrolled
-* Common name is set to short hostname/machine name in AD
-* E-mail is not filled in (maybe we can fill in something from AD?)
-* Given name and surname are not filled in
+* If Kerberos credentials are presented machine can be automatically enrolled depending on the ``machine enrollment`` setting
+* Common name is set to short ``hostname``
+* It is tricky to determine user who is triggering the action so given name, surname and e-mail attributes are not filled in
 
 If user enrolls, eg by clicking generate bundle button in the web interface:
 
-* Common name is either set to username or username@device-identifier depending on the 'user certificate enrollment' setting
-* Given name and surname are filled in based on LDAP attributes of the user
-* E-mail not filled in (should it be filled in? Can we even send mail to user if it's in external domain?)
+* Common name is either set to ``username`` or ``username@device-identifier`` depending on the ``user enrollment`` setting
+* Given name and surname are not filled in because Unicode characters cause issues in OpenVPN Connect app
+* E-mail is not filled in because it might change in AD

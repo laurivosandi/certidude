@@ -1,9 +1,14 @@
-<li id="certificate-{{ certificate.common_name | replace('@', '--') | replace('.', '-') }}" data-dn="{{ certificate.identity }}" data-cn="{{ certificate.common_name }}" class="filterable">
+<li id="certificate-{{ certificate.common_name | replace('@', '--') | replace('.', '-') }}" data-dn="CN={{ certificate.common_name }}" data-cn="{{ certificate.common_name }}" class="filterable">
     <a class="button icon download" href="/api/signed/{{certificate.common_name}}/">Fetch</a>
     <button class="icon revoke" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/signed/{{certificate.common_name}}/',type:'delete'});">Revoke</button>
 
     <div class="monospace">
+    {% if certificate.server %}
+    {% include 'img/iconmonstr-server-1.svg' %}
+    {% else %}
     {% include 'img/iconmonstr-certificate-15.svg' %}
+    {% endif %}
+
     {{certificate.common_name}}
     </div>
 

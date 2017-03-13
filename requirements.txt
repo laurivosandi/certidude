@@ -4,7 +4,7 @@ cryptography==1.7.2
 falcon==1.1.0
 humanize==0.5.1
 ipaddress==1.0.18
-Jinja2==2.8
+Jinja2==2.9.5
 Markdown==2.6.8
 pyldap==2.4.28
 requests==2.10.0

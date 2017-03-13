@@ -2,12 +2,10 @@
 <section id="about">
 <h2>{{ session.user.gn }} {{ session.user.sn }} ({{session.user.name }}) settings</h2>
 
-<p>Mails will be sent to: {{ session.user.mail }}</p>
+<p title="Bundles are mainly intended for Android and iOS users">
+Click <a href="/api/bundle/">here</a> to generate Android or iOS bundle for current user account.</p>
 
-{% if session.authority.user_certificate_enrollment %}
-<p>You can click <a href="/api/bundle/">here</a> to generate bundle
-for current user account.</p>
-{% endif %}
+<p>Mails will be sent to: {{ session.user.mail }}</p>
 
 {% if session.authority %}
 
@@ -28,9 +26,9 @@ as such require complete reset of X509 infrastructure if some of them needs to b
 {% endif %}
 
 
-<p>User certificate enrollment:
-{% if session.authority.user_certificate_enrollment %}
-    {% if session.authority.user_mutliple_certificates %}
+<p>User enrollment:
+{% if session.authority.user_enrollment_allowed %}
+    {% if session.authority.user_multiple_certificates %}
     multiple
     {% else %}
     single
@@ -42,10 +40,20 @@ forbidden
 </p>
 
 
-<p>Web signed certificate attributes:</p>
+<p>Machine enrollment:
+{% if session.authority.machine_enrollment_allowed %}
+allowed
+{% else %}
+forbidden
+{% endif %}
+</p>
+
+
+<p>Certificate attributes:</p>
 
 <ul>
-    <li>Certificate lifetime: {{ session.authority.signature.certificate_lifetime }} days</li>
+    <li>Server certificate lifetime: {{ session.authority.signature.server_certificate_lifetime }} days</li>
+    <li>Client certificate lifetime: {{ session.authority.signature.client_certificate_lifetime }} days</li>
     <li>Revocation list lifetime: {{ session.authority.signature.revocation_list_lifetime }} seconds</li>
 </ul>
 
@@ -134,13 +142,13 @@ cat example.csr
 </pre>
 
       <p>Paste the contents here and click submit:</p>
-      <textarea id="request_body" style="width:100%; min-height: 4em;" placeholder="-----BEGIN CERTIFICATE REQUEST-----
-...
------END CERTIFICATE REQUEST-----"></textarea>
+      <textarea id="request_body" style="width:100%; min-height: 4em;" placeholder="-----BEGIN CERTIFICATE REQUEST-----"></textarea>
       <button class="icon upload" id="request_submit" style="float:none;">Submit</button>
     {% else %}
-      <p>Submit a certificate signing request with Certidude:</p>
-      <pre>certidude setup client {{session.common_name}}</pre>
+      <p>Submit a certificate signing request from Mac OS X, Ubuntu or Fedora:</p>
+      <pre>easy_install pip
+pip install certidude
+certidude bootstrap {{session.authority.common_name}}</pre>
     {% endif %}
 
     <ul id="pending_requests">
@@ -180,7 +188,8 @@ cat example.csr
     <h1>Revoked certificates</h1>
     <p>To fetch <a href="{{window.location.href}}api/revoked/">certificate revocation list</a>:</p>
     <pre>curl {{window.location.href}}api/revoked/ > crl.der
-curl http://ca2.koodur.lan/api/revoked/?wait=yes -H "Accept: application/x-pem-file" > crl.pem</pre>
+curl http://ca2.koodur.lan/api/revoked/ -L -H "Accept: application/x-pem-file"
+curl http://ca2.koodur.lan/api/revoked/?wait=yes -L -H "Accept: application/x-pem-file" > crl.pem</pre>
     <!--
     <p>To perform online certificate status request</p>
 

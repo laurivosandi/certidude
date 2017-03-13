@@ -84,8 +84,6 @@ class DirectoryConnection(object):
 class ActiveDirectoryUserManager(object):
     def get(self, username):
         # TODO: Sanitize username
-        if "@" in username:
-            username, _ = username.split("@", 1)
         with DirectoryConnection() as conn:
             ft = config.LDAP_USER_FILTER % username
             attribs = "cn", "givenName", "sn", "mail", "userPrincipalName"

@@ -38,27 +38,31 @@ AUTHORITY_CERTIFICATE_PATH = cp.get("authority", "certificate path")
 REQUESTS_DIR = cp.get("authority", "requests dir")
 SIGNED_DIR = cp.get("authority", "signed dir")
 REVOKED_DIR = cp.get("authority", "revoked dir")
+EXPIRED_DIR = cp.get("authority", "expired dir")
 
 OUTBOX = cp.get("authority", "outbox uri")
 OUTBOX_NAME = cp.get("authority", "outbox sender name")
 OUTBOX_MAIL = cp.get("authority", "outbox sender address")
 
-BUNDLE_FORMAT = cp.get("authority", "bundle format")
-OPENVPN_BUNDLE_TEMPLATE = cp.get("authority", "openvpn bundle template")
+BUNDLE_FORMAT = cp.get("bundle", "format")
+OPENVPN_PROFILE_TEMPLATE = cp.get("bundle", "openvpn profile template")
 
-USER_CERTIFICATE_ENROLLMENT = {
+MACHINE_ENROLLMENT_ALLOWED = {
+    "forbidden": False, "allowed": True }[
+    cp.get("authority", "machine enrollment")]
+USER_ENROLLMENT_ALLOWED = {
     "forbidden": False, "single allowed": True, "multiple allowed": True }[
-    cp.get("authority", "user certificate enrollment")]
+    cp.get("authority", "user enrollment")]
 USER_MULTIPLE_CERTIFICATES = {
     "forbidden": False, "single allowed": False, "multiple allowed": True }[
-    cp.get("authority", "user certificate enrollment")]
+    cp.get("authority", "user enrollment")]
 
-CERTIFICATE_BASIC_CONSTRAINTS = "CA:FALSE"
-CERTIFICATE_KEY_USAGE_FLAGS = "digitalSignature,keyEncipherment"
-CERTIFICATE_EXTENDED_KEY_USAGE_FLAGS = "clientAuth"
-CERTIFICATE_LIFETIME = cp.getint("signature", "certificate lifetime")
-CERTIFICATE_AUTHORITY_URL = cp.get("signature", "certificate url")
+REQUEST_SUBMISSION_ALLOWED = cp.getboolean("authority", "request submission allowed")
+CLIENT_CERTIFICATE_LIFETIME = cp.getint("signature", "client certificate lifetime")
+SERVER_CERTIFICATE_LIFETIME = cp.getint("signature", "server certificate lifetime")
+AUTHORITY_CERTIFICATE_URL = cp.get("signature", "authority certificate url")
 CERTIFICATE_CRL_URL = cp.get("signature", "revoked url")
+CERTIFICATE_RENEWAL_ALLOWED = cp.getboolean("signature", "renewal allowed")
 
 REVOCATION_LIST_LIFETIME = cp.getint("signature", "revocation list lifetime")
 

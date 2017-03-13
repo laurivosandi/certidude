@@ -79,10 +79,10 @@ def send(template, to=None, attachments=(), **context):
     msg.attach(part1)
     msg.attach(part2)
 
-    for attachment in attachments:
-        part = MIMEBase(*attachment.content_type.split("/"))
-        part.add_header('Content-Disposition', 'attachment', filename=attachment.suggested_filename)
-        part.set_payload(attachment.dump())
+    for attachment, content_type, suggested_filename in attachments:
+        part = MIMEBase(*content_type.split("/"))
+        part.add_header('Content-Disposition', 'attachment', filename=suggested_filename)
+        part.set_payload(attachment)
         msg.attach(part)
 
     # Gmail employs some sort of IPS

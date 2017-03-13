@@ -108,18 +108,23 @@ function onClientDown(e) {
 
 function onRequestSigned(e) {
     console.log("Request signed:", e.data);
+    var slug = e.data.replace("@", "--").replace(".", "-");
+    console.log("Removing:", slug);
 
-    $("#request-" + e.data.replace("@", "--").replace(".", "-")).slideUp("normal", function() { $(this).remove(); });
-    $("#certificate-" + e.data.replace("@", "--").replace(".", "-")).slideUp("normal", function() { $(this).remove(); });
+    $("#request-" + slug).slideUp("normal", function() { $(this).remove(); });
+    $("#certificate-" + slug).slideUp("normal", function() { $(this).remove(); });
 
     $.ajax({
         method: "GET",
         url: "/api/signed/" + e.data + "/",
         dataType: "json",
         success: function(certificate, status, xhr) {
-            console.info(certificate);
+            console.info("Retrieved certificate:", certificate);
             $("#signed_certificates").prepend(
                 nunjucks.render('views/signed.html', { certificate: certificate }));
+        },
+        error: function(response) {
+            console.info("Failed to retrieve certificate:", response);
         }
     });
 }
@@ -234,7 +239,7 @@ $(document).ready(function() {
             $(window).on("search", function() {
                 var q = $("#search").val();
                 $(".filterable").each(function(i, e) {
-                    if ($(e).attr("data-dn").toLowerCase().indexOf(q) >= 0) {
+                    if ($(e).attr("data-cn").toLowerCase().indexOf(q) >= 0) {
                         $(e).show();
                     } else {
                         $(e).hide();

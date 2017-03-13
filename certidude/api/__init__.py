@@ -5,13 +5,14 @@ import mimetypes
 import logging
 import os
 import click
+import hashlib
 from datetime import datetime
 from time import sleep
 from certidude import authority, mailer
 from certidude.auth import login_required, authorize_admin
 from certidude.user import User
 from certidude.decorators import serialize, event_source, csrf_protection
-from certidude.wrappers import Request, Certificate
+from cryptography.x509.oid import NameOID
 from certidude import const, config
 
 logger = logging.getLogger("api")
@@ -44,6 +45,33 @@ class SessionResource(object):
     @login_required
     @event_source
     def on_get(self, req, resp):
+        def serialize_requests(g):
+            for common_name, path, buf, obj, server in g():
+                yield dict(
+                    common_name = common_name,
+                    server = server,
+                    md5sum = hashlib.md5(buf).hexdigest(),
+                    sha1sum = hashlib.sha1(buf).hexdigest(),
+                    sha256sum = hashlib.sha256(buf).hexdigest(),
+                    sha512sum = hashlib.sha512(buf).hexdigest()
+                )
+
+        def serialize_certificates(g):
+            for common_name, path, buf, obj, server in g():
+                yield dict(
+                    serial_number = "%x" % obj.serial_number,
+                    common_name = common_name,
+                    server = server,
+                    # TODO: key type, key length, key exponent, key modulo
+                    signed = obj.not_valid_before,
+                    expires = obj.not_valid_after,
+                    sha256sum = hashlib.sha256(buf).hexdigest()
+                )
+
+        if req.context.get("user").is_admin():
+            logger.info("Logged in authority administrator %s" % req.context.get("user"))
+        else:
+            logger.info("Logged in authority user %s" % req.context.get("user"))
         return dict(
             user = dict(
                 name=req.context.get("user").name,
@@ -51,29 +79,31 @@ class SessionResource(object):
                 sn=req.context.get("user").surname,
                 mail=req.context.get("user").mail
             ),
-            request_submission_allowed = sum( # Dirty hack!
-                [req.context.get("remote_addr") in j
-                    for j in config.REQUEST_SUBNETS]),
+            request_submission_allowed = config.REQUEST_SUBMISSION_ALLOWED,
             authority = dict(
+                common_name = authority.ca_cert.subject.get_attributes_for_oid(
+                    NameOID.COMMON_NAME)[0].value,
                 outbox = dict(
                     server = config.OUTBOX,
                     name = config.OUTBOX_NAME,
                     mail = config.OUTBOX_MAIL
                 ),
-                user_certificate_enrollment=config.USER_CERTIFICATE_ENROLLMENT,
-                user_mutliple_certificates=config.USER_MULTIPLE_CERTIFICATES,
-                certificate = authority.certificate,
+                machine_enrollment_allowed=config.MACHINE_ENROLLMENT_ALLOWED,
+                user_enrollment_allowed=config.USER_ENROLLMENT_ALLOWED,
+                user_multiple_certificates=config.USER_MULTIPLE_CERTIFICATES,
                 events = config.EVENT_SOURCE_SUBSCRIBE % config.EVENT_SOURCE_TOKEN,
-                requests=authority.list_requests(),
-                signed=authority.list_signed(),
-                revoked=authority.list_revoked(),
+                requests=serialize_requests(authority.list_requests),
+                signed=serialize_certificates(authority.list_signed),
+                revoked=serialize_certificates(authority.list_revoked),
+                users=User.objects.all(),
                 admin_users = User.objects.filter_admins(),
                 user_subnets = config.USER_SUBNETS,
                 autosign_subnets = config.AUTOSIGN_SUBNETS,
                 request_subnets = config.REQUEST_SUBNETS,
                 admin_subnets=config.ADMIN_SUBNETS,
                 signature = dict(
-                    certificate_lifetime=config.CERTIFICATE_LIFETIME,
+                    server_certificate_lifetime=config.SERVER_CERTIFICATE_LIFETIME,
+                    client_certificate_lifetime=config.CLIENT_CERTIFICATE_LIFETIME,
                     revocation_list_lifetime=config.REVOCATION_LIST_LIFETIME
                 )
             ) if req.context.get("user").is_admin() else None,
@@ -88,7 +118,6 @@ class StaticResource(object):
         self.root = os.path.realpath(root)
 
     def __call__(self, req, resp):
-
         path = os.path.realpath(os.path.join(self.root, req.path[1:]))
         if not path.startswith(self.root):
             raise falcon.HTTPForbidden
@@ -124,7 +153,7 @@ def certidude_app():
     from certidude import config
     from .bundle import BundleResource
     from .revoked import RevocationListResource
-    from .signed import SignedCertificateListResource, SignedCertificateDetailResource
+    from .signed import SignedCertificateDetailResource
     from .request import RequestListResource, RequestDetailResource
     from .lease import LeaseResource, StatusFileLeaseResource
     from .whois import WhoisResource
@@ -138,7 +167,6 @@ def certidude_app():
     app.add_route("/api/certificate/", CertificateAuthorityResource())
     app.add_route("/api/revoked/", RevocationListResource())
     app.add_route("/api/signed/{cn}/", SignedCertificateDetailResource())
-    app.add_route("/api/signed/", SignedCertificateListResource())
     app.add_route("/api/request/{cn}/", RequestDetailResource())
     app.add_route("/api/request/", RequestListResource())
     app.add_route("/api/", SessionResource())
@@ -151,7 +179,7 @@ def certidude_app():
         app.add_route("/api/whois/", WhoisResource())
 
     # Optional user enrollment API call
-    if config.USER_CERTIFICATE_ENROLLMENT:
+    if config.USER_ENROLLMENT_ALLOWED:
         app.add_route("/api/bundle/", BundleResource())
 
     if config.TAGGING_BACKEND == "sql":

@@ -4,18 +4,20 @@ import os
 import requests
 import subprocess
 import tempfile
+from base64 import b64encode
+from datetime import datetime, timedelta
 from certidude import errors, const
-from certidude.wrappers import Certificate, Request
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import rsa
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.serialization import Encoding
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID, AuthorityInformationAccessOID
 from configparser import ConfigParser
-from OpenSSL import crypto
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
 
-def certidude_request_certificate(server, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, autosign=False, wait=False, ip_address=None, bundle=False, insecure=False):
+def certidude_request_certificate(server, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, autosign=False, wait=False, bundle=False, insecure=False):
     """
     Exchange CSR for certificate using Certidude HTTP API server
     """
@@ -25,6 +27,8 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
         request_params.add("autosign=true")
     if wait:
         request_params.add("wait=forever")
+
+    renew = False # Attempt to renew if certificate has expired
 
     # Expand ca.example.com
     scheme = "http" if insecure else "https" # TODO: Expose in CLI
@@ -41,13 +45,14 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
         click.echo("Attempting to fetch authority certificate from %s" % authority_url)
         try:
             r = requests.get(authority_url,
-                    headers={"Accept": "application/x-x509-ca-cert,application/x-pem-file"})
-            cert = crypto.load_certificate(crypto.FILETYPE_PEM, r.text)
-        except crypto.Error:
-            raise ValueError("Failed to parse PEM: %s" % r.text)
+                headers={"Accept": "application/x-x509-ca-cert,application/x-pem-file"})
+            x509.load_pem_x509_certificate(r.content, default_backend())
+        except:
+            raise
+        #    raise ValueError("Failed to parse PEM: %s" % r.text)
         authority_partial = tempfile.mktemp(prefix=authority_path + ".part")
         with open(authority_partial, "w") as oh:
-            oh.write(r.text)
+            oh.write(r.content)
         click.echo("Writing authority certificate to: %s" % authority_path)
         os.rename(authority_partial, authority_path)
 
@@ -68,18 +73,19 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
 
     # Check if we have been inserted into CRL
     if os.path.exists(certificate_path):
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, open(certificate_path).read())
-        revocation_list = crypto.load_crl(crypto.FILETYPE_PEM, open(revocations_path).read())
-        for revocation in revocation_list.get_revoked():
-            if int(revocation.get_serial(), 16) == cert.get_serial_number():
-                if revocation.get_reason() == "Certificate Hold": # TODO: 'Remove From CRL'
-                    # TODO: Disable service for time being
-                    click.echo("Certificate put on hold, doing nothing for now")
+        cert = x509.load_pem_x509_certificate(open(certificate_path).read(), default_backend())
+
+        for revocation in x509.load_pem_x509_crl(open(revocations_path).read(), default_backend()):
+            extension, = revocation.extensions
+
+            if revocation.serial_number == cert.serial_number:
+                if extension.value.reason == x509.ReasonFlags.certificate_hold:
+                    # Don't do anything for now
+                    # TODO: disable service
                     break
 
-                # Disable the client if operation has been ceased or
-                # the certificate has been superseded by other
-                if revocation.get_reason() in ("Cessation Of Operation", "Superseded"):
+                # Disable the client if operation has been ceased
+                if extension.value.reason == x509.ReasonFlags.cessation_of_operation:
                     if os.path.exists("/etc/certidude/client.conf"):
                         clients.readfp(open("/etc/certidude/client.conf"))
                         if clients.has_section(server):
@@ -87,9 +93,7 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
                             clients.write(open("/etc/certidude/client.conf", "w"))
                             click.echo("Authority operation ceased, disabling in /etc/certidude/client.conf")
                     # TODO: Disable related services
-                if revocation.get_reason() in ("CA Compromise", "AA Compromise"):
-                    if os.path.exists(authority_path):
-                        os.remove(key_path)
+                    return
 
                 click.echo("Certificate has been revoked, wiping keys and certificates!")
                 if os.path.exists(key_path):
@@ -102,9 +106,16 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
         else:
             click.echo("Certificate does not seem to be revoked. Good!")
 
+
     try:
-        request = Request(open(request_path))
+        request_buf = open(request_path).read()
+        request = x509.load_pem_x509_csr(request_buf, default_backend())
         click.echo("Found signing request: %s" % request_path)
+        with open(key_path) as fh:
+            key = serialization.load_pem_private_key(
+                fh.read(),
+                password=None,
+                backend=default_backend())
     except EnvironmentError:
 
         # Construct private key
@@ -146,9 +157,16 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
     # Update CRL, renew certificate, maybe something extra?
 
     if os.path.exists(certificate_path):
-        click.echo("Found certificate: %s" % certificate_path)
-        # TODO: Check certificate validity, download CRL?
-        return
+        cert_buf = open(certificate_path).read()
+        cert = x509.load_pem_x509_certificate(cert_buf, default_backend())
+        lifetime = (cert.not_valid_after - cert.not_valid_before)
+        rollover = lifetime / 1 # TODO: Make rollover configurable
+        if datetime.now() > cert.not_valid_after - rollover:
+            click.echo("Certificate expired %s" % cert.not_valid_after)
+            renew = True
+        else:
+            click.echo("Found valid certificate: %s" % certificate_path)
+            return
 
     # If machine is joined to domain attempt to present machine credentials for authentication
     if os.path.exists("/etc/krb5.keytab"):
@@ -169,10 +187,25 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
         auth = None
 
     click.echo("Submitting to %s, waiting for response..." % request_url)
-    submission = requests.post(request_url,
-        auth=auth,
-        data=open(request_path),
-        headers={"Content-Type": "application/pkcs10", "Accept": "application/x-x509-user-cert,application/x-pem-file"})
+    headers={
+        "Content-Type": "application/pkcs10",
+        "Accept": "application/x-x509-user-cert,application/x-pem-file"
+    }
+
+    if renew:
+        signer = key.signer(
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA512()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA512()
+        )
+        signer.update(cert_buf)
+        signer.update(request_buf)
+        headers["X-Renewal-Signature"] = b64encode(signer.finalize())
+        click.echo("Attached renewal signature %s" % headers["X-Renewal-Signature"])
+
+    submission = requests.post(request_url, auth=auth, data=open(request_path), headers=headers)
 
     # Destroy service ticket
     if os.path.exists("/tmp/ca.ticket"):
@@ -192,8 +225,8 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
         submission.raise_for_status()
 
     try:
-        cert = crypto.load_certificate(crypto.FILETYPE_PEM, submission.text)
-    except crypto.Error:
+        cert = x509.load_pem_x509_certificate(submission.text.encode("ascii"), default_backend())
+    except: # TODO: catch correct exceptions
         raise ValueError("Failed to parse PEM: %s" % submission.text)
 
     os.umask(0o022)

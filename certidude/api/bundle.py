@@ -1,5 +1,3 @@
-
-
 import logging
 import hashlib
 from certidude import config, authority

@@ -31,6 +31,8 @@ if "kerberos" in config.AUTHENTICATION_BACKENDS:
     else:
         click.echo("Kerberos enabled, service principal is HTTP/%s" % const.FQDN)
 
+    click.echo("Accepting requests only for realm: %s" % const.DOMAIN)
+
 
 def authenticate(optional=False):
     def wrapper(func):
@@ -38,7 +40,7 @@ def authenticate(optional=False):
             # If LDAP enabled and device is not Kerberos capable fall
             # back to LDAP bind authentication
             if "ldap" in config.AUTHENTICATION_BACKENDS:
-                if "Android" in req.user_agent:
+                if "Android" in req.user_agent or "iPhone" in req.user_agent:
                     return ldap_authenticate(resource, req, resp, *args, **kwargs)
 
             # Try pre-emptive authentication
@@ -81,16 +83,20 @@ def authenticate(optional=False):
                 raise falcon.HTTPForbidden("Forbidden",
                     "Kerberos error: %s" % (ex.args[0],))
 
-            user = kerberos.authGSSServerUserName(context)
+            user_principal = kerberos.authGSSServerUserName(context)
+            username, domain = user_principal.split("@")
+            if domain.lower() != const.DOMAIN:
+                raise falcon.HTTPForbidden("Forbidden",
+                    "Invalid realm supplied")
 
-            if "$@" in user and optional:
+            if username.endswith("$") and optional:
                 # Extract machine hostname
                 # TODO: Assert LDAP group membership
-                req.context["machine"], _ = user.lower().split("$@", 1)
+                req.context["machine"] = username[:-1].lower()
                 req.context["user"] = None
             else:
                 # Attempt to look up real user
-                req.context["user"] = User.objects.get(user)
+                req.context["user"] = User.objects.get(username)
 
             try:
                 kerberos.authGSSServerClean(context)
@@ -143,12 +149,8 @@ def authenticate(optional=False):
             conn = ldap.initialize(config.LDAP_AUTHENTICATION_URI)
             conn.set_option(ldap.OPT_REFERRALS, 0)
 
-            if "@" not in user:
-                user = "%s@%s" % (user, const.DOMAIN)
-                logger.debug("Expanded username to %s", user)
-
             try:
-                conn.simple_bind_s(user, passwd)
+                conn.simple_bind_s("%s@%s" % (user, const.DOMAIN), passwd)
             except ldap.STRONG_AUTH_REQUIRED:
                 logger.critical("LDAP server demands encryption, use ldaps:// instead of ldaps://")
                 raise
@@ -160,8 +162,8 @@ def authenticate(optional=False):
                 logger.critical(u"LDAP bind authentication failed for user %s from  %s",
                     repr(user), req.context.get("remote_addr"))
                 raise falcon.HTTPUnauthorized("Forbidden",
-                    "Please authenticate with %s domain account or supply UPN" % const.DOMAIN,
-		("Basic",))
+                    "Please authenticate with %s domain account username" % const.DOMAIN,
+                    ("Basic",))
 
             req.context["ldap_conn"] = conn
             req.context["user"] = User.objects.get(user)

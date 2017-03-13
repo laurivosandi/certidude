@@ -29,7 +29,8 @@ class SignHandler(asynchat.async_chat):
             """
 
             builder = x509.CertificateRevocationListBuilder(
-                ).last_update(now
+                ).last_update(
+                    now - timedelta(minutes=5)
                 ).next_update(
                     now + timedelta(seconds=config.REVOCATION_LIST_LIFETIME)
                 ).issuer_name(self.server.certificate.issuer
@@ -89,9 +90,12 @@ class SignHandler(asynchat.async_chat):
                 ).public_key(
                     request.public_key()
                 ).not_valid_before(
-                    now - timedelta(hours=1)
+                    now
                 ).not_valid_after(
-                    now + timedelta(days=config.CERTIFICATE_LIFETIME)
+                    now + timedelta(days=
+                        config.SERVER_CERTIFICATE_LIFETIME
+                        if server_flags
+                        else config.CLIENT_CERTIFICATE_LIFETIME)
                 ).add_extension(
                     x509.BasicConstraints(
                         ca=False,
@@ -122,7 +126,7 @@ class SignHandler(asynchat.async_chat):
                         x509.AccessDescription(
                             AuthorityInformationAccessOID.CA_ISSUERS,
                             x509.UniformResourceIdentifier(
-                                config.CERTIFICATE_AUTHORITY_URL)
+                                config.AUTHORITY_CERTIFICATE_URL)
                         )
                     ]),
                     critical=False

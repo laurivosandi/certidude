@@ -1,10 +1,10 @@
 
+import click
 import falcon
 import json
 import logging
 from certidude import const, config
 from certidude.authority import export_crl, list_revoked
-from certidude.decorators import MyEncoder
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.serialization import Encoding
@@ -31,16 +31,13 @@ class RevocationListResource(object):
                 resp.status = falcon.HTTP_SEE_OTHER
                 resp.set_header("Location", url.encode("ascii"))
                 logger.debug(u"Redirecting to CRL request to %s", url)
+                resp.body = "Redirecting to %s" % url
             else:
                 resp.set_header("Content-Type", "application/x-pem-file")
                 resp.append_header(
                     "Content-Disposition",
                     ("attachment; filename=%s-crl.pem" % const.HOSTNAME).encode("ascii"))
                 resp.body = export_crl()
-        elif req.accept.startswith("application/json"):
-            resp.set_header("Content-Type", "application/json")
-            resp.set_header("Content-Disposition", "inline")
-            resp.body = json.dumps(list_revoked(), cls=MyEncoder)
         else:
             raise falcon.HTTPUnsupportedMediaType(
                 "Client did not accept application/x-pkcs7-crl or application/x-pem-file")

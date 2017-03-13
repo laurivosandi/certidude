@@ -4,91 +4,125 @@ import falcon
 import logging
 import ipaddress
 import os
+import hashlib
+from base64 import b64decode
 from certidude import config, authority, helpers, push, errors
 from certidude.auth import login_required, login_optional, authorize_admin
 from certidude.decorators import serialize, csrf_protection
-from certidude.wrappers import Request, Certificate
 from certidude.firewall import whitelist_subnets, whitelist_content_types
-
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.asymmetric import padding
+from cryptography.exceptions import InvalidSignature
+from cryptography.x509.oid import NameOID
+from datetime import datetime
 
 logger = logging.getLogger("api")
 
 class RequestListResource(object):
-    @serialize
-    @login_required
-    @authorize_admin
-    def on_get(self, req, resp):
-        return authority.list_requests()
-
-
     @login_optional
     @whitelist_subnets(config.REQUEST_SUBNETS)
     @whitelist_content_types("application/pkcs10")
     def on_post(self, req, resp):
         """
-        Submit certificate signing request (CSR) in PEM format
+        Validate and parse certificate signing request
         """
-
         body = req.stream.read(req.content_length)
-
-        # Normalize body, TODO: newlines
-        if not body.endswith("\n"):
-            body += "\n"
-
-        csr = Request(body)
-
-        if not csr.common_name:
+        csr = x509.load_pem_x509_csr(body, default_backend())
+        try:
+            common_name, = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+        except: # ValueError?
             logger.warning(u"Rejected signing request without common name from %s",
                 req.context.get("remote_addr"))
             raise falcon.HTTPBadRequest(
                 "Bad request",
                 "No common name specified!")
 
+        """
+        Handle domain computer automatic enrollment
+        """
         machine = req.context.get("machine")
-        if machine:
-            if csr.common_name != machine:
+        if config.MACHINE_ENROLLMENT_ALLOWED and machine:
+            if common_name.value != machine:
                 raise falcon.HTTPBadRequest(
                     "Bad request",
-                    "Common name %s differs from Kerberos credential %s!" % (csr.common_name, machine))
+                    "Common name %s differs from Kerberos credential %s!" % (common_name.value, machine))
 
             # Automatic enroll with Kerberos machine cerdentials
             resp.set_header("Content-Type", "application/x-x509-user-cert")
-            resp.body = authority.sign(csr, overwrite=True).dump()
+            cert, resp.body = authority._sign(csr, body, overwrite=True)
+            logger.info(u"Automatically enrolled Kerberos authenticated machine %s from %s",
+                machine, req.context.get("remote_addr"))
             return
 
-
-        # Check if this request has been already signed and return corresponding certificte if it has been signed
+        """
+        Attempt to renew certificate using currently valid key pair
+        """
         try:
-            cert = authority.get_signed(csr.common_name)
+            path, buf, cert = authority.get_signed(common_name.value)
         except EnvironmentError:
             pass
         else:
-            if cert.pubkey == csr.pubkey:
-                resp.status = falcon.HTTP_SEE_OTHER
-                resp.location = os.path.join(os.path.dirname(req.relative_uri), "signed", csr.common_name)
-                return
+            if cert.public_key().public_numbers() == csr.public_key().public_numbers():
+                try:
+                    renewal_signature = b64decode(req.get_header("X-Renewal-Signature"))
+                except TypeError, ValueError: # No header supplied, redirect to signed API call
+                    resp.status = falcon.HTTP_SEE_OTHER
+                    resp.location = os.path.join(os.path.dirname(req.relative_uri), "signed", common_name.value)
+                    return
+                else:
+                    try:
+                        verifier = cert.public_key().verifier(
+                            renewal_signature,
+                            padding.PSS(
+                                mgf=padding.MGF1(hashes.SHA512()),
+                                salt_length=padding.PSS.MAX_LENGTH
+                            ),
+                            hashes.SHA512()
+                        )
+                        verifier.update(buf)
+                        verifier.update(body)
+                        verifier.verify()
+                    except InvalidSignature:
+                        logger.error("Renewal failed, invalid signature supplied for %s", common_name.value)
+                    else:
+                        # At this point renewal signature was valid but we need to perform some extra checks
+                        if datetime.utcnow() > cert.not_valid_after:
+                            logger.error("Renewal failed, current certificate for %s has expired", common_name.value)
+                            # Put on hold
+                        elif not config.CERTIFICATE_RENEWAL_ALLOWED:
+                            logger.error("Renewal requested for %s, but not allowed by authority settings", common_name.value)
+                            # Put on hold
+                        else:
+                            resp.set_header("Content-Type", "application/x-x509-user-cert")
+                            _, resp.body = authority._sign(csr, body, overwrite=True)
+                            logger.info("Renewed certificate for %s", common_name.value)
+                            return
 
-        # TODO: check for revoked certificates and return HTTP 410 Gone
 
-        # Process automatic signing if the IP address is whitelisted, autosigning was requested and certificate can be automatically signed
-        if req.get_param_as_bool("autosign") and csr.is_client:
+        """
+        Process automatic signing if the IP address is whitelisted,
+        autosigning was requested and certificate can be automatically signed
+        """
+        if req.get_param_as_bool("autosign") and "." not in common_name.value:
             for subnet in config.AUTOSIGN_SUBNETS:
                 if req.context.get("remote_addr") in subnet:
                     try:
                         resp.set_header("Content-Type", "application/x-x509-user-cert")
-                        resp.body = authority.sign(csr).dump()
+                        _, resp.body = authority._sign(csr, body)
+                        logger.info("Autosigned %s as %s is whitelisted", common_name.value, req.context.get("remote_addr"))
                         return
-                    except EnvironmentError: # Certificate already exists, try to save the request
-                        pass
+                    except EnvironmentError:
+                        logger.info("Autosign for %s failed, signed certificate already exists",
+                            common_name.value, req.context.get("remote_addr"))
                     break
 
         # Attempt to save the request otherwise
         try:
             csr = authority.store_request(body)
         except errors.RequestExists:
-            # We should stil redirect client to long poll URL below
+            # We should still redirect client to long poll URL below
             pass
         except errors.DuplicateCommonNameError:
             # TODO: Certificate renewal
@@ -98,12 +132,13 @@ class RequestListResource(object):
                 "CSR with such CN already exists",
                 "Will not overwrite existing certificate signing request, explicitly delete CSR and try again")
         else:
-            push.publish("request-submitted", csr.common_name)
+            push.publish("request-submitted", common_name.value)
 
         # Wait the certificate to be signed if waiting is requested
+        logger.info(u"Signing request %s from %s stored", common_name.value, req.context.get("remote_addr"))
         if req.get_param("wait"):
             # Redirect to nginx pub/sub
-            url = config.LONG_POLL_SUBSCRIBE % csr.fingerprint()
+            url = config.LONG_POLL_SUBSCRIBE % hashlib.sha256(body).hexdigest()
             click.echo("Redirecting to: %s"  % url)
             resp.status = falcon.HTTP_SEE_OTHER
             resp.set_header("Location", url.encode("ascii"))
@@ -111,20 +146,17 @@ class RequestListResource(object):
         else:
             # Request was accepted, but not processed
             resp.status = falcon.HTTP_202
-            logger.info(u"Signing request from %s stored", req.context.get("remote_addr"))
 
 
 class RequestDetailResource(object):
-    @serialize
     def on_get(self, req, resp, cn):
         """
         Fetch certificate signing request as PEM
         """
-        csr = authority.get_request(cn)
+        resp.set_header("Content-Type", "application/pkcs10")
+        _, resp.body, _ = authority.get_request(cn)
         logger.debug(u"Signing request %s was downloaded by %s",
-            csr.common_name, req.context.get("remote_addr"))
-        return csr
-
+            cn, req.context.get("remote_addr"))
 
     @csrf_protection
     @login_required
@@ -133,15 +165,14 @@ class RequestDetailResource(object):
         """
         Sign a certificate signing request
         """
-        csr = authority.get_request(cn)
-        cert = authority.sign(csr, overwrite=True, delete=True)
-        os.unlink(csr.path)
+        cert, buf = authority.sign(cn, overwrite=True)
+        # Mailing and long poll publishing implemented in the function above
+
         resp.body = "Certificate successfully signed"
         resp.status = falcon.HTTP_201
         resp.location = os.path.join(req.relative_uri, "..", "..", "signed", cn)
-        logger.info(u"Signing request %s signed by %s from %s", csr.common_name,
+        logger.info(u"Signing request %s signed by %s from %s", cn,
             req.context.get("user"), req.context.get("remote_addr"))
-
 
     @csrf_protection
     @login_required

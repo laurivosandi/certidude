@@ -4,15 +4,15 @@ import os
 import random
 import re
 import requests
+import hashlib
 import socket
 from datetime import datetime, timedelta
 from cryptography.hazmat.backends import default_backend
 from cryptography import x509
-from cryptography.x509.oid import NameOID, ExtensionOID, AuthorityInformationAccessOID
+from cryptography.x509.oid import NameOID, ExtensionOID, ExtendedKeyUsageOID
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import hashes, serialization
 from certidude import config, push, mailer, const
-from certidude.wrappers import Certificate, Request
 from certidude import errors
 from jinja2 import Template
 
@@ -23,70 +23,50 @@ RE_HOSTNAME =  "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z
 # http://pycopia.googlecode.com/svn/trunk/net/pycopia/ssl/certs.py
 
 # Cache CA certificate
-certificate = Certificate(open(config.AUTHORITY_CERTIFICATE_PATH))
 
-def publish_certificate(func):
-    # TODO: Implement e-mail and nginx notifications using hooks
-    def wrapped(csr, *args, **kwargs):
-        cert = func(csr, *args, **kwargs)
-        assert isinstance(cert, Certificate), "notify wrapped function %s returned %s" % (func, type(cert))
-
-        recipient = None
-
-        mailer.send(
-            "certificate-signed.md",
-            to=recipient,
-            attachments=(cert,),
-            certificate=cert)
-
-        if config.LONG_POLL_PUBLISH:
-            url = config.LONG_POLL_PUBLISH % csr.fingerprint()
-            click.echo("Publishing certificate at %s ..." % url)
-            requests.post(url, data=cert.dump(),
-                headers={"User-Agent": "Certidude API", "Content-Type": "application/x-x509-user-cert"})
-
-            # For deleting request in the web view, use pubkey modulo
-            push.publish("request-signed", cert.common_name)
-        return cert
-    return wrapped
-
+with open(config.AUTHORITY_CERTIFICATE_PATH) as fh:
+    ca_buf = fh.read()
+    ca_cert = x509.load_pem_x509_certificate(ca_buf, default_backend())
 
 def get_request(common_name):
     if not re.match(RE_HOSTNAME, common_name):
         raise ValueError("Invalid common name %s" % repr(common_name))
-    return Request(open(os.path.join(config.REQUESTS_DIR, common_name + ".pem")))
-
+    path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
+    with open(path) as fh:
+        buf = fh.read()
+        return path, buf, x509.load_pem_x509_csr(buf, default_backend())
 
 def get_signed(common_name):
     if not re.match(RE_HOSTNAME, common_name):
         raise ValueError("Invalid common name %s" % repr(common_name))
-    return Certificate(open(os.path.join(config.SIGNED_DIR, common_name + ".pem")))
+    path = os.path.join(config.SIGNED_DIR, common_name + ".pem")
+    with open(path) as fh:
+        buf = fh.read()
+        return path, buf, x509.load_pem_x509_certificate(buf, default_backend())
 
-
-def get_revoked(common_name):
-    if not re.match(RE_HOSTNAME, common_name):
-        raise ValueError("Invalid common name %s" % repr(common_name))
-    return Certificate(open(os.path.join(config.SIGNED_DIR, common_name + ".pem")))
-
+def get_revoked(serial):
+    path = os.path.join(config.REVOKED_DIR, serial + ".pem")
+    with open(path) as fh:
+        buf = fh.read()
+        return path, buf, x509.load_pem_x509_certificate(buf, default_backend())
 
 def store_request(buf, overwrite=False):
     """
     Store CSR for later processing
     """
 
-    if not buf: return # No certificate supplied
+    if not buf:
+        raise ValueError("No certificate supplied") # No certificate supplied
+
     csr = x509.load_pem_x509_csr(buf, backend=default_backend())
-    for name in csr.subject:
-        if name.oid == NameOID.COMMON_NAME:
-            common_name = name.value
-            break
-    else:
-        raise ValueError("No common name in %s" % csr.subject)
+    common_name, = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+    # TODO: validate common name again
 
-    request_path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
-
-    if not re.match(RE_HOSTNAME, common_name):
+    if not re.match(RE_HOSTNAME, common_name.value):
         raise ValueError("Invalid common name")
+
+    request_path = os.path.join(config.REQUESTS_DIR, common_name.value + ".pem")
+
 
     # If there is cert, check if it's the same
     if os.path.exists(request_path):
@@ -99,9 +79,11 @@ def store_request(buf, overwrite=False):
             fh.write(buf)
         os.rename(request_path + ".part", request_path)
 
-    req = Request(open(request_path))
-    mailer.send("request-stored.md", attachments=(req,), request=req)
-    return req
+    attach_csr = buf, "application/x-pem-file", common_name.value + ".csr"
+    mailer.send("request-stored.md",
+        attachments=(attach_csr,),
+        common_name=common_name.value)
+    return csr
 
 
 def signer_exec(cmd, *bits):
@@ -118,14 +100,15 @@ def signer_exec(cmd, *bits):
     return buf
 
 
-def revoke_certificate(common_name):
+def revoke(common_name):
     """
     Revoke valid certificate
     """
-    cert = get_signed(common_name)
-    revoked_filename = os.path.join(config.REVOKED_DIR, "%s.pem" % cert.serial_number)
-    os.rename(cert.path, revoked_filename)
-    push.publish("certificate-revoked", cert.common_name)
+    path, buf, cert = get_signed(common_name)
+    revoked_path = os.path.join(config.REVOKED_DIR, "%x.pem" % cert.serial_number)
+    signed_path = os.path.join(config.SIGNED_DIR, "%s.pem" % common_name)
+    os.rename(signed_path, revoked_path)
+    push.publish("certificate-revoked", common_name)
 
     # Publish CRL for long polls
     if config.LONG_POLL_PUBLISH:
@@ -134,26 +117,52 @@ def revoke_certificate(common_name):
         requests.post(url, data=export_crl(),
             headers={"User-Agent": "Certidude API", "Content-Type": "application/x-pem-file"})
 
-    mailer.send("certificate-revoked.md", attachments=(cert,), certificate=cert)
+    attach_cert = buf, "application/x-pem-file", common_name + ".crt"
+    mailer.send("certificate-revoked.md",
+        attachments=(attach_cert,),
+        serial_number="%x" % cert.serial,
+        common_name=common_name)
+
+def server_flags(cn):
+    if config.USER_ENROLLMENT_ALLOWED and not config.USER_MULTIPLE_CERTIFICATES:
+        # Common name set to username, used for only HTTPS client validation anyway
+        return False
+    if "@" in cn:
+        # username@hostname is user certificate anyway, can't be server
+        return False
+    if "." in cn:
+        # CN is hostname, if contains dot has to be FQDN, hence a server
+        return True
+    return False
 
 
 def list_requests(directory=config.REQUESTS_DIR):
     for filename in os.listdir(directory):
         if filename.endswith(".pem"):
-            yield Request(open(os.path.join(directory, filename)))
+            common_name = filename[:-4]
+            path, buf, req = get_request(common_name)
+            yield common_name, path, buf, req, server_flags(common_name),
 
-
-def list_signed(directory=config.SIGNED_DIR):
+def _list_certificates(directory):
     for filename in os.listdir(directory):
         if filename.endswith(".pem"):
-            yield Certificate(open(os.path.join(directory, filename)))
+            common_name = filename[:-4]
+            path = os.path.join(directory, filename)
+            with open(path) as fh:
+                buf = fh.read()
+                cert = x509.load_pem_x509_certificate(buf, default_backend())
+                server = False
+                extension = cert.extensions.get_extension_for_oid(ExtensionOID.EXTENDED_KEY_USAGE)
+                for usage in extension.value:
+                    if usage == ExtendedKeyUsageOID.SERVER_AUTH: # TODO: IKE intermediate?
+                        server = True
+                yield common_name, path, buf, cert, server
 
+def list_signed():
+    return _list_certificates(config.SIGNED_DIR)
 
-def list_revoked(directory=config.REVOKED_DIR):
-    for filename in os.listdir(directory):
-        if filename.endswith(".pem"):
-            yield Certificate(open(os.path.join(directory, filename)))
-
+def list_revoked():
+    return _list_certificates(config.REVOKED_DIR)
 
 def export_crl():
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -178,14 +187,15 @@ def delete_request(common_name):
         raise ValueError("Invalid common name")
 
     path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
-    request = Request(open(path))
+    _, buf, csr = get_request(common_name)
     os.unlink(path)
 
     # Publish event at CA channel
-    push.publish("request-deleted", request.common_name)
+    push.publish("request-deleted", common_name)
 
     # Write empty certificate to long-polling URL
-    requests.delete(config.LONG_POLL_PUBLISH % request.fingerprint(),
+    requests.delete(
+        config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest(),
         headers={"User-Agent": "Certidude API"})
 
 def generate_ovpn_bundle(common_name, owner=None):
@@ -198,26 +208,26 @@ def generate_ovpn_bundle(common_name, owner=None):
         backend=default_backend()
     )
 
+    key_buf = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
     csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
         x509.NameAttribute(k, v) for k, v in (
             (NameOID.COMMON_NAME, common_name),
         ) if v
-    ]))
+    ])).sign(key, hashes.SHA512(), default_backend())
+
+    buf = csr.public_bytes(serialization.Encoding.PEM)
 
     # Sign CSR
-    cert = sign(Request(
-        csr.sign(key, hashes.SHA512(), default_backend()).public_bytes(serialization.Encoding.PEM)), overwrite=True)
+    cert, cert_buf = _sign(csr, buf, overwrite=True)
 
-    bundle = Template(open(config.OPENVPN_BUNDLE_TEMPLATE).read()).render(
-        ca = certificate.dump(),
-        key = key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.NoEncryption()
-        ),
-        cert = cert.dump(),
-        crl=export_crl(),
-    )
+    bundle = Template(open(config.OPENVPN_PROFILE_TEMPLATE).read()).render(
+        ca = ca_buf, key = key_buf, cert = cert_buf, crl=export_crl(),
+        servers = [cn for cn, path, buf, cert, server in list_signed() if server])
     return bundle, cert
 
 def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
@@ -236,11 +246,12 @@ def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
 
     csr = x509.CertificateSigningRequestBuilder().subject_name(x509.Name([
         x509.NameAttribute(NameOID.COMMON_NAME, common_name)
-    ]))
+    ])).sign(key, hashes.SHA512(), default_backend())
+
+    buf = csr.public_bytes(serialization.Encoding.PEM)
 
     # Sign CSR
-    cert = sign(Request(
-        csr.sign(key, hashes.SHA512(), default_backend()).public_bytes(serialization.Encoding.PEM)), overwrite=True)
+    cert, cert_buf = _sign(csr, buf, overwrite=True)
 
     # Generate P12, currently supported only by PyOpenSSL
     try:
@@ -256,131 +267,102 @@ def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
                 key.private_bytes(
                         encoding=serialization.Encoding.PEM,
                         format=serialization.PrivateFormat.TraditionalOpenSSL,
-                        encryption_algorithm=serialization.NoEncryption()
-                    )
-                )
-            )
-        p12.set_certificate( cert._obj )
-        p12.set_ca_certificates([certificate._obj])
+                        encryption_algorithm=serialization.NoEncryption())))
+        p12.set_certificate(
+            crypto.load_certificate(crypto.FILETYPE_PEM, cert_buf))
+        p12.set_ca_certificates([
+            crypto.load_certificate(crypto.FILETYPE_PEM, ca_buf)])
         return p12.export("1234"), cert
 
 
-@publish_certificate
-def sign(req, overwrite=False, delete=True):
+def sign(common_name, overwrite=False):
     """
     Sign certificate signing request via signer process
     """
-    cert_path = os.path.join(config.SIGNED_DIR, req.common_name + ".pem")
+
+    req_path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
+    with open(req_path) as fh:
+        csr_buf = fh.read()
+        csr = x509.load_pem_x509_csr(csr_buf, backend=default_backend())
+    common_name, = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+
+    # Sign with function below
+    cert, buf = _sign(csr, csr_buf, overwrite)
+
+    os.unlink(req_path)
+    return cert, buf
+
+def _sign(csr, buf, overwrite=False):
+    assert buf.startswith("-----BEGIN CERTIFICATE REQUEST-----\n")
+    assert isinstance(csr, x509.CertificateSigningRequest)
+    common_name, = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
+    cert_path = os.path.join(config.SIGNED_DIR, common_name.value + ".pem")
+    renew = False
 
     # Move existing certificate if necessary
     if os.path.exists(cert_path):
-        old_cert = Certificate(open(cert_path))
+        with open(cert_path) as fh:
+            prev_buf = fh.read()
+            prev = x509.load_pem_x509_certificate(prev_buf, default_backend())
+            # TODO: assert validity here again?
+            renew = prev.public_key().public_numbers() == csr.public_key().public_numbers()
+
         if overwrite:
-            revoke_certificate(req.common_name)
-        elif req.pubkey == old_cert.pubkey:
-            return old_cert
+            if renew:
+                # TODO: is this the best approach?
+                signed_path = os.path.join(config.SIGNED_DIR, "%s.pem" % common_name.value)
+                revoked_path = os.path.join(config.REVOKED_DIR, "%x.pem" % prev.serial_number)
+                os.rename(signed_path, revoked_path)
+            else:
+                revoke(common_name.value)
         else:
             raise EnvironmentError("Will not overwrite existing certificate")
 
     # Sign via signer process
-    cert_buf = signer_exec("sign-request", req.dump())
+    cert_buf = signer_exec("sign-request", buf)
+    cert = x509.load_pem_x509_certificate(cert_buf, default_backend())
     with open(cert_path + ".part", "wb") as fh:
         fh.write(cert_buf)
     os.rename(cert_path + ".part", cert_path)
 
-    return Certificate(open(cert_path))
+    # Send mail
+    recipient = None
 
-
-@publish_certificate
-def sign2(request, private_key, authority_certificate, overwrite=False, delete=True, lifetime=None):
-    """
-    Sign directly using private key, this is usually done by root.
-    Basic constraints and certificate lifetime are copied from config,
-    lifetime may be overridden on the command line,
-    other extensions are copied as is.
-    """
-
-    certificate_path = os.path.join(config.SIGNED_DIR, request.common_name + ".pem")
-    if os.path.exists(certificate_path):
-        if overwrite:
-            revoke_certificate(request.common_name)
-        else:
-            raise errors.DuplicateCommonNameError("Valid certificate with common name %s already exists" % request.common_name)
-
-    now = datetime.utcnow()
-    request_path = os.path.join(config.REQUESTS_DIR, request.common_name + ".pem")
-    request = x509.load_pem_x509_csr(open(request_path).read(), default_backend())
-
-    cert = x509.CertificateBuilder(
-        ).subject_name(x509.Name([n for n in request.subject])
-        ).serial_number(random.randint(
-            0x1000000000000000000000000000000000000000,
-            0xffffffffffffffffffffffffffffffffffffffff)
-        ).issuer_name(authority_certificate.issuer
-        ).public_key(request.public_key()
-        ).not_valid_before(now - timedelta(hours=1)
-        ).not_valid_after(now + timedelta(days=config.CERTIFICATE_LIFETIME)
-        ).add_extension(x509.KeyUsage(
-            digital_signature=True,
-            key_encipherment=True,
-            content_commitment=False,
-            data_encipherment=False,
-            key_agreement=False,
-            key_cert_sign=False,
-            crl_sign=False,
-            encipher_only=False,
-            decipher_only=False), critical=True
-        ).add_extension(
-            x509.SubjectKeyIdentifier.from_public_key(request.public_key()),
-            critical=False
-        ).add_extension(
-            x509.AuthorityInformationAccess([
-                x509.AccessDescription(
-                    AuthorityInformationAccessOID.CA_ISSUERS,
-                    x509.UniformResourceIdentifier(
-                        config.CERTIFICATE_AUTHORITY_URL)
-                )
-            ]),
-            critical=False
-        ).add_extension(
-            x509.CRLDistributionPoints([
-                x509.DistributionPoint(
-                    full_name=[
-                        x509.UniformResourceIdentifier(
-                            config.CERTIFICATE_CRL_URL)],
-                    relative_name=None,
-                    crl_issuer=None,
-                    reasons=None)
-            ]),
-            critical=False
-        ).add_extension(
-            x509.AuthorityKeyIdentifier.from_issuer_public_key(
-                authority_certificate.public_key()),
-            critical=False
+    if renew:
+        mailer.send(
+            "certificate-renewed.md",
+            to=recipient,
+            attachments=(
+                (prev_buf, "application/x-pem-file", "deprecated.crt"),
+                (cert_buf, "application/x-pem-file", common_name.value + ".crt")
+            ),
+            serial_number="%x" % cert.serial,
+            common_name=common_name.value,
+            certificate=cert,
+        )
+    else:
+        mailer.send(
+            "certificate-signed.md",
+            to=recipient,
+            attachments=(
+                (buf,      "application/x-pem-file", common_name.value + ".csr"),
+                (cert_buf, "application/x-pem-file", common_name.value + ".crt")
+            ),
+            serial_number="%x" % cert.serial,
+            common_name=common_name.value,
+            certificate=cert,
         )
 
-    # Append subject alternative name, extended key usage flags etc
-    for extension in request.extensions:
-        if extension.oid == ExtensionOID.SUBJECT_ALTERNATIVE_NAME:
-            click.echo("Appending subject alt name extension: %s" % extension)
-            cert = cert.add_extension(x509.SubjectAlternativeName(extension.value),
-                critical=extension.critical)
-        if extension.oid == ExtensionOID.EXTENDED_KEY_USAGE:
-            click.echo("Appending extended key usage flags extension: %s" % extension)
-            cert = cert.add_extension(x509.ExtendedKeyUsage(extension.value),
-                critical=extension.critical)
 
+    if config.LONG_POLL_PUBLISH:
+        url = config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest()
+        click.echo("Publishing certificate at %s ..." % url)
+        requests.post(url, data=cert_buf,
+            headers={"User-Agent": "Certidude API", "Content-Type": "application/x-x509-user-cert"})
 
-    cert = cert.sign(private_key, hashes.SHA512(), default_backend())
+    if config.EVENT_SOURCE_PUBLISH: # TODO: handle renewal
+        push.publish("request-signed", common_name.value)
 
-    buf = cert.public_bytes(serialization.Encoding.PEM)
-    with open(certificate_path + ".part", "wb") as fh:
-        fh.write(buf)
-    os.rename(certificate_path + ".part", certificate_path)
-    click.echo("Wrote certificate to: %s" % certificate_path)
-    if delete:
-        os.unlink(request_path)
-        click.echo("Deleted request: %s" % request_path)
+    return cert, cert_buf
 
-    return Certificate(open(certificate_path))
 
