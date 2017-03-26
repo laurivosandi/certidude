@@ -1,7 +1,7 @@
 
 import falcon
 import logging
-import ipaddress
+from ipaddress import ip_address
 from xattr import getxattr, listxattr
 from datetime import datetime
 from certidude import config, authority
@@ -17,30 +17,33 @@ class AttributeResource(object):
         This not only contains tags and lease information,
         but might also contain some other sensitive information.
         """
-        path, buf, cert = authority.get_signed(cn)
+        try:
+            path, buf, cert = authority.get_signed(cn)
+        except IOError:
+            raise falcon.HTTPNotFound()
+        else:
+            attribs = dict()
+            for key in listxattr(path):
+                if not key.startswith("user."):
+                    continue
+                value = getxattr(path, key)
+                current = attribs
+                if "." in key:
+                    namespace, key = key.rsplit(".", 1)
+                    for component in namespace.split("."):
+                        if component not in current:
+                            current[component] = dict()
+                        current = current[component]
+                current[key] = value
 
-        attribs = dict()
-        for key in listxattr(path):
-            if not key.startswith("user."):
-                continue
-            value = getxattr(path, key)
-            current = attribs
-            if "." in key:
-                namespace, key = key.rsplit(".", 1)
-                for component in namespace.split("."):
-                    if component not in current:
-                        current[component] = dict()
-                    current = current[component]
-            current[key] = value
+            whitelist = ip_address(attribs.get("user").get("lease").get("address").decode("ascii"))
 
-        whitelist = attribs.get("user").get("address")
+            if req.context.get("remote_addr") != whitelist:
+                logger.info("Attribute access denied from %s, expected %s for %s",
+                    req.context.get("remote_addr"),
+                    whitelist,
+                    cn)
+                raise falcon.HTTPForbidden("Forbidden",
+                    "Attributes only accessible to the machine")
 
-        if req.context.get("remote_addr") != whitelist:
-            logger.info("Attribute access denied from %s, expected %s for %s",
-                req.context.get("remote_addr"),
-                whitelist,
-                cn)
-            raise falcon.HTTPForbidden("Forbidden",
-                "Attributes only accessible to the machine")
-
-        return attribs
+            return attribs
