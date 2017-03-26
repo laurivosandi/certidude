@@ -13,7 +13,8 @@ def test_cli_setup_authority():
     from certidude import const, config
 
     from certidude import authority
-    assert authority.ca_cert.serial_number == 1
+    assert authority.ca_cert.serial_number >= 0x100000000000000000000000000000000000000
+    assert authority.ca_cert.serial_number <= 0xfffffffffffffffffffffffffffffffffffffff
     assert authority.ca_cert.not_valid_before < datetime.now()
     assert authority.ca_cert.not_valid_after > datetime.now() + timedelta(days=7000)
 

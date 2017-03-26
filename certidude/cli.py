@@ -862,7 +862,10 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
             ).not_valid_before(datetime.utcnow()
             ).not_valid_after(
                 datetime.utcnow() + timedelta(days=authority_lifetime)
-            ).serial_number(1
+            ).serial_number(
+                random.randint(
+                    0x100000000000000000000000000000000000000,
+                    0xfffffffffffffffffffffffffffffffffffffff)
             ).add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True,
             ).add_extension(x509.KeyUsage(
                 digital_signature=server_flags,
