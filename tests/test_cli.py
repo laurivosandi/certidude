@@ -45,3 +45,6 @@ def test_cli_setup_authority():
 
     authority.generate_ovpn_bundle(u"test2")
     authority.generate_pkcs12_bundle(u"test3")
+
+    result = runner.invoke(cli, ['list', '-srv'])
+    assert not result.exception
