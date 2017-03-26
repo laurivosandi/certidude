@@ -958,7 +958,6 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
     #   r - revoked
 
     from certidude import authority
-    from pycountry import countries
 
     def dump_common(common_name, path, cert):
         click.echo("certidude revoke %s" % common_name)
