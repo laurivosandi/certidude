@@ -3,6 +3,7 @@ import click
 import falcon
 import logging
 import ipaddress
+import json
 import os
 import hashlib
 from base64 import b64decode
@@ -154,9 +155,32 @@ class RequestDetailResource(object):
         Fetch certificate signing request as PEM
         """
         resp.set_header("Content-Type", "application/pkcs10")
-        _, resp.body, _ = authority.get_request(cn)
+        _, buf, _ = authority.get_request(cn)
         logger.debug(u"Signing request %s was downloaded by %s",
             cn, req.context.get("remote_addr"))
+
+        preferred_type = req.client_prefers(("application/json", "application/x-pem-file"))
+
+        if preferred_type == "application/x-pem-file":
+            # For certidude client, curl scripts etc
+            resp.set_header("Content-Type", "application/x-pem-file")
+            resp.set_header("Content-Disposition", ("attachment; filename=%s.pem" % cn))
+            resp.body = buf
+        elif preferred_type == "application/json":
+            # For web interface events
+            resp.set_header("Content-Type", "application/json")
+            resp.set_header("Content-Disposition", ("attachment; filename=%s.json" % cn))
+            resp.body = json.dumps(dict(
+                common_name = cn,
+                server = authority.server_flags(cn),
+                md5sum = hashlib.md5(buf).hexdigest(),
+                sha1sum = hashlib.sha1(buf).hexdigest(),
+                sha256sum = hashlib.sha256(buf).hexdigest(),
+                sha512sum = hashlib.sha512(buf).hexdigest()))
+        else:
+            raise falcon.HTTPUnsupportedMediaType(
+                "Client did not accept application/json or application/x-pem-file")
+
 
     @csrf_protection
     @login_required

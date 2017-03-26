@@ -24,7 +24,7 @@ class RelationalMixin(object):
                 if self.uri.scheme == "sqlite":
                     cur.executescript(fh.read())
                 else:
-                    cur.execute(fh.read())
+                    cur.execute(fh.read(), multi=True)
             conn.commit()
             cur.close()
             conn.close()

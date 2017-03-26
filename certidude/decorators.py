@@ -3,7 +3,7 @@ import ipaddress
 import json
 import logging
 import types
-from datetime import date, time, datetime
+from datetime import date, time, datetime, timedelta
 from certidude.auth import User
 from urlparse import urlparse
 
@@ -58,6 +58,8 @@ class MyEncoder(json.JSONEncoder):
             return obj.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
         if isinstance(obj, date):
             return obj.strftime("%Y-%m-%d")
+        if isinstance(obj, timedelta):
+            return obj.total_seconds()
         if isinstance(obj, types.GeneratorType):
             return tuple(obj)
         if isinstance(obj, User):

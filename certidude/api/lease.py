@@ -1,96 +1,39 @@
 
+import click
+import xattr
 from datetime import datetime
-from dateutil import tz
 from pyasn1.codec.der import decoder
-from certidude import config
+from certidude import config, authority, push
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize
 
-localtime = tz.tzlocal()
+# TODO: lease namespacing (?)
 
-OIDS = {
-    (2, 5, 4,  3) : 'CN',   # common name
-    (2, 5, 4,  6) : 'C',    # country
-    (2, 5, 4,  7) : 'L',    # locality
-    (2, 5, 4,  8) : 'ST',   # stateOrProvince
-    (2, 5, 4, 10) : 'O',    # organization
-    (2, 5, 4, 11) : 'OU',   # organizationalUnit
-}
-
-def parse_dn(data):
-    chunks, remainder = decoder.decode(data)
-    dn = ""
-    if remainder:
-        raise ValueError()
-    # TODO: Check for duplicate entries?
-    def generate():
-        for chunk in chunks:
-            for chunkette in chunk:
-                key, value = chunkette
-                yield str(OIDS[key] + "=" + value)
-    return ", ".join(generate())
-
-
-class StatusFileLeaseResource(object):
-    def __init__(self, uri):
-        self.uri = uri
-
+class LeaseDetailResource(object):
     @serialize
     @login_required
     @authorize_admin
-    def on_get(self, req, resp):
-        from openvpn_status import parse_status
-        from urllib import urlopen
-        fh = urlopen(self.uri)
-        # openvpn-status.log has no information about timezone
-        # and dates marked there use local time instead of UTC
-        status = parse_status(fh.read())
-        for cn, e in status.routing_table.items():
-            yield {
-                "acquired": status.client_list[cn].connected_since.replace(tzinfo=localtime),
-                "released": None,
-                "address":  e.virtual_address,
-                "identity": "CN=%s" % cn, # BUGBUG
-            }
+    def on_get(self, req, resp, cn):
+        path, buf, cert = authority.get_signed(cn)
+        return dict(
+            last_seen = xattr.getxattr(path, "user.last_seen"),
+            address = xattr.getxattr(path, "user.address").decode("ascii")
+        )
 
 
 class LeaseResource(object):
-    @serialize
-    @login_required
-    @authorize_admin
-    def on_get(self, req, resp):
-        from ipaddress import ip_address
+    def on_post(self, req, resp):
+        # TODO: verify signature
+        common_name = req.get_param("client", required=True)
+        path, buf, cert = authority.get_signed(common_name) # TODO: catch exceptions
+        if cert.serial != req.get_param_as_int("serial", required=True): # Badum we have OCSP!
+            raise # TODO proper exception
+        if req.get_param("action") == "client-connect":
+            xattr.setxattr(path, "user.address", req.get_param("address", required=True).encode("ascii"))
+            xattr.setxattr(path, "user.last_seen", datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
+            push.publish("lease-update", common_name)
 
-        # BUGBUG
-        SQL_LEASES = """
-            select
-                acquired,
-                released,
-                address,
-                identities.data as identity
-            from
-                addresses
-            right join
-                identities
-            on
-                identities.id = addresses.identity
-            where
-                addresses.released <> 1
-            order by
-                addresses.id
-            desc
-        """
-        conn = config.DATABASE_POOL.get_connection()
-        cursor = conn.cursor()
-        cursor.execute(SQL_LEASES)
-
-        for acquired, released, address, identity in cursor:
-            yield {
-                "acquired": datetime.utcfromtimestamp(acquired),
-                "released": datetime.utcfromtimestamp(released) if released else None,
-                "address":  ip_address(bytes(address)),
-                "identity": parse_dn(bytes(identity))
-            }
-
-        cursor.close()
-        conn.close()
+        # client-disconnect is pretty much unusable:
+        # - Android Connect Client results "IP packet with unknown IP version=2" on gateway
+        # - NetworkManager just kills OpenVPN client, disconnect is never reported
+        # - Disconnect is also not reported when uplink connection dies or laptop goes to sleep

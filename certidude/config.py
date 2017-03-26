@@ -72,12 +72,7 @@ EVENT_SOURCE_SUBSCRIBE = cp.get("push", "event source subscribe")
 LONG_POLL_PUBLISH = cp.get("push", "long poll publish")
 LONG_POLL_SUBSCRIBE = cp.get("push", "long poll subscribe")
 
-TAGGING_BACKEND = cp.get("tagging", "backend")
 LOGGING_BACKEND = cp.get("logging", "backend")
-LEASES_BACKEND = cp.get("leases", "backend")
-
-OPENVPN_STATUS_URI = cp.get("leases", "openvpn status uri")
-
 
 if "whitelist" == AUTHORIZATION_BACKEND:
     USERS_WHITELIST = set([j for j in  cp.get("authorization", "users whitelist").split(" ") if j])
@@ -92,5 +87,7 @@ elif "ldap" == AUTHORIZATION_BACKEND:
     if "%s" not in LDAP_ADMIN_FILTER: raise ValueError("No placeholder %s for username in 'ldap admin filter'")
 else:
     raise NotImplementedError("Unknown authorization backend '%s'" % AUTHORIZATION_BACKEND)
+
+TAG_TYPES = [j.split("/", 1) + [cp.get("tag types", j)] for j in cp.options("tag types")]
 
 # TODO: Check if we don't have base or servers

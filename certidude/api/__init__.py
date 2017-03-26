@@ -6,6 +6,7 @@ import logging
 import os
 import click
 import hashlib
+import xattr
 from datetime import datetime
 from time import sleep
 from certidude import authority, mailer
@@ -58,6 +59,15 @@ class SessionResource(object):
 
         def serialize_certificates(g):
             for common_name, path, buf, obj, server in g():
+                try:
+                    last_seen = datetime.strptime(xattr.getxattr(path, "user.last_seen"), "%Y-%m-%dT%H:%M:%S.%fZ")
+                    lease = dict(
+                        address = xattr.getxattr(path, "user.address"),
+                        last_seen = last_seen,
+                        age = datetime.utcnow() - last_seen
+                    )
+                except IOError: # No such attribute(s)
+                    lease = None
                 yield dict(
                     serial_number = "%x" % obj.serial_number,
                     common_name = common_name,
@@ -65,7 +75,12 @@ class SessionResource(object):
                     # TODO: key type, key length, key exponent, key modulo
                     signed = obj.not_valid_before,
                     expires = obj.not_valid_after,
-                    sha256sum = hashlib.sha256(buf).hexdigest()
+                    sha256sum = hashlib.sha256(buf).hexdigest(),
+                    lease = lease,
+                    tags = dict([
+                        (j[9:], xattr.getxattr(path, j).decode("utf-8"))
+                        for j in xattr.listxattr(path)
+                        if j.startswith("user.tag.")])
                 )
 
         if req.context.get("user").is_admin():
@@ -81,6 +96,10 @@ class SessionResource(object):
             ),
             request_submission_allowed = config.REQUEST_SUBMISSION_ALLOWED,
             authority = dict(
+                lease = dict(
+                    offline = 600, # Seconds from last seen activity to consider lease offline, OpenVPN reneg-sec option
+                    dead = 604800 # Seconds from last activity to consider lease dead, X509 chain broken or machine discarded
+                ),
                 common_name = authority.ca_cert.subject.get_attributes_for_oid(
                     NameOID.COMMON_NAME)[0].value,
                 outbox = dict(
@@ -108,8 +127,8 @@ class SessionResource(object):
                 )
             ) if req.context.get("user").is_admin() else None,
             features=dict(
-                tagging=config.TAGGING_BACKEND,
-                leases=config.LEASES_BACKEND,
+                tagging=True,
+                leases=True,
                 logging=config.LOGGING_BACKEND))
 
 
@@ -155,12 +174,13 @@ def certidude_app():
     from .revoked import RevocationListResource
     from .signed import SignedCertificateDetailResource
     from .request import RequestListResource, RequestDetailResource
-    from .lease import LeaseResource, StatusFileLeaseResource
-    from .whois import WhoisResource
-    from .tag import TagResource, TagDetailResource
+    from .lease import LeaseResource, LeaseDetailResource
     from .cfg import ConfigResource, ScriptResource
+    from .tag import TagResource, TagDetailResource
+    from .attrib import AttributeResource
 
     app = falcon.API(middleware=NormalizeMiddleware())
+    app.req_options.auto_parse_form_urlencoded = True
 
     # Certificate authority API calls
     app.add_route("/api/ocsp/", CertificateStatusResource())
@@ -171,25 +191,21 @@ def certidude_app():
     app.add_route("/api/request/", RequestListResource())
     app.add_route("/api/", SessionResource())
 
-    # Gateway API calls, should this be moved to separate project?
-    if config.LEASES_BACKEND == "openvpn-status":
-        app.add_route("/api/lease/", StatusFileLeaseResource(config.OPENVPN_STATUS_URI))
-    elif config.LEASES_BACKEND == "sql":
-        app.add_route("/api/lease/", LeaseResource())
-        app.add_route("/api/whois/", WhoisResource())
+    # Extended attributes for scripting etc.
+    app.add_route("/api/signed/{cn}/attr/", AttributeResource())
+
+    # API calls used by pushed events on the JS end
+    app.add_route("/api/signed/{cn}/tag/", TagResource())
+    app.add_route("/api/signed/{cn}/lease/", LeaseDetailResource())
+
+    # API call used to delete existing tags
+    app.add_route("/api/signed/{cn}/tag/{key}/", TagDetailResource())
+
+    # Gateways can submit leases via this API call
+    app.add_route("/api/lease/", LeaseResource())
 
     # Optional user enrollment API call
     if config.USER_ENROLLMENT_ALLOWED:
         app.add_route("/api/bundle/", BundleResource())
-
-    if config.TAGGING_BACKEND == "sql":
-        uri = config.cp.get("tagging", "database")
-        app.add_route("/api/tag/", TagResource(uri))
-        app.add_route("/api/tag/{identifier}/", TagDetailResource(uri))
-        app.add_route("/api/config/", ConfigResource(uri))
-        app.add_route("/api/script/", ScriptResource(uri))
-    elif config.TAGGING_BACKEND:
-        raise ValueError("Invalid tagging.backend = %s" % config.TAGGING_BACKEND)
-
 
     return app

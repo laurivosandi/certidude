@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from certidude import config, push, mailer, const
 from certidude import errors
 from jinja2 import Template
+from xattr import getxattr, listxattr, setxattr
 
 RE_HOSTNAME =  "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])(@(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9]))?$"
 
@@ -299,6 +300,9 @@ def _sign(csr, buf, overwrite=False):
     cert_path = os.path.join(config.SIGNED_DIR, common_name.value + ".pem")
     renew = False
 
+    signed_path = os.path.join(config.SIGNED_DIR, "%s.pem" % common_name.value)
+    revoked_path = None
+
     # Move existing certificate if necessary
     if os.path.exists(cert_path):
         with open(cert_path) as fh:
@@ -310,7 +314,6 @@ def _sign(csr, buf, overwrite=False):
         if overwrite:
             if renew:
                 # TODO: is this the best approach?
-                signed_path = os.path.join(config.SIGNED_DIR, "%s.pem" % common_name.value)
                 revoked_path = os.path.join(config.REVOKED_DIR, "%x.pem" % prev.serial_number)
                 os.rename(signed_path, revoked_path)
             else:
@@ -324,6 +327,13 @@ def _sign(csr, buf, overwrite=False):
     with open(cert_path + ".part", "wb") as fh:
         fh.write(cert_buf)
     os.rename(cert_path + ".part", cert_path)
+
+    # Copy filesystem attributes to newly signed certificate
+    if revoked_path:
+        for key in listxattr(revoked_path):
+            if not key.startswith("user."):
+                continue
+            setxattr(signed_path, key, getxattr(revoked_path, key))
 
     # Send mail
     recipient = None

@@ -1,3 +1,6 @@
-<span id="tag_{{ tag.id }}" onclick="onTagClicked()"
-title="{{ tag.key }}={{ tag.value }}" class="{{ tag.key | replace('.', ' ') }}"
-data-id="{{ tag.id }}" data-key="{{ tag.key }}">{{ tag.value }}</span>
+{% for key, value in certificate.tags %}
+<span onclick="onTagClicked(event);"
+title="{{ key }}={{ value }}" class="tag icon {{ key | replace('.', ' ') }}"
+data-cn="{{ certificate.common_name }}"
+data-key="{{ key }}">{{ value }}</span>
+{% endfor %}

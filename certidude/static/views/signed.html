@@ -46,12 +46,17 @@
 
     {% if session.features.tagging %}
     <div class="tags">
-        <select class="icon tag" data-cn="{{ certificate.common_name }}" onChange="onNewTagClicked();">
-        <option value="">Add tag...</option>
-            {% include 'views/tagtypes.html' %}
+        <span data-cn="{{ certificate.common_name }}">
+            {% include 'views/tags.html' %}
+        </span>
+        <select class="icon tag" data-cn="{{ certificate.common_name }}" onChange="onNewTagClicked(event);">
+            <option value="">Add tag...</option>
+                {% include 'views/tagtypes.html' %}
         </select>
     </div>
     {% endif %}
 
-    <div class="status"></div>
+    <div class="status">
+    {% include 'views/status.html' %}
+    </div>
 </li>

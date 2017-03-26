@@ -1,16 +1,14 @@
-<svg height="32" width="32">
-    <circle cx="16" cy="16" r="13" stroke="black" stroke-width="3" fill="{% if lease %}{% if lease.released %}{% if lease.age > 1209600 %}#D6083B{% else %}#0072CF{% endif %}{%else %}#55A51C{% endif %}{% else %}#F3BD48{% endif %}" />
-</svg>
-
 <span>
-
-{% if lease %}
-{% if lease.released %}
-Last seen {{ lease.released }} at {{ lease.address }}
-{% else %}
-Online since {{ lease.acquired }} at <a target="{{ lease.address }}" href="http://{{ lease.address }}">{{ lease.address }}</a>
-{% endif %}
-{% else %}
-Not seen
-{% endif %}
+  {% if certificate.lease %}
+    <svg height="32" width="32">
+      <circle cx="16" cy="16" r="13" stroke="black" stroke-width="3" fill="{% if certificate.lease %}{% if certificate.lease.age > session.authority.lease.offline %}#0072CF{% elif certificate.lease.age > session.authority.lease.dead %}#D6083B{%else %}#55A51C{% endif %}{% endif %}"/>
+    </svg>
+    {% if certificate.lease.age > session.authority.lease.offline %}
+      Last seen <time class="timeago" datetime="{{ certificate.lease.last_seen }}">{{ certificate.lease.last_seen }}</time>
+      at {{ certificate.lease.address }}
+    {% else %}
+      Online since <time class="timeago" datetime="{{ certificate.lease.last_seen }}">{{ certificate.lease.last_seen }}</time> at
+      <a target="{{ certificate.lease.address }}" href="http://{{ certificate.lease.address }}">{{ certificate.lease.address }}</a>
+    {% endif %}
+  {% endif %}
 </span>

@@ -1,76 +1,42 @@
-
 import falcon
 import logging
-from certidude.relational import RelationalMixin
+import xattr
+from certidude import authority
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize, csrf_protection
 
 logger = logging.getLogger("api")
 
-class TagResource(RelationalMixin):
-    SQL_CREATE_TABLES = "tag_tables.sql"
-
+class TagResource(object):
     @serialize
     @login_required
     @authorize_admin
-    def on_get(self, req, resp):
-        return self.iterfetch("select * from tag")
-
+    def on_get(self, req, resp, cn):
+        path, buf, cert = authority.get_signed(cn)
+        return dict([
+            (k[9:], xattr.getxattr(path, k))
+            for k in xattr.listxattr(path)
+            if k.startswith("user.tag.")])
 
     @csrf_protection
-    @serialize
     @login_required
     @authorize_admin
-    def on_post(self, req, resp):
+    def on_post(self, req, resp, cn):
         from certidude import push
-        args = req.get_param("cn"), req.get_param("key"), req.get_param("value")
-        rowid = self.sql_execute("tag_insert.sql", *args)
-        push.publish("tag-added", str(rowid))
-        logger.debug(u"Tag cn=%s, key=%s, value=%s added" % args)
+        path, buf, cert = authority.get_signed(cn)
+        key, value = req.get_param("key", required=True), req.get_param("value", required=True)
+        xattr.setxattr(path, "user.tag.%s" % key, value.encode("utf-8"))
+        logger.debug(u"Tag %s=%s set for %s" % (key, value, cn))
+        push.publish("tag-update", cn)
 
 
-class TagDetailResource(RelationalMixin):
-    SQL_CREATE_TABLES = "tag_tables.sql"
-
-    @serialize
-    @login_required
-    @authorize_admin
-    def on_get(self, req, resp, identifier):
-        conn = self.sql_connect()
-        cursor = conn.cursor()
-        if self.uri.scheme == "mysql":
-            cursor.execute("select `cn`, `key`, `value` from tag where id = %s", (identifier,))
-        else:
-            cursor.execute("select `cn`, `key`, `value` from tag where id = ?", (identifier,))
-        cols = [j[0] for j in cursor.description]
-        for row in cursor:
-            cursor.close()
-            conn.close()
-            return dict(zip(cols, row))
-        cursor.close()
-        conn.close()
-        raise falcon.HTTPNotFound()
-
-
+class TagDetailResource(object):
     @csrf_protection
-    @serialize
     @login_required
     @authorize_admin
-    def on_put(self, req, resp, identifier):
+    def on_delete(self, req, resp, cn, key):
         from certidude import push
-        args = req.get_param("value"), identifier
-        self.sql_execute("tag_update.sql", *args)
-        logger.debug(u"Tag %s updated, value set to %s",
-            identifier, req.get_param("value"))
-        push.publish("tag-updated", identifier)
-
-
-    @csrf_protection
-    @serialize
-    @login_required
-    @authorize_admin
-    def on_delete(self, req, resp, identifier):
-        from certidude import push
-        self.sql_execute("tag_delete.sql", identifier)
-        push.publish("tag-removed", identifier)
-        logger.debug(u"Tag %s removed" % identifier)
+        path, buf, cert = authority.get_signed(cn)
+        xattr.removexattr(path, "user.tag.%s" % key)
+        logger.debug(u"Tag %s removed for %s" % (key, cn))
+        push.publish("tag-update", cn)

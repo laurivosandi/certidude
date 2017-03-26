@@ -2,7 +2,7 @@
 import logging
 import time
 from datetime import datetime
-from certidude.api.tag import RelationalMixin
+from certidude.relational import RelationalMixin
  
 class LogHandler(logging.Handler, RelationalMixin):
     SQL_CREATE_TABLES = "log_tables.sql"

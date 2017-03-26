@@ -11,6 +11,8 @@ def publish(event_type, event_data):
     """
     Publish event on nchan EventSource publisher
     """
+    assert event_type, "No event type specified"
+    assert event_data, "No event data specified"
     if not config.EVENT_SOURCE_PUBLISH:
         # Push server disabled
         return
