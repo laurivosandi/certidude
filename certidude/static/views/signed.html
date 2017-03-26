@@ -51,7 +51,9 @@
         </span>
         <select class="icon tag" data-cn="{{ certificate.common_name }}" onChange="onNewTagClicked(event);">
             <option value="">Add tag...</option>
-                {% include 'views/tagtypes.html' %}
+            {% for tag_type in session.authority.tagging %}
+            <option value="{{ tag_type.name }}">{{ tag_type.title }}</option>
+            {% endfor %}
         </select>
     </div>
     {% endif %}

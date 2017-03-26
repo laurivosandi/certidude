@@ -1,6 +1,5 @@
-{% for key, value in certificate.tags %}
+{% for tag in certificate.tags %}
 <span onclick="onTagClicked(event);"
-title="{{ key }}={{ value }}" class="tag icon {{ key | replace('.', ' ') }}"
-data-cn="{{ certificate.common_name }}"
-data-key="{{ key }}">{{ value }}</span>
+title="{{ tag.id }}" class="tag icon {{ tag.key | replace('.', ' ') }}"
+data-cn="{{ certificate.common_name }}">{{ tag.value }}</span>
 {% endfor %}

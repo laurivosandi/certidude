@@ -59,15 +59,29 @@ class SessionResource(object):
 
         def serialize_certificates(g):
             for common_name, path, buf, obj, server in g():
+                # Extract certificate tags from filesystem
                 try:
-                    last_seen = datetime.strptime(xattr.getxattr(path, "user.last_seen"), "%Y-%m-%dT%H:%M:%S.%fZ")
+                    tags = []
+                    for tag in xattr.getxattr(path, "user.xdg.tags").split(","):
+                        if "=" in tag:
+                            k, v = tag.split("=", 1)
+                        else:
+                            k, v = "other", tag
+                        tags.append(dict(id=tag, key=k, value=v))
+                except IOError: # No such attribute(s)
+                    tags = None
+
+                # Extract lease information from filesystem
+                try:
+                    last_seen = datetime.strptime(xattr.getxattr(path, "user.lease.last_seen"), "%Y-%m-%dT%H:%M:%S.%fZ")
                     lease = dict(
-                        address = xattr.getxattr(path, "user.address"),
+                        address = xattr.getxattr(path, "user.lease.address"),
                         last_seen = last_seen,
                         age = datetime.utcnow() - last_seen
                     )
                 except IOError: # No such attribute(s)
                     lease = None
+
                 yield dict(
                     serial_number = "%x" % obj.serial_number,
                     common_name = common_name,
@@ -77,10 +91,7 @@ class SessionResource(object):
                     expires = obj.not_valid_after,
                     sha256sum = hashlib.sha256(buf).hexdigest(),
                     lease = lease,
-                    tags = dict([
-                        (j[9:], xattr.getxattr(path, j).decode("utf-8"))
-                        for j in xattr.listxattr(path)
-                        if j.startswith("user.tag.")])
+                    tags = tags
                 )
 
         if req.context.get("user").is_admin():
@@ -96,6 +107,7 @@ class SessionResource(object):
             ),
             request_submission_allowed = config.REQUEST_SUBMISSION_ALLOWED,
             authority = dict(
+                tagging = [dict(name=t[0], type=t[1], title=t[2]) for t in config.TAG_TYPES],
                 lease = dict(
                     offline = 600, # Seconds from last seen activity to consider lease offline, OpenVPN reneg-sec option
                     dead = 604800 # Seconds from last activity to consider lease dead, X509 chain broken or machine discarded
@@ -199,7 +211,7 @@ def certidude_app():
     app.add_route("/api/signed/{cn}/lease/", LeaseDetailResource())
 
     # API call used to delete existing tags
-    app.add_route("/api/signed/{cn}/tag/{key}/", TagDetailResource())
+    app.add_route("/api/signed/{cn}/tag/{tag}/", TagDetailResource())
 
     # Gateways can submit leases via this API call
     app.add_route("/api/lease/", LeaseResource())

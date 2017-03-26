@@ -16,8 +16,8 @@ class LeaseDetailResource(object):
     def on_get(self, req, resp, cn):
         path, buf, cert = authority.get_signed(cn)
         return dict(
-            last_seen = xattr.getxattr(path, "user.last_seen"),
-            address = xattr.getxattr(path, "user.address").decode("ascii")
+            last_seen = xattr.getxattr(path, "user.lease.last_seen"),
+            address = xattr.getxattr(path, "user.lease.address").decode("ascii")
         )
 
 
@@ -29,8 +29,8 @@ class LeaseResource(object):
         if cert.serial != req.get_param_as_int("serial", required=True): # Badum we have OCSP!
             raise # TODO proper exception
         if req.get_param("action") == "client-connect":
-            xattr.setxattr(path, "user.address", req.get_param("address", required=True).encode("ascii"))
-            xattr.setxattr(path, "user.last_seen", datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
+            xattr.setxattr(path, "user.lease.address", req.get_param("address", required=True).encode("ascii"))
+            xattr.setxattr(path, "user.lease.last_seen", datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
             push.publish("lease-update", common_name)
 
         # client-disconnect is pretty much unusable:

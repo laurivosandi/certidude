@@ -5,6 +5,7 @@ function normalizeCommonName(j) {
 }
 
 function setTag(cn, key, value, indicator) {
+    $(indicator).addClass("busy");
     $.ajax({
         method: "POST",
         url: "/api/signed/" + cn + "/tag/",
@@ -24,18 +25,36 @@ function setTag(cn, key, value, indicator) {
 }
 
 function onTagClicked(event) {
+    var tag = event.target;
     var cn = $(event.target).attr("data-cn");
-    var key = $(event.target).attr("data-key");
+    var id = $(event.target).attr("title");
     var value = $(event.target).html();
     var updated = prompt("Enter new tag or clear to remove the tag", value);
-    $(event.target).addClass("busy");
     if (updated == "") {
+        $(event.target).addClass("busy");
         $.ajax({
             method: "DELETE",
-            url: "/api/signed/" + cn + "/tag/" + key + "/"
+            url: "/api/signed/" + cn + "/tag/" + id + "/"
         });
     } else if (updated && updated != value) {
-        setTag(cn, key, updated, menu);
+        $(tag).addClass("busy");
+        $.ajax({
+            method: "PUT",
+            url: "/api/signed/" + cn + "/tag/" + id + "/",
+            data: { value: updated },
+            dataType: "text",
+            complete: function(xhr, status) {
+                console.info("Tag added successfully", xhr.status,  status);
+            },
+            success: function() {
+                $(tag).removeClass("busy");
+            },
+            error: function(xhr, status, e) {
+                console.info("Submitting request failed with:", status, e);
+                alert(e);
+            }
+        });
+
     }
 }
 
@@ -47,7 +66,6 @@ function onNewTagClicked(event) {
     var value = prompt("Enter new " + key + " tag for " + cn);
     if (!value) return;
     if (value.length == 0) return;
-    $(menu).addClass("busy");
     setTag(cn, key, value, event.target);
 }
 
