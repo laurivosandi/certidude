@@ -1,6 +1,6 @@
 sudo: false
 language: python
-dist: trusty
+dist: xenial
 python:
   - "2.7"
 after_success:
