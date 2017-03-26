@@ -17,10 +17,26 @@ from configparser import ConfigParser
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 
+def selinux_fixup(path):
+    """
+    Fix OpenVPN credential store security context on Fedora
+    """
+    if not os.path.exists("/sys/fs/selinux"):
+        return
+    cmd = "chcon", "--type=home_cert_t", path
+    subprocess.call(cmd)
+
 def certidude_request_certificate(server, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, autosign=False, wait=False, bundle=False, renew=False, insecure=False):
     """
     Exchange CSR for certificate using Certidude HTTP API server
     """
+
+    # Create directories
+    for path in key_path, request_path, certificate_path, authority_path, revocations_path:
+        dir_path = os.path.dirname(path)
+        if not os.path.exists(dir_path):
+            os.makedirs(dir_path)
+
     # Set up URL-s
     request_params = set()
     if autosign:
@@ -52,6 +68,7 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
         with open(authority_partial, "w") as oh:
             oh.write(r.content)
         click.echo("Writing authority certificate to: %s" % authority_path)
+        selinux_fixup(authority_partial)
         os.rename(authority_partial, authority_path)
 
     # Fetch certificate revocation list
@@ -67,6 +84,7 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
     else:
         # TODO: Check monotonically increasing CRL number
         click.echo("Certificate revocation list passed verification")
+        selinux_fixup(revocations_partial)
         os.rename(revocations_partial, revocations_path)
 
     # Check if we have been inserted into CRL
@@ -143,13 +161,16 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
 
         # Sign & dump CSR
         os.umask(0o022)
-        with open(request_path + ".part", "wb") as f:
+        request_partial = tempfile.mktemp(prefix=request_path + ".part")
+        with open(request_partial, "wb") as f:
             f.write(csr.sign(key, hashes.SHA256(), default_backend()).public_bytes(serialization.Encoding.PEM))
 
         click.echo("Writing private key to: %s" % key_path)
+        selinux_fixup(key_partial)
         os.rename(key_partial, key_path)
+
         click.echo("Writing certificate signing request to: %s" % request_path)
-        os.rename(request_path + ".part", request_path)
+        os.rename(request_partial, request_path)
 
     # We have CSR now, save the paths to client.conf so we could:
     # Update CRL, renew certificate, maybe something extra?
@@ -229,7 +250,8 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
         raise ValueError("Failed to parse PEM: %s" % submission.text)
 
     os.umask(0o022)
-    with open(certificate_path + ".part", "w") as fh:
+    certificate_partial = tempfile.mktemp(prefix=certificate_path + ".part")
+    with open(certificate_partial, "w") as fh:
         # Dump certificate
         fh.write(submission.text)
 
@@ -239,7 +261,8 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
                 fh.write(ch.read())
 
     click.echo("Writing certificate to: %s" % certificate_path)
-    os.rename(certificate_path + ".part", certificate_path)
+    selinux_fixup(certificate_partial)
+    os.rename(certificate_partial, certificate_path)
 
     # TODO: Validate fetched certificate against CA
     # TODO: Check that recevied certificate CN and pubkey match
