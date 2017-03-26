@@ -88,6 +88,6 @@ elif "ldap" == AUTHORIZATION_BACKEND:
 else:
     raise NotImplementedError("Unknown authorization backend '%s'" % AUTHORIZATION_BACKEND)
 
-TAG_TYPES = [j.split("/", 1) + [cp.get("tag types", j)] for j in cp.options("tag types")]
+TAG_TYPES = [j.split("/", 1) + [cp.get("tagging", j)] for j in cp.options("tagging")]
 
 # TODO: Check if we don't have base or servers
