@@ -37,6 +37,9 @@ def test_cli_setup_authority():
     authority.store_request(
         csr.sign(key, hashes.SHA256(), default_backend()).public_bytes(serialization.Encoding.PEM))
 
+    result = runner.invoke(cli, ['list', '-srv'])
+    assert not result.exception
+
     result = runner.invoke(cli, ['sign', 'test', '-o'])
     assert not result.exception
 
@@ -47,4 +50,7 @@ def test_cli_setup_authority():
     authority.generate_pkcs12_bundle(u"test3")
 
     result = runner.invoke(cli, ['list', '-srv'])
+    assert not result.exception
+
+    result = runner.invoke(cli, ['cron'])
     assert not result.exception
