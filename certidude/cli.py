@@ -982,7 +982,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
             click.echo("=" * len(common_name))
             click.echo("State: ? " + click.style("submitted", fg="yellow") + " " + naturaltime(created) + click.style(", %s" %created,  fg="white"))
             click.echo("openssl req -in %s -text -noout" % path)
-            dump_common(common_name, path, cert)
+            dump_common(common_name, path, csr)
 
 
     if show_signed:
