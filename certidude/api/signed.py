@@ -7,7 +7,7 @@ from certidude import authority
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import csrf_protection
 
-logger = logging.getLogger("api")
+logger = logging.getLogger(__name__)
 
 class SignedCertificateDetailResource(object):
     def on_get(self, req, resp, cn):

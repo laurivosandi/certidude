@@ -9,8 +9,7 @@ from certidude.decorators import serialize
 from certidude.relational import RelationalMixin
 from jinja2 import Environment, FileSystemLoader
 
-logger = logging.getLogger("api")
-
+logger = logging.getLogger(__name__)
 env = Environment(loader=FileSystemLoader("/etc/certidude/scripts"), trim_blocks=True)
 
 SQL_SELECT_INHERITED = """
