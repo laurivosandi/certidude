@@ -5,7 +5,7 @@ from certidude import authority, push
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize, csrf_protection
 
-logger = logging.getLogger("api")
+logger = logging.getLogger(__name__)
 
 class TagResource(object):
     @serialize

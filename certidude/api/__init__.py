@@ -16,7 +16,7 @@ from certidude.decorators import serialize, event_source, csrf_protection
 from cryptography.x509.oid import NameOID
 from certidude import const, config
 
-logger = logging.getLogger("api")
+logger = logging.getLogger(__name__)
 
 class CertificateStatusResource(object):
     """

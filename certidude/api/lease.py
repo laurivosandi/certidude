@@ -1,11 +1,14 @@
 
 import click
+import logging
 import xattr
 from datetime import datetime
 from pyasn1.codec.der import decoder
 from certidude import config, authority, push
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize
+
+logger = logging.getLogger(__name__)
 
 # TODO: lease namespacing (?)
 

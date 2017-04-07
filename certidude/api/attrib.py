@@ -7,7 +7,7 @@ from datetime import datetime
 from certidude import config, authority
 from certidude.decorators import serialize
 
-logger = logging.getLogger("api")
+logger = logging.getLogger(__name__)
 
 class AttributeResource(object):
     @serialize

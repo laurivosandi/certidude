@@ -29,6 +29,7 @@ from jinja2 import Environment, PackageLoader
 from setproctitle import setproctitle
 import const
 
+logger = logging.getLogger(__name__)
 env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
 
 # http://www.mad-hacking.net/documentation/linux/security/ssl-tls/creating-ca.xml
@@ -863,7 +864,10 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
             ).not_valid_before(datetime.utcnow()
             ).not_valid_after(
                 datetime.utcnow() + timedelta(days=authority_lifetime)
-            ).serial_number(1
+            ).serial_number(
+                random.randint(
+                    0x100000000000000000000000000000000000000,
+                    0xfffffffffffffffffffffffffffffffffffffff)
             ).add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True,
             ).add_extension(x509.KeyUsage(
                 digital_signature=server_flags,
@@ -956,7 +960,6 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
     #   r - revoked
 
     from certidude import authority
-    from pycountry import countries
 
     def dump_common(common_name, path, cert):
         click.echo("certidude revoke %s" % common_name)
@@ -980,7 +983,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
             click.echo("=" * len(common_name))
             click.echo("State: ? " + click.style("submitted", fg="yellow") + " " + naturaltime(created) + click.style(", %s" %created,  fg="white"))
             click.echo("openssl req -in %s -text -noout" % path)
-            dump_common(common_name, path, cert)
+            dump_common(common_name, path, csr)
 
 
     if show_signed:
@@ -1061,6 +1064,7 @@ def certidude_serve(port, listen, fork):
     from certidude import const
     click.echo("Using configuration from: %s" % const.CONFIG_PATH)
 
+    log_handlers = []
 
     from certidude import config
 
@@ -1070,6 +1074,11 @@ def certidude_serve(port, listen, fork):
         _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
         restricted_groups = []
         restricted_groups.append(gid)
+        from logging.handlers import RotatingFileHandler
+        rh = RotatingFileHandler("/var/log/certidude.log", maxBytes=1048576*5, backupCount=5)
+        rh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+        log_handlers.append(rh)
+
 
     """
     Spawn signer process
@@ -1168,8 +1177,6 @@ def certidude_serve(port, listen, fork):
 
 
     # Set up log handlers
-    log_handlers = []
-
     if config.LOGGING_BACKEND == "sql":
         from certidude.mysqllog import LogHandler
         from certidude.api.log import LogResource
@@ -1187,18 +1194,19 @@ def certidude_serve(port, listen, fork):
         from certidude.push import EventSourceLogHandler
         log_handlers.append(EventSourceLogHandler())
 
-    for facility in "api", "cli":
-        logger = logging.getLogger(facility)
-        logger.setLevel(logging.DEBUG)
-        for handler in log_handlers:
-            logger.addHandler(handler)
+    for j in logging.Logger.manager.loggerDict.values():
+        if isinstance(j, logging.Logger): # PlaceHolder is what?
+            if j.name.startswith("certidude."):
+                j.setLevel(logging.DEBUG)
+                for handler in log_handlers:
+                    j.addHandler(handler)
 
 
     def exit_handler():
-        logging.getLogger("cli").debug("Shutting down Certidude")
+        logger.debug("Shutting down Certidude")
     import atexit
     atexit.register(exit_handler)
-    logging.getLogger("cli").debug("Started Certidude at %s", const.FQDN)
+    logger.debug("Started Certidude at %s", const.FQDN)
 
     if not fork or not os.fork():
         httpd.serve_forever()

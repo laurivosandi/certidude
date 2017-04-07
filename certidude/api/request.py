@@ -19,7 +19,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.x509.oid import NameOID
 from datetime import datetime
 
-logger = logging.getLogger("api")
+logger = logging.getLogger(__name__)
 
 class RequestListResource(object):
     @login_optional
