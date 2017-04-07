@@ -20,6 +20,7 @@ from certidude.common import expand_paths, ip_address, ip_network
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from datetime import datetime, timedelta
@@ -1202,6 +1203,50 @@ def certidude_serve(port, listen, fork):
     if not fork or not os.fork():
         httpd.serve_forever()
 
+
+@click.command("yubikey", help="Set up Yubikey as client authentication token")
+@click.argument("authority")
+@click.option("-p", "--pin", default="123456", help="Slot pincode, 123456 by default")
+@click.option("-s", "--slot", default="9a", help="Yubikey slot to use, 9a by default")
+@click.option("-u", "--username", default=os.getenv("USER"), help="Username to use, %s by default" % os.getenv("USER"))
+def certidude_setup_yubikey(authority, slot, username, pin):
+    cmd = "ykinfo", "-q", "-s"
+    click.echo("Executing: %s" % " ".join(cmd))
+    serial = subprocess.check_output(cmd).strip()
+
+    dn = "/CN=%s@yk-%s-%s" % (username, slot, serial)
+
+    cmd = "yubico-piv-tool", "-a", "generate", "-s", slot, "-o", "/tmp/pk.pem"
+    click.echo("Executing: %s" % " ".join(cmd))
+    subprocess.call(cmd)
+
+    cmd = "yubico-piv-tool", \
+        "-i", "/tmp/pk.pem", "-o", "/tmp/req.pem", \
+        "-P", pin, \
+        "-S", dn, \
+        "-a", "verify", "-a", "request", \
+        "-s", slot
+    click.echo("Executing: %s" % " ".join(cmd))
+
+    scheme = "http"
+    request_url = "%s://%s/api/request/?wait=true" % (scheme, authority)
+
+    subprocess.check_output(cmd)
+    click.echo("Submitting to %s, waiting for response..." % request_url)
+    headers={
+        "Content-Type": "application/pkcs10",
+        "Accept": "application/x-x509-user-cert,application/x-pem-file"
+    }
+
+    submission = requests.post(request_url, data=open("/tmp/req.pem"), headers=headers)
+    with open("/tmp/cert.pem", "w") as fh:
+        fh.write(submission.text)
+
+    cmd = "yubico-piv-tool", "-a", "import-certificate", "-s", slot, "-i", "/tmp/cert.pem"
+    click.echo("Executing: %s" % " ".join(cmd))
+    subprocess.call(cmd)
+
+
 @click.group("strongswan", help="strongSwan helpers")
 def certidude_setup_strongswan(): pass
 
@@ -1224,6 +1269,7 @@ certidude_setup.add_command(certidude_setup_authority)
 certidude_setup.add_command(certidude_setup_openvpn)
 certidude_setup.add_command(certidude_setup_strongswan)
 certidude_setup.add_command(certidude_setup_nginx)
+certidude_setup.add_command(certidude_setup_yubikey)
 entry_point.add_command(certidude_setup)
 entry_point.add_command(certidude_serve)
 entry_point.add_command(certidude_request)
