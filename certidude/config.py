@@ -46,6 +46,7 @@ OUTBOX_MAIL = cp.get("authority", "outbox sender address")
 
 BUNDLE_FORMAT = cp.get("bundle", "format")
 OPENVPN_PROFILE_TEMPLATE = cp.get("bundle", "openvpn profile template")
+BOOTSTRAP_TEMPLATE = cp.get("bootstrap", "services template")
 
 MACHINE_ENROLLMENT_ALLOWED = {
     "forbidden": False, "allowed": True }[

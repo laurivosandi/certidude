@@ -106,6 +106,15 @@ def certidude_request(fork, renew):
                 subprocess.check_call(cmd)
         except NoOptionError:
             pass
+
+        try:
+            endpoint_port = service_config.getint(endpoint, "port")
+        except NoOptionError:
+            endpoint_port = 1194
+        try:
+            endpoint_proto = service_config.get(endpoint, "proto")
+        except NoOptionError:
+            endpoint_proto = "udp"
         try:
             endpoint_insecure = clients.getboolean(authority, "insecure")
         except NoOptionError:
@@ -254,7 +263,8 @@ def certidude_request(fork, renew):
                 nm_config.set("vpn", "tap-dev", "no")
                 nm_config.set("vpn", "remote-cert-tls", "server") # Assert TLS Server flag of X.509 certificate
                 nm_config.set("vpn", "remote", service_config.get(endpoint, "remote"))
-                nm_config.set("vpn", "port", "51900")
+                nm_config.set("vpn", "port", endpoint_port)
+                nm_config.set("vpn", "proto", endpoint_proto)
                 nm_config.set("vpn", "key", endpoint_key_path)
                 nm_config.set("vpn", "cert", endpoint_certificate_path)
                 nm_config.set("vpn", "ca", endpoint_authority_path)
@@ -319,7 +329,7 @@ def certidude_request(fork, renew):
 @click.argument("authority")
 @click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="OpenVPN subnet, 192.168.33.0/24 by default")
 @click.option("--local", "-l", default="0.0.0.0", help="OpenVPN listening address, defaults to all interfaces")
-@click.option("--port", "-p", default=51900, type=click.IntRange(1,60000), help="OpenVPN listening port, 51900 by default")
+@click.option("--port", "-p", default=1194, type=click.IntRange(1,60000), help="OpenVPN listening port, 1194 by default")
 @click.option('--proto', "-t", default="udp", type=click.Choice(['udp', 'tcp']), help="OpenVPN transport protocol, UDP by default")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
 @click.option("--config", "-o",

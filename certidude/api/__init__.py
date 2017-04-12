@@ -190,6 +190,7 @@ def certidude_app():
     from .cfg import ConfigResource, ScriptResource
     from .tag import TagResource, TagDetailResource
     from .attrib import AttributeResource
+    from .bootstrap import BootstrapResource
 
     app = falcon.API(middleware=NormalizeMiddleware())
     app.req_options.auto_parse_form_urlencoded = True
@@ -202,6 +203,7 @@ def certidude_app():
     app.add_route("/api/request/{cn}/", RequestDetailResource())
     app.add_route("/api/request/", RequestListResource())
     app.add_route("/api/", SessionResource())
+    app.add_route("/api/bootstrap/", BootstrapResource())
 
     # Extended attributes for scripting etc.
     app.add_route("/api/signed/{cn}/attr/", AttributeResource())
