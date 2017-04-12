@@ -106,7 +106,7 @@ def revoke(common_name):
     Revoke valid certificate
     """
     path, buf, cert = get_signed(common_name)
-    revoked_path = os.path.join(config.REVOKED_DIR, "%x.pem" % cert.serial_number)
+    revoked_path = os.path.join(config.REVOKED_DIR, "%x.pem" % cert.serial)
     signed_path = os.path.join(config.SIGNED_DIR, "%s.pem" % common_name)
     os.rename(signed_path, revoked_path)
     push.publish("certificate-revoked", common_name)
@@ -314,7 +314,7 @@ def _sign(csr, buf, overwrite=False):
         if overwrite:
             if renew:
                 # TODO: is this the best approach?
-                revoked_path = os.path.join(config.REVOKED_DIR, "%x.pem" % prev.serial_number)
+                revoked_path = os.path.join(config.REVOKED_DIR, "%x.pem" % prev.serial)
                 os.rename(signed_path, revoked_path)
             else:
                 revoke(common_name.value)

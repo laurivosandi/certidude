@@ -289,6 +289,7 @@ def certidude_request(fork, renew):
             # IPSec set up with NetworkManager
             elif service_config.get(endpoint, "service") == "network-manager/strongswan":
                 client_config = ConfigParser()
+                nm_config = ConfigParser()
                 nm_config.add_section("connection")
                 nm_config.set("connection", "id", endpoint)
                 nm_config.set("connection", "uuid", uuid)
@@ -745,6 +746,7 @@ def certidude_setup_openvpn_networkmanager(authority, remote):
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
 def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags):
     openvpn_profile_template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates", "openvpn-client.conf")
+    bootstrap_template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates", "bootstrap.conf")
 
     if not directory:
         if os.getuid():
@@ -1007,7 +1009,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
                     click.echo("y " + path)
                 continue
 
-            click.echo(click.style(common_name, fg="blue") + " " + click.style("%x" % cert.serial_number, fg="white"))
+            click.echo(click.style(common_name, fg="blue") + " " + click.style("%x" % cert.serial, fg="white"))
             click.echo("="*(len(common_name)+60))
             expires = 0 # TODO
             if cert.not_valid_before < NOW and cert.not_valid_after > NOW:

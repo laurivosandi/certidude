@@ -31,7 +31,7 @@ class SignedCertificateDetailResource(object):
                 resp.set_header("Content-Disposition", ("attachment; filename=%s.json" % cn))
                 resp.body = json.dumps(dict(
                     common_name = cn,
-                    serial_number = "%x" % cert.serial_number,
+                    serial_number = "%x" % cert.serial,
                     signed = cert.not_valid_before.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                     expires = cert.not_valid_after.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                     sha256sum = hashlib.sha256(buf).hexdigest()))

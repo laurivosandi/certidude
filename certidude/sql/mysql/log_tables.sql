@@ -5,7 +5,7 @@ create table if not exists log (
     severity varchar(10),
     message text,
     module varchar(20),
-    func varchar(20),
+    func varchar(50),
     lineno int,
     exception text,
     process int,

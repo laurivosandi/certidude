@@ -94,7 +94,7 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
         for revocation in x509.load_pem_x509_crl(open(revocations_path).read(), default_backend()):
             extension, = revocation.extensions
 
-            if revocation.serial_number == cert.serial_number:
+            if revocation.serial_number == cert.serial:
                 if extension.value.reason == x509.ReasonFlags.certificate_hold:
                     # Don't do anything for now
                     # TODO: disable service
