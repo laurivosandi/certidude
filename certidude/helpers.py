@@ -1,7 +1,6 @@
 
 import click
 import os
-import requests
 import subprocess
 import tempfile
 from base64 import b64encode
@@ -30,6 +29,7 @@ def certidude_request_certificate(server, system_keytab_required, key_path, requ
     """
     Exchange CSR for certificate using Certidude HTTP API server
     """
+    import requests
 
     # Create directories
     for path in key_path, request_path, certificate_path, authority_path, revocations_path:

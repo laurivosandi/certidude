@@ -2,6 +2,7 @@
 import click
 import os
 import socket
+import sys
 
 CONFIG_DIR = os.path.expanduser("~/.certidude") if os.getuid() else "/etc/certidude"
 CONFIG_PATH = os.path.join(CONFIG_DIR, "server.conf")
@@ -18,7 +19,11 @@ SIGNER_LOG_PATH = os.path.join(CONFIG_DIR, "signer.log") if os.getuid() else "/v
 if os.getenv("TRAVIS"):
     FQDN = "buildbot"
 else:
-    FQDN = socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, 0, 0, socket.AI_CANONNAME)[0][3]
+    try:
+        FQDN = socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, 0, 0, socket.AI_CANONNAME)[0][3]
+    except socket.gaierror:
+        click.echo("Failed to resolve fully qualified hostname of this machine, make sure hostname -f works")
+        sys.exit(254)
 
 if "." in FQDN:
     HOSTNAME, DOMAIN = FQDN.split(".", 1)

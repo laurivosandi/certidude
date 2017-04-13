@@ -8,7 +8,6 @@ import os
 import pwd
 import random
 import re
-import requests
 import signal
 import socket
 import string
@@ -17,6 +16,7 @@ import sys
 from configparser import ConfigParser, NoOptionError, NoSectionError
 from certidude.helpers import certidude_request_certificate
 from certidude.common import expand_paths, ip_address, ip_network
+from certidude.decorators import apt, rpm, pip
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 from cryptography.hazmat.backends import default_backend
@@ -24,9 +24,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from datetime import datetime, timedelta
-from humanize import naturaltime
 from jinja2 import Environment, PackageLoader
-from setproctitle import setproctitle
 import const
 
 logger = logging.getLogger(__name__)
@@ -67,6 +65,8 @@ ExecStart=%s request
 @click.option("-r", "--renew", default=False, is_flag=True, help="Renew now")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 def certidude_request(fork, renew):
+    import requests
+
     if not os.path.exists(const.CLIENT_CONFIG_PATH):
         click.echo("No %s!" % const.CLIENT_CONFIG_PATH)
         return 1
@@ -485,6 +485,8 @@ def certidude_setup_nginx(authority, site_config, tls_config, common_name, direc
     default="/etc/openvpn/client-to-site.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
+@apt("openvpn python-requests-kerberos")
+@rpm("openvpn python2-requests-kerberos")
 def certidude_setup_openvpn_client(authority, remote, config, proto):
 
     # Create corresponding section in Certidude client configuration file
@@ -602,6 +604,9 @@ def certidude_setup_strongswan_server(authority, config, secrets, subnet, route,
 @click.command("client", help="Set up strongSwan client")
 @click.argument("authority")
 @click.argument("remote")
+@apt("network-manager-openvpn-gnome python-requests-kerberos")
+@rpm("NetworkManager-openvpn-gnome python2-requests-kerberos")
+@pip("ipsecparse")
 def certidude_setup_strongswan_client(authority, config, remote, dpdaction):
     # Create corresponding section in /etc/certidude/client.conf
     client_config = ConfigParser()
@@ -649,6 +654,8 @@ def certidude_setup_strongswan_client(authority, config, remote, dpdaction):
 @click.command("networkmanager", help="Set up strongSwan client via NetworkManager")
 @click.argument("authority") # Certidude server
 @click.argument("remote") # StrongSwan gateway
+@apt("strongswan-nm")
+@rpm("NetworkManager-strongswan-gnome")
 def certidude_setup_strongswan_networkmanager(authority, remote):
     endpoint = "IPSec to %s" % remote
 
@@ -744,10 +751,12 @@ def certidude_setup_openvpn_networkmanager(authority, remote):
 @click.option("--authority-lifetime", default=20*365, help="Authority certificate lifetime in days, 20 years by default")
 @click.option("--organization", "-o", default=None, help="Company or organization name")
 @click.option("--organizational-unit", "-ou", default=None)
-@click.option("--push-server", default="http://" + const.FQDN, help="Push server, by default http://%s" % const.FQDN)
+@click.option("--push-server", help="Push server, by default http://%s" % const.FQDN)
 @click.option("--directory", help="Directory for authority files")
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
+@apt("python-setproctitle python-openssl python-falcon python-humanize python-markdown python-xattr")
+@rpm("python-setproctitle pyOpenSSL python-falcon python-humanize python-markdown pyxattr")
 def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags):
     openvpn_profile_template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates", "openvpn-client.conf")
     bootstrap_template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates", "bootstrap.conf")
@@ -802,8 +811,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         else:
             click.echo("Warning: /etc/krb5.keytab or /etc/samba/smb.conf not found, Kerberos unconfigured")
 
-
-        working_directory = os.path.realpath(os.path.dirname(__file__))
+        static_path = os.path.join(os.path.realpath(os.path.dirname(__file__)), "static")
         certidude_path = sys.argv[0]
 
         # Push server config generation
@@ -812,15 +820,16 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
             listen = "0.0.0.0"
             port = "80"
         else:
-            nginx_client_config.write(env.get_template("nginx.conf").render(vars()))
-            click.echo("Generated: %s" % nginx_client_config.name)
+            port = "8080"
+            nginx_config.write(env.get_template("nginx.conf").render(vars()))
+            click.echo("Generated: %s" % nginx_config.name)
             if not os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
                 os.symlink("../sites-available/certidude.conf", "/etc/nginx/sites-enabled/certidude.conf")
-                click.echo("Symlinked %s -> /etc/nginx/sites-enabled/" % nginx_client_config.name)
+                click.echo("Symlinked %s -> /etc/nginx/sites-enabled/" % nginx_config.name)
             if os.path.exists("/etc/nginx/sites-enabled/default"):
                 os.unlink("/etc/nginx/sites-enabled/default")
             if not push_server:
-                click.echo("Remember to install nchan instead of regular nginx!")
+                click.echo("Remember to install nchan capable nginx instead of regular nginx!")
 
         if os.path.exists("/etc/systemd"):
             if os.path.exists("/etc/systemd/system/certidude.service"):
@@ -974,7 +983,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
     #   e - expired
     #   y - not valid yet
     #   r - revoked
-
+    from humanize import naturaltime
     from certidude import authority
 
     def dump_common(common_name, path, cert):
@@ -1076,6 +1085,7 @@ def certidude_cron():
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 def certidude_serve(port, listen, fork):
+    from setproctitle import setproctitle
     from certidude.signer import SignServer
     from certidude import const
     click.echo("Using configuration from: %s" % const.CONFIG_PATH)
@@ -1234,6 +1244,7 @@ def certidude_serve(port, listen, fork):
 @click.option("-s", "--slot", default="9a", help="Yubikey slot to use, 9a by default")
 @click.option("-u", "--username", default=os.getenv("USER"), help="Username to use, %s by default" % os.getenv("USER"))
 def certidude_setup_yubikey(authority, slot, username, pin):
+    import requests
     cmd = "ykinfo", "-q", "-s"
     click.echo("Executing: %s" % " ".join(cmd))
     serial = subprocess.check_output(cmd).strip()

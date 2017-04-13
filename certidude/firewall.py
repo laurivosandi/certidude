@@ -1,5 +1,4 @@
 
-import falcon
 import logging
 
 logger = logging.getLogger("api")
@@ -8,6 +7,8 @@ def whitelist_subnets(subnets):
     """
     Validate source IP address of API call against subnet list
     """
+    import falcon
+
     def wrapper(func):
         def wrapped(self, req, resp, *args, **kwargs):
             # Check for administration subnet whitelist
@@ -26,6 +27,8 @@ def whitelist_subnets(subnets):
     return wrapper
 
 def whitelist_content_types(*content_types):
+    import falcon
+
     def wrapper(func):
         def wrapped(self, req, resp, *args, **kwargs):
             for content_type in content_types:

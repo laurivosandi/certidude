@@ -10,7 +10,7 @@ virtualenv:
 install:
   - pip install -r requirements.txt
   - pip install --editable .
-  - pip install codecov pytest-cov
+  - pip install codecov pytest-cov click ipaddress humanize falcon
 script:
   - py.test --cov-report xml --cov=certidude tests/
 cache:
@@ -19,5 +19,10 @@ cache:
 addons:
   apt:
     packages:
-    - python-ldap
     - python-xattr
+    - python-setproctitle
+    - python-markdown
+    - python-jinja2
+    - python-configparser
+    - python-pyasn1
+    - python-openssl

@@ -1,11 +1,10 @@
-
 import falcon
 import logging
 from ipaddress import ip_address
-from xattr import getxattr, listxattr
 from datetime import datetime
 from certidude import config, authority
 from certidude.decorators import serialize
+from xattr import getxattr, listxattr
 
 logger = logging.getLogger(__name__)
 

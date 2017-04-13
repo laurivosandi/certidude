@@ -1,8 +1,6 @@
 
 import click
 import grp
-import ldap
-import ldap.sasl
 import os
 import pwd
 from certidude import const, config
@@ -65,6 +63,9 @@ class PosixUserManager(object):
 
 class DirectoryConnection(object):
     def __enter__(self):
+        import ldap
+        import ldap.sasl
+
         # TODO: Implement simple bind
         if not os.path.exists(config.LDAP_GSSAPI_CRED_CACHE):
             raise ValueError("Ticket cache at %s not initialized, unable to "
@@ -87,8 +88,7 @@ class ActiveDirectoryUserManager(object):
         with DirectoryConnection() as conn:
             ft = config.LDAP_USER_FILTER % username
             attribs = "cn", "givenName", "sn", "mail", "userPrincipalName"
-            r = conn.search_s(config.LDAP_BASE, ldap.SCOPE_SUBTREE,
-                ft.encode("utf-8"), attribs)
+            r = conn.search_s(config.LDAP_BASE, 2, ft.encode("utf-8"), attribs)
             for dn, entry in r:
                 if not dn:
                     continue
@@ -110,8 +110,7 @@ class ActiveDirectoryUserManager(object):
     def filter(self, ft):
         with DirectoryConnection() as conn:
             attribs = "givenName", "surname", "samaccountname", "cn", "mail", "userPrincipalName"
-            r = conn.search_s(config.LDAP_BASE, ldap.SCOPE_SUBTREE,
-                ft.encode("utf-8"), attribs)
+            r = conn.search_s(config.LDAP_BASE, 2, ft.encode("utf-8"), attribs)
             for dn,entry in r:
                 if not dn:
                     continue
@@ -145,8 +144,7 @@ class ActiveDirectoryUserManager(object):
     def is_admin(self, user):
         with DirectoryConnection() as conn:
             ft = config.LDAP_ADMIN_FILTER % user.name
-            r = conn.search_s(config.LDAP_BASE, ldap.SCOPE_SUBTREE,
-                ft.encode("utf-8"), ["cn"])
+            r = conn.search_s(config.LDAP_BASE, 2, ft.encode("utf-8"), ["cn"])
             for dn, entry in r:
                 if not dn:
                     continue

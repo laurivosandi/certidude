@@ -15,7 +15,6 @@ from cryptography.hazmat.primitives import hashes, serialization
 from certidude import config, push, mailer, const
 from certidude import errors
 from jinja2 import Template
-from xattr import getxattr, listxattr, setxattr
 
 RE_HOSTNAME =  "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])(@(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9]))?$"
 
@@ -259,7 +258,6 @@ def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
     try:
         from OpenSSL import crypto
     except ImportError:
-        logger.error("For P12 bundles please install pyOpenSSL: pip install pyOpenSSL")
         raise
     else:
         p12 = crypto.PKCS12()
@@ -297,6 +295,8 @@ def sign(common_name, overwrite=False):
 def _sign(csr, buf, overwrite=False):
     assert buf.startswith("-----BEGIN CERTIFICATE REQUEST-----\n")
     assert isinstance(csr, x509.CertificateSigningRequest)
+    from xattr import getxattr, listxattr, setxattr
+
     common_name, = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
     cert_path = os.path.join(config.SIGNED_DIR, common_name.value + ".pem")
     renew = False
@@ -375,5 +375,3 @@ def _sign(csr, buf, overwrite=False):
         push.publish("request-signed", common_name.value)
 
     return cert, cert_buf
-
-

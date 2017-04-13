@@ -1,10 +1,11 @@
-import falcon
+import click
 import ipaddress
 import json
 import logging
+import os
+import subprocess
 import types
 from datetime import date, time, datetime, timedelta
-from certidude.auth import User
 from urlparse import urlparse
 
 logger = logging.getLogger("api")
@@ -13,6 +14,7 @@ def csrf_protection(func):
     """
     Protect resource from common CSRF attacks by checking user agent and referrer
     """
+    import falcon
     def wrapped(self, req, resp, *args, **kwargs):
         # Assume curl and python-requests are used intentionally
         if req.user_agent.startswith("curl/") or req.user_agent.startswith("python-requests/"):
@@ -40,6 +42,7 @@ def csrf_protection(func):
 
 
 def event_source(func):
+    import falcon
     def wrapped(self, req, resp, *args, **kwargs):
         if req.get_header("Accept") == "text/event-stream":
             resp.status = falcon.HTTP_SEE_OTHER
@@ -50,6 +53,7 @@ def event_source(func):
 
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
+        from certidude.auth import User
         if isinstance(obj, ipaddress._IPAddressBase):
             return str(obj)
         if isinstance(obj, set):
@@ -72,6 +76,7 @@ def serialize(func):
     """
     Falcon response serialization
     """
+    import falcon
     def wrapped(instance, req, resp, **kwargs):
         if not req.client_accepts("application/json"):
             logger.debug("Client did not accept application/json")
@@ -83,3 +88,43 @@ def serialize(func):
         resp.body = json.dumps(func(instance, req, resp, **kwargs), cls=MyEncoder)
     return wrapped
 
+
+def apt(packages):
+    """
+    Install packages for Debian and Ubuntu
+    """
+    def wrapper(func):
+        def wrapped(*args, **kwargs):
+            if os.path.exists("/usr/bin/apt-get"):
+                cmd = ["/usr/bin/apt-get", "install", "-yqq"] + packages.split(" ")
+                click.echo("Running: %s" % " ".join(cmd))
+                subprocess.call(cmd)
+            return func(*args, **kwargs)
+        return wrapped
+    return wrapper
+
+
+def rpm(packages):
+    """
+    Install packages for Fedora and CentOS
+    """
+    def wrapper(func):
+        def wrapped(*args, **kwargs):
+            if os.path.exists("/usr/bin/dnf"):
+                cmd = ["/usr/bin/dnf", "install", "-y"] + packages.split(" ")
+                click.echo("Running: %s" % " ".join(cmd))
+                subprocess.call(cmd)
+            return func(*args, **kwargs)
+        return wrapped
+    return wrapper
+
+
+def pip(packages):
+    def wrapper(func):
+        def wrapped(*args, **kwargs):
+            click.echo("Running: pip install %s" % packages)
+            import pip
+            pip.main(['install'] + packages.split(" "))
+            return func(*args, **kwargs)
+        return wrapped
+    return wrapper
