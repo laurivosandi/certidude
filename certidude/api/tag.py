@@ -56,7 +56,10 @@ class TagDetailResource(object):
             tags = set(getxattr(path, "user.xdg.tags").decode("utf-8").split(","))
         except IOError:
             tags = set()
-        tags.remove(tag)
+        try:
+            tags.remove(tag)
+        except KeyError:
+            pass
         if "=" in tag:
             tags.add("%s=%s" % (tag.split("=")[0], value))
         else:

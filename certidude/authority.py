@@ -123,6 +123,7 @@ def revoke(common_name):
         attachments=(attach_cert,),
         serial_number="%x" % cert.serial,
         common_name=common_name)
+    return revoked_path
 
 def server_flags(cn):
     if config.USER_ENROLLMENT_ALLOWED and not config.USER_MULTIPLE_CERTIFICATES:
@@ -317,7 +318,7 @@ def _sign(csr, buf, overwrite=False):
                 revoked_path = os.path.join(config.REVOKED_DIR, "%x.pem" % prev.serial)
                 os.rename(signed_path, revoked_path)
             else:
-                revoke(common_name.value)
+                revoked_path = revoke(common_name.value)
         else:
             raise EnvironmentError("Will not overwrite existing certificate")
 
