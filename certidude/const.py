@@ -31,4 +31,7 @@ else:
     HOSTNAME, DOMAIN = FQDN, "local"
     click.echo("Unable to determine domain of this computer, falling back to local")
 
-EXTENSION_WHITELIST = set(["subjectAltName"])
+if os.path.exists("/etc/strongswan/ipsec.conf"): # fedora dafuq?!
+    STRONGSWAN_PREFIX = "/etc/strongswan"
+else:
+    STRONGSWAN_PREFIX = "/etc"

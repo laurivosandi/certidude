@@ -217,27 +217,37 @@ def certidude_request(fork, renew):
 
             # IPSec set up with initscripts
             if service_config.get(endpoint, "service") == "init/strongswan":
+                remote = service_config.get(endpoint, "remote")
                 from ipsecparse import loads
-                config = loads(open('/etc/ipsec.conf').read())
-                if config["conn"][server]["left"] == "%defaultroute":
-                    config["conn"][server]["auto"] = "start" # This is client
+                config = loads(open("%s/ipsec.conf" % const.STRONGSWAN_PREFIX).read())
+                if config["conn",remote]["left"] == "%defaultroute":
+                    config["conn",remote]["auto"] = "start" # This is client
                 else:
-                    config["conn"][server]["auto"] = "add" # This is server
-                with open("/etc/ipsec.conf.part", "w") as fh:
+                    config["conn",remote]["auto"] = "add" # This is server
+                with open("%s/ipsec.conf.part" % const.STRONGSWAN_PREFIX, "w") as fh:
                     fh.write(config.dumps())
-                os.rename("/etc/ipsec.conf.part", "/etc/ipsec.conf")
+                os.rename(
+                    "%s/ipsec.conf.part" % const.STRONGSWAN_PREFIX,
+                    "%s/ipsec.conf" % const.STRONGSWAN_PREFIX)
 
                 # Regenerate /etc/ipsec.secrets
-                with open("/etc/ipsec.secrets.part", "w") as fh:
-                    for filename in os.listdir("/etc/ipsec.d/private"):
+                with open("%s/ipsec.secrets.part" % const.STRONGSWAN_PREFIX, "w") as fh:
+                    for filename in os.listdir("%s/ipsec.d/private" % const.STRONGSWAN_PREFIX):
                         if not filename.endswith(".pem"):
                             continue
-                        fh.write(": RSA /etc/ipsec.d/private/%s\n" % filename)
-                os.rename("/etc/ipsec.secrets.part", "/etc/ipsec.secrets")
+                        fh.write(": RSA %s/ipsec.d/private/%s\n" % (const.STRONGSWAN_PREFIX, filename))
+                os.rename(
+                    "%s/ipsec.secrets.part" % const.STRONGSWAN_PREFIX,
+                    "%s/ipsec.secrets" % const.STRONGSWAN_PREFIX)
 
                 # Attempt to reload config or start if it's not running
-                if os.system("ipsec update") == 130:
-                    os.system("ipsec start")
+                if os.path.exists("/usr/sbin/strongswan"): # wtf fedora
+                    if os.system("strongswan update") == 130:
+                        os.system("strongswan start")
+                else:
+                    if os.system("ipsec update") == 130:
+                        os.system("ipsec start")
+
                 continue
 
             # OpenVPN set up with NetworkManager
@@ -327,7 +337,7 @@ def certidude_request(fork, renew):
                 continue
 
             # TODO: Puppet, OpenLDAP, <insert awesomeness here>
-
+            click.echo("Unknown service: %s" % service_config.get(endpoint, "service"))
         os.unlink(pid_path)
 
 
@@ -520,6 +530,7 @@ def certidude_setup_openvpn_client(authority, remote, config, proto):
         service_config.add_section(endpoint)
         service_config.set(endpoint, "authority", authority)
         service_config.set(endpoint, "service", "init/openvpn")
+        service_config.set(endpoint, "remote", remote)
         with open(const.SERVICES_CONFIG_PATH + ".part", 'wb') as fh:
             service_config.write(fh)
         os.rename(const.SERVICES_CONFIG_PATH + ".part", const.SERVICES_CONFIG_PATH)
@@ -552,6 +563,7 @@ def certidude_setup_openvpn_client(authority, remote, config, proto):
 @click.option("--subnet", "-sn", default=u"192.168.33.0/24", type=ip_network, help="IPsec virtual subnet, 192.168.33.0/24 by default")
 @click.option("--local", "-l", type=ip_address, help="IP address associated with the certificate, none by default")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
+@pip("ipsecparse")
 def certidude_setup_strongswan_server(authority, config, secrets, subnet, route, local, fqdn):
     if "." not in common_name:
         raise ValueError("Hostname has to be fully qualified!")
@@ -571,7 +583,7 @@ def certidude_setup_strongswan_server(authority, config, secrets, subnet, route,
         client_config.set(authority, "key path", "/etc/ipsec.d/private/%s.pem" % const.HOSTNAME)
         client_config.set(authority, "certificate path", "/etc/ipsec.d/certs/%s.pem" % const.HOSTNAME)
         client_config.set(authority, "authority path",  "/etc/ipsec.d/cacerts/ca.pem")
-        client_config.set(authority, "authority path",  "/etc/ipsec.d/crls/ca.pem")
+        client_config.set(authority, "revocations path",  "/etc/ipsec.d/crls/ca.pem")
         with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
             client_config.write(fh)
         os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
@@ -604,58 +616,77 @@ def certidude_setup_strongswan_server(authority, config, secrets, subnet, route,
 @click.command("client", help="Set up strongSwan client")
 @click.argument("authority")
 @click.argument("remote")
-@apt("network-manager-openvpn-gnome python-requests-kerberos")
-@rpm("NetworkManager-openvpn-gnome python2-requests-kerberos")
+@apt("strongswan-nm python-requests python-requests-kerberos")
+@rpm("NetworkManager-strongswan-gnome python2-requests python2-requests-kerberos")
 @pip("ipsecparse")
-def certidude_setup_strongswan_client(authority, config, remote, dpdaction):
+def certidude_setup_strongswan_client(authority, remote):
     # Create corresponding section in /etc/certidude/client.conf
     client_config = ConfigParser()
     if os.path.exists(const.CLIENT_CONFIG_PATH):
         client_config.readfp(open(const.CLIENT_CONFIG_PATH))
-    if client_config.has_section(server):
+    if client_config.has_section(authority):
         click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
     else:
         client_config.add_section(authority)
         client_config.set(authority, "trigger", "interface up")
         client_config.set(authority, "common name", const.HOSTNAME)
-        client_config.set(authority, "request path", "/etc/ipsec.d/reqs/%s.pem" % const.HOSTNAME)
-        client_config.set(authority, "key path", "/etc/ipsec.d/private/%s.pem" % const.HOSTNAME)
-        client_config.set(authority, "certificate path", "/etc/ipsec.d/certs/%s.pem" % const.HOSTNAME)
-        client_config.set(authority, "authority path",  "/etc/ipsec.d/cacerts/ca.pem")
-        client_config.set(authority, "authority path",  "/etc/ipsec.d/crls/ca.pem")
+        client_config.set(authority, "request path", "%s/ipsec.d/reqs/%s.pem" % (const.STRONGSWAN_PREFIX, const.HOSTNAME))
+        client_config.set(authority, "key path", "%s/ipsec.d/private/%s.pem" % (const.STRONGSWAN_PREFIX, const.HOSTNAME))
+        client_config.set(authority, "certificate path", "%s/ipsec.d/certs/%s.pem" % const.HOSTNAME)
+        client_config.set(authority, "authority path", "%s/ipsec.d/cacerts/ca.pem" % const.STRONGSWAN_PREFIX)
+        client_config.set(authority, "revocations path", "%s/ipsec.d/crls/ca.pem" % const.STRONGSWAN_PREFIX)
         with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
             client_config.write(fh)
         os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
         click.echo("Section '%s' added to %s" % (authority, const.CLIENT_CONFIG_PATH))
 
+    # Create corresponding section in /etc/certidude/services.conf
+    endpoint = "IPsec connection to %s" % remote
+    service_config = ConfigParser()
+    if os.path.exists(const.SERVICES_CONFIG_PATH):
+        service_config.readfp(open(const.SERVICES_CONFIG_PATH))
+    if service_config.has_section(endpoint):
+        click.echo("Section '%s' already exists in %s, not reconfiguring" % (endpoint, const.SERVICES_CONFIG_PATH))
+    else:
+        service_config.add_section(endpoint)
+        service_config.set(endpoint, "authority", authority)
+        service_config.set(endpoint, "service", "init/strongswan")
+        service_config.set(endpoint, "remote", remote)
+        with open(const.SERVICES_CONFIG_PATH + ".part", 'wb') as fh:
+            service_config.write(fh)
+        os.rename(const.SERVICES_CONFIG_PATH + ".part", const.SERVICES_CONFIG_PATH)
+        click.echo("Section '%s' added to %s" % (endpoint, const.SERVICES_CONFIG_PATH))
+
     # Create corresponding section in /etc/ipsec.conf
     from ipsecparse import loads
-    config = loads(open('/etc/ipsec.conf').read())
-    config["conn", server] = dict(
+    config = loads(open('%s/ipsec.conf' % const.STRONGSWAN_PREFIX).read())
+    config["conn", remote] = dict(
         leftsourceip="%config",
         left="%defaultroute",
-        leftcert=certificate_path,
+        leftcert=client_config.get(authority, "certificate path"),
         rightid="%any",
         right=remote,
-        rightsubnet=route,
+        #rightsubnet=route,
         keyexchange="ikev2",
         keyingtries="300",
         dpdaction="restart",
         closeaction="restart",
         auto="ignore")
-    with open("/etc/ipsec.conf.part", "w") as fh:
-        fh.write(client_config.dumps())
-    os.rename("/etc/ipsec.conf.part", "/etc/ipsec.conf")
+    with open("%s/ipsec.conf.part" % const.STRONGSWAN_PREFIX, "w") as fh:
+        fh.write(config.dumps())
+    os.rename(
+        "%s/ipsec.conf.part" % const.STRONGSWAN_PREFIX,
+        "%s/ipsec.conf" % const.STRONGSWAN_PREFIX)
 
-    click.echo("Generated section %s in %s" % (authority, client_config.name))
+    click.echo("Generated section %s in %s" % (authority, const.CLIENT_CONFIG_PATH))
     click.echo("Run 'certidude request' to request certificates and to enable services")
 
 
 @click.command("networkmanager", help="Set up strongSwan client via NetworkManager")
 @click.argument("authority") # Certidude server
 @click.argument("remote") # StrongSwan gateway
-@apt("strongswan-nm")
-@rpm("NetworkManager-strongswan-gnome")
+@apt("strongswan-nm python-requests python-requests-kerberos")
+@rpm("NetworkManager-strongswan-gnome python2-requests python2-requests-kerberos")
 def certidude_setup_strongswan_networkmanager(authority, remote):
     endpoint = "IPSec to %s" % remote
 
@@ -663,7 +694,7 @@ def certidude_setup_strongswan_networkmanager(authority, remote):
     client_config = ConfigParser()
     if os.path.exists(const.CLIENT_CONFIG_PATH):
         client_config.readfp(open(const.CLIENT_CONFIG_PATH))
-    if client_config.has_section(server):
+    if client_config.has_section(authority):
         click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
     else:
         client_config.add_section(authority)
@@ -687,9 +718,9 @@ def certidude_setup_strongswan_networkmanager(authority, remote):
         click.echo("Section '%s' already exists in %s, remove to regenerate" % (endpoint, const.SERVICES_CONFIG_PATH))
     else:
         service_config.add_section(endpoint)
-        service_config.set(authority, "authority", server)
-        service_config.set(authority, "remote", remote)
-        service_config.set(authority, "service", "network-manager/strongswan-client")
+        service_config.set(endpoint, "authority", authority)
+        service_config.set(endpoint, "remote", remote)
+        service_config.set(endpoint, "service", "network-manager/strongswan")
         with open(const.SERVICES_CONFIG_PATH + ".part", 'wb') as fh:
             service_config.write(fh)
         os.rename(const.SERVICES_CONFIG_PATH + ".part", const.SERVICES_CONFIG_PATH)
