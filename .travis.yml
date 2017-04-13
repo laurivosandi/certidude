@@ -10,7 +10,7 @@ virtualenv:
 install:
   - pip install -r requirements.txt
   - pip install --editable .
-  - pip install codecov pytest-cov
+  - pip install codecov pytest-cov click ipaddress humanize
 script:
   - py.test --cov-report xml --cov=certidude tests/
 cache:
@@ -24,7 +24,4 @@ addons:
     - python-falcon
     - python-markdown
     - python-jinja2
-    - python-click
     - python-configparser
-    - python-ipaddress
-    - python-humanize
