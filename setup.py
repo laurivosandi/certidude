@@ -23,6 +23,7 @@ setup(
         "cryptography",
         "configparser",
         "jinja2",
+        "pyasn1",
         "requests",
         "requests-kerberos"
     ],

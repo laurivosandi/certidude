@@ -25,3 +25,4 @@ addons:
     - python-markdown
     - python-jinja2
     - python-configparser
+    - python-pyasn1
