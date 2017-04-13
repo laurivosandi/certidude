@@ -258,7 +258,6 @@ def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
     try:
         from OpenSSL import crypto
     except ImportError:
-        logger.error("For P12 bundles please install pyOpenSSL: pip install pyOpenSSL")
         raise
     else:
         p12 = crypto.PKCS12()

@@ -25,3 +25,4 @@ addons:
     - python-jinja2
     - python-configparser
     - python-pyasn1
+    - python-openssl
