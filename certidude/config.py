@@ -18,6 +18,7 @@ AUTHENTICATION_BACKENDS = set([j for j in
 AUTHORIZATION_BACKEND = cp.get("authorization", "backend")  # whitelist, ldap, posix
 ACCOUNTS_BACKEND = cp.get("accounts", "backend")             # posix, ldap
 
+KERBEROS_KEYTAB = cp.get("authentication", "kerberos keytab")
 LDAP_AUTHENTICATION_URI = cp.get("authentication", "ldap uri")
 LDAP_GSSAPI_CRED_CACHE = cp.get("accounts", "ldap gssapi credential cache")
 LDAP_ACCOUNTS_URI = cp.get("accounts", "ldap uri")

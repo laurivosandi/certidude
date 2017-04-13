@@ -4,7 +4,6 @@ After=network.target
 
 [Service]
 Environment=PYTHON_EGG_CACHE=/tmp/.cache
-Environment=KRB5_KTNAME={{kerberos_keytab}}
 PIDFile=/run/certidude/server.pid
 ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s TERM $MAINPID

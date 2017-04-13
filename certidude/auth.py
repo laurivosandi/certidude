@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import socket
+from base64 import b64decode
 from certidude.user import User
 from certidude.firewall import whitelist_subnets
 from certidude import config, const
@@ -12,25 +13,11 @@ from certidude import config, const
 logger = logging.getLogger("api")
 
 if "kerberos" in config.AUTHENTICATION_BACKENDS:
-    import kerberos # If this fails pip install kerberos
-    ktname = os.getenv("KRB5_KTNAME")
-
-    if not ktname:
-        click.echo("Kerberos keytab not specified, set environment variable 'KRB5_KTNAME'", err=True)
-        exit(250)
-    if not os.path.exists(ktname):
-        click.echo("Kerberos keytab %s does not exist" % ktname, err=True)
-        exit(248)
-
-    try:
-        principal = kerberos.getServerPrincipalDetails("HTTP", const.FQDN)
-    except kerberos.KrbError as exc:
-        click.echo("Failed to initialize Kerberos, service principal is HTTP/%s, reason: %s" % (
-            const.FQDN, exc), err=True)
-        exit(249)
-    else:
-        click.echo("Kerberos enabled, service principal is HTTP/%s" % const.FQDN)
-
+    import gssapi
+    os.environ["KRB5_KTNAME"] = config.KERBEROS_KEYTAB
+    server_creds = gssapi.creds.Credentials(
+        usage='accept',
+        name=gssapi.names.Name('HTTP/%s'% (socket.gethostname())))
     click.echo("Accepting requests only for realm: %s" % const.DOMAIN)
 
 
@@ -55,37 +42,12 @@ def authenticate(optional=False):
                     "No Kerberos ticket offered, are you sure you've logged in with domain user account?",
                     ["Negotiate"])
 
+            context = gssapi.sec_contexts.SecurityContext(creds=server_creds)
             token = ''.join(req.auth.split()[1:])
+            context.step(b64decode(token))
+            username, domain = str(context.initiator_name).split("@")
 
-            try:
-                result, context = kerberos.authGSSServerInit("HTTP@" + const.FQDN)
-            except kerberos.GSSError as ex:
-                # TODO: logger.error
-                raise falcon.HTTPForbidden("Forbidden",
-                    "Authentication System Failure: %s(%s)" % (ex.args[0][0], ex.args[1][0],))
-
-            try:
-                result = kerberos.authGSSServerStep(context, token)
-            except kerberos.GSSError as ex:
-                kerberos.authGSSServerClean(context)
-                logger.error(u"Kerberos authentication failed from %s. "
-                    "GSSAPI error: %s (%d), perhaps the clock skew it too large?",
-                    req.context.get("remote_addr"),
-                    ex.args[0][0], ex.args[0][1])
-                raise falcon.HTTPForbidden("Forbidden",
-                    "GSSAPI error: %s (%d), perhaps the clock skew it too large?" % (ex.args[0][0], ex.args[0][1]))
-            except kerberos.KrbError as ex:
-                kerberos.authGSSServerClean(context)
-                logger.error(u"Kerberos authentication failed from  %s. "
-                    "Kerberos error: %s (%d)",
-                    req.context.get("remote_addr"),
-                    ex.args[0][0], ex.args[0][1])
-                raise falcon.HTTPForbidden("Forbidden",
-                    "Kerberos error: %s" % (ex.args[0],))
-
-            user_principal = kerberos.authGSSServerUserName(context)
-            username, domain = user_principal.split("@")
-            if domain.lower() != const.DOMAIN:
+            if domain.lower() != const.DOMAIN.lower():
                 raise falcon.HTTPForbidden("Forbidden",
                     "Invalid realm supplied")
 
@@ -98,29 +60,9 @@ def authenticate(optional=False):
                 # Attempt to look up real user
                 req.context["user"] = User.objects.get(username)
 
-            try:
-                kerberos.authGSSServerClean(context)
-            except kerberos.GSSError as ex:
-                logger.error(u"Kerberos authentication failed for user %s from  %s. "
-                    "Authentication system failure: %s (%d)",
-                    user, req.context.get("remote_addr"),
-                    ex.args[0][0], ex.args[0][1])
-                raise falcon.HTTPUnauthorized("Authentication System Failure %s (%s)" % (ex.args[0][0], ex.args[1][0]))
-
-            if result == kerberos.AUTH_GSS_COMPLETE:
-                logger.debug(u"Succesfully authenticated user %s for %s from %s",
-                    req.context["user"], req.env["PATH_INFO"], req.context["remote_addr"])
-                return func(resource, req, resp, *args, **kwargs)
-            elif result == kerberos.AUTH_GSS_CONTINUE:
-                logger.error(u"Kerberos authentication failed for user %s from  %s. "
-                    "Unauthorized, tried GSSAPI.",
-                    user, req.context.get("remote_addr"))
-                raise falcon.HTTPUnauthorized("Unauthorized", "Tried GSSAPI")
-            else:
-                logger.error(u"Kerberos authentication failed for user %s from  %s. "
-                    "Forbidden, tried GSSAPI.",
-                    user, req.context.get("remote_addr"))
-                raise falcon.HTTPForbidden("Forbidden", "Tried GSSAPI")
+            logger.debug(u"Succesfully authenticated user %s for %s from %s",
+                req.context["user"], req.env["PATH_INFO"], req.context["remote_addr"])
+            return func(resource, req, resp, *args, **kwargs)
 
 
         def ldap_authenticate(resource, req, resp, *args, **kwargs):
@@ -186,7 +128,6 @@ def authenticate(optional=False):
             if not req.auth.startswith("Basic "):
                 raise falcon.HTTPForbidden("Forbidden", "Bad header: %s" % req.auth)
 
-            from base64 import b64decode
             basic, token = req.auth.split(" ", 1)
             user, passwd = b64decode(token).split(":", 1)
 

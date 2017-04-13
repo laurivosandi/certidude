@@ -197,8 +197,7 @@ Install dependencies:
 
 .. code:: bash
 
-    apt-get install samba-common-bin krb5-user ldap-utils
-    pip install pykerberos
+    apt-get install samba-common-bin krb5-user ldap-utils python-gssapi
 
 Reset Samba client configuration in ``/etc/samba/smb.conf``, adjust
 workgroup and realm accordingly:
