@@ -16,6 +16,7 @@ import sys
 from configparser import ConfigParser, NoOptionError, NoSectionError
 from certidude.helpers import certidude_request_certificate
 from certidude.common import expand_paths, ip_address, ip_network
+from certidude.decorators import apt, rpm, pip
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 from cryptography.hazmat.backends import default_backend
@@ -481,6 +482,8 @@ def certidude_setup_nginx(authority, site_config, tls_config, common_name, direc
     default="/etc/openvpn/client-to-site.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
+@apt("openvpn python-requests-kerberos")
+@rpm("openvpn python2-requests-kerberos")
 def certidude_setup_openvpn_client(authority, remote, config, proto):
 
     # Create corresponding section in Certidude client configuration file
@@ -598,6 +601,9 @@ def certidude_setup_strongswan_server(authority, config, secrets, subnet, route,
 @click.command("client", help="Set up strongSwan client")
 @click.argument("authority")
 @click.argument("remote")
+@apt("network-manager-openvpn-gnome python-requests-kerberos")
+@rpm("NetworkManager-openvpn-gnome python2-requests-kerberos")
+@pip("ipsecparse")
 def certidude_setup_strongswan_client(authority, config, remote, dpdaction):
     # Create corresponding section in /etc/certidude/client.conf
     client_config = ConfigParser()
@@ -645,6 +651,8 @@ def certidude_setup_strongswan_client(authority, config, remote, dpdaction):
 @click.command("networkmanager", help="Set up strongSwan client via NetworkManager")
 @click.argument("authority") # Certidude server
 @click.argument("remote") # StrongSwan gateway
+@apt("strongswan-nm")
+@rpm("NetworkManager-strongswan-gnome")
 def certidude_setup_strongswan_networkmanager(authority, remote):
     endpoint = "IPSec to %s" % remote
 
@@ -744,6 +752,8 @@ def certidude_setup_openvpn_networkmanager(authority, remote):
 @click.option("--directory", help="Directory for authority files")
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
+@apt("python-setproctitle python-openssl python-falcon python-humanize python-markdown python-xattr")
+@rpm("python-setproctitle pyOpenSSL python-falcon python-humanize python-markdown pyxattr")
 def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags):
     openvpn_profile_template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates", "openvpn-client.conf")
     bootstrap_template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates", "bootstrap.conf")

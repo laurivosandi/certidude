@@ -1,6 +1,5 @@
 
 import click
-import falcon
 import logging
 import os
 import re
@@ -22,6 +21,7 @@ if "kerberos" in config.AUTHENTICATION_BACKENDS:
 
 
 def authenticate(optional=False):
+    import falcon
     def wrapper(func):
         def kerberos_authenticate(resource, req, resp, *args, **kwargs):
             # If LDAP enabled and device is not Kerberos capable fall
