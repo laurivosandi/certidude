@@ -138,7 +138,9 @@ def certidude_request(fork, renew):
             endpoint_revocations_path = "/var/lib/certidude/%s/ca_crl.pem" % authority
         # TODO: Create directories automatically
 
+        system_keytab_required = False
         if clients.get(authority, "trigger") == "domain joined":
+            system_keytab_required = True
             if not os.path.exists("/etc/krb5.keytab"):
                 continue
         elif clients.get(authority, "trigger") != "interface up":
@@ -173,6 +175,7 @@ def certidude_request(fork, renew):
             try:
                 certidude_request_certificate(
                     authority,
+                    system_keytab_required,
                     endpoint_key_path,
                     endpoint_request_path,
                     endpoint_certificate_path,

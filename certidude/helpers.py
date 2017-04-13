@@ -26,7 +26,7 @@ def selinux_fixup(path):
     cmd = "chcon", "--type=home_cert_t", path
     subprocess.call(cmd)
 
-def certidude_request_certificate(server, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, autosign=False, wait=False, bundle=False, renew=False, insecure=False):
+def certidude_request_certificate(server, system_keytab_required, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, autosign=False, wait=False, bundle=False, renew=False, insecure=False):
     """
     Exchange CSR for certificate using Certidude HTTP API server
     """
@@ -189,7 +189,7 @@ def certidude_request_certificate(server, key_path, request_path, certificate_pa
                 return
 
     # If machine is joined to domain attempt to present machine credentials for authentication
-    if os.path.exists("/etc/krb5.keytab"):
+    if system_keytab_required:
         os.environ["KRB5CCNAME"]="/tmp/ca.ticket"
         # If Samba configuration exists assume NetBIOS name was used in keytab
         if os.path.exists("/etc/samba/smb.conf"):
