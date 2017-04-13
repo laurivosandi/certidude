@@ -90,7 +90,7 @@ class SignHandler(asynchat.async_chat):
                 ).public_key(
                     request.public_key()
                 ).not_valid_before(
-                    now
+                    now - timedelta(minutes=5)
                 ).not_valid_after(
                     now + timedelta(days=
                         config.SERVER_CERTIFICATE_LIFETIME
