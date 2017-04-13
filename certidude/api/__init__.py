@@ -6,7 +6,6 @@ import logging
 import os
 import click
 import hashlib
-import xattr
 from datetime import datetime
 from time import sleep
 from certidude import authority, mailer
@@ -46,6 +45,8 @@ class SessionResource(object):
     @login_required
     @event_source
     def on_get(self, req, resp):
+        import xattr
+
         def serialize_requests(g):
             for common_name, path, buf, obj, server in g():
                 yield dict(
@@ -126,7 +127,6 @@ class SessionResource(object):
                 requests=serialize_requests(authority.list_requests),
                 signed=serialize_certificates(authority.list_signed),
                 revoked=serialize_certificates(authority.list_revoked),
-                users=User.objects.all(),
                 admin_users = User.objects.filter_admins(),
                 user_subnets = config.USER_SUBNETS,
                 autosign_subnets = config.AUTOSIGN_SUBNETS,

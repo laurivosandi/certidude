@@ -8,7 +8,6 @@ import os
 import pwd
 import random
 import re
-import requests
 import signal
 import socket
 import string
@@ -67,6 +66,8 @@ ExecStart=%s request
 @click.option("-r", "--renew", default=False, is_flag=True, help="Renew now")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 def certidude_request(fork, renew):
+    import requests
+
     if not os.path.exists(const.CLIENT_CONFIG_PATH):
         click.echo("No %s!" % const.CLIENT_CONFIG_PATH)
         return 1
@@ -741,7 +742,7 @@ def certidude_setup_openvpn_networkmanager(authority, remote):
 @click.option("--authority-lifetime", default=20*365, help="Authority certificate lifetime in days, 20 years by default")
 @click.option("--organization", "-o", default=None, help="Company or organization name")
 @click.option("--organizational-unit", "-ou", default=None)
-@click.option("--push-server", default="http://" + const.FQDN, help="Push server, by default http://%s" % const.FQDN)
+@click.option("--push-server", help="Push server, by default http://%s" % const.FQDN)
 @click.option("--directory", help="Directory for authority files")
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
@@ -799,8 +800,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         else:
             click.echo("Warning: /etc/krb5.keytab or /etc/samba/smb.conf not found, Kerberos unconfigured")
 
-
-        working_directory = os.path.realpath(os.path.dirname(__file__))
+        static_path = os.path.join(os.path.realpath(os.path.dirname(__file__)), "static")
         certidude_path = sys.argv[0]
 
         # Push server config generation
@@ -809,15 +809,16 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
             listen = "0.0.0.0"
             port = "80"
         else:
-            nginx_client_config.write(env.get_template("nginx.conf").render(vars()))
-            click.echo("Generated: %s" % nginx_client_config.name)
+            port = "8080"
+            nginx_config.write(env.get_template("nginx.conf").render(vars()))
+            click.echo("Generated: %s" % nginx_config.name)
             if not os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
                 os.symlink("../sites-available/certidude.conf", "/etc/nginx/sites-enabled/certidude.conf")
-                click.echo("Symlinked %s -> /etc/nginx/sites-enabled/" % nginx_client_config.name)
+                click.echo("Symlinked %s -> /etc/nginx/sites-enabled/" % nginx_config.name)
             if os.path.exists("/etc/nginx/sites-enabled/default"):
                 os.unlink("/etc/nginx/sites-enabled/default")
             if not push_server:
-                click.echo("Remember to install nchan instead of regular nginx!")
+                click.echo("Remember to install nchan capable nginx instead of regular nginx!")
 
         if os.path.exists("/etc/systemd"):
             if os.path.exists("/etc/systemd/system/certidude.service"):
@@ -1231,6 +1232,7 @@ def certidude_serve(port, listen, fork):
 @click.option("-s", "--slot", default="9a", help="Yubikey slot to use, 9a by default")
 @click.option("-u", "--username", default=os.getenv("USER"), help="Username to use, %s by default" % os.getenv("USER"))
 def certidude_setup_yubikey(authority, slot, username, pin):
+    import requests
     cmd = "ykinfo", "-q", "-s"
     click.echo("Executing: %s" % " ".join(cmd))
     serial = subprocess.check_output(cmd).strip()
