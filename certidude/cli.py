@@ -109,14 +109,6 @@ def certidude_request(fork, renew):
             pass
 
         try:
-            endpoint_port = service_config.getint(endpoint, "port")
-        except NoOptionError:
-            endpoint_port = 1194
-        try:
-            endpoint_proto = service_config.get(endpoint, "proto")
-        except NoOptionError:
-            endpoint_proto = "udp"
-        try:
             endpoint_insecure = clients.getboolean(authority, "insecure")
         except NoOptionError:
             endpoint_insecure = False
@@ -247,6 +239,15 @@ def certidude_request(fork, renew):
 
             # OpenVPN set up with NetworkManager
             if service_config.get(endpoint, "service") == "network-manager/openvpn":
+                try:
+                    endpoint_port = service_config.getint(endpoint, "port")
+                except NoOptionError:
+                    endpoint_port = 1194
+                try:
+                    endpoint_proto = service_config.get(endpoint, "proto")
+                except NoOptionError:
+                    endpoint_proto = "udp"
+                # NetworkManager-strongswan-gnome
                 nm_config_path = os.path.join("/etc/NetworkManager/system-connections", endpoint)
                 if os.path.exists(nm_config_path):
                     click.echo("Not creating %s, remove to regenerate" % nm_config_path)
