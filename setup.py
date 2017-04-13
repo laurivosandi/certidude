@@ -17,7 +17,14 @@ setup(
         "certidude.api"
     ],
     long_description=open("README.rst").read(),
+    # Include here only stuff required to run certidude client
     install_requires=[
+        "click",
+        "cryptography",
+        "configparser",
+        "jinja2",
+        "requests",
+        "requests-kerberos"
     ],
     scripts=[
         "misc/certidude"

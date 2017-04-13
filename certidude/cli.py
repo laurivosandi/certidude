@@ -23,9 +23,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from datetime import datetime, timedelta
-from humanize import naturaltime
 from jinja2 import Environment, PackageLoader
-from setproctitle import setproctitle
 import const
 
 logger = logging.getLogger(__name__)
@@ -972,7 +970,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
     #   e - expired
     #   y - not valid yet
     #   r - revoked
-
+    from humanize import naturaltime
     from certidude import authority
 
     def dump_common(common_name, path, cert):
@@ -1074,6 +1072,7 @@ def certidude_cron():
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 def certidude_serve(port, listen, fork):
+    from setproctitle import setproctitle
     from certidude.signer import SignServer
     from certidude import const
     click.echo("Using configuration from: %s" % const.CONFIG_PATH)

@@ -19,5 +19,12 @@ cache:
 addons:
   apt:
     packages:
-    - python-ldap
     - python-xattr
+    - python-setproctitle
+    - python-falcon
+    - python-markdown
+    - python-jinja2
+    - python-click
+    - python-configparser
+    - python-ipaddress
+    - python-humanize
