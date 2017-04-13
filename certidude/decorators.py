@@ -6,7 +6,6 @@ import os
 import subprocess
 import types
 from datetime import date, time, datetime, timedelta
-from certidude.auth import User
 from urlparse import urlparse
 
 logger = logging.getLogger("api")
@@ -54,6 +53,7 @@ def event_source(func):
 
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
+        from certidude.auth import User
         if isinstance(obj, ipaddress._IPAddressBase):
             return str(obj)
         if isinstance(obj, set):
