@@ -79,7 +79,7 @@ class SignHandler(asynchat.async_chat):
                 extended_key_usage_flags.append( # OpenVPN client
                     ExtendedKeyUsageOID.CLIENT_AUTH)
 
-            cert = x509.CertificateBuilder(
+            builder = x509.CertificateBuilder(
                 ).subject_name(
                     x509.Name([common_name])
                 ).serial_number(random.randint(
@@ -145,7 +145,18 @@ class SignHandler(asynchat.async_chat):
                     x509.AuthorityKeyIdentifier.from_issuer_public_key(
                         self.server.certificate.public_key()),
                     critical=False
-                ).sign(self.server.private_key, hashes.SHA512(), default_backend())
+                )
+
+            # OpenVPN uses CN while StrongSwan uses SAN
+            if server_flags:
+                builder = builder.add_extension(
+                    x509.SubjectAlternativeName(
+                        [x509.DNSName(common_name.value)]
+                    ),
+                    critical=False
+                )
+
+            cert = builder.sign(self.server.private_key, hashes.SHA512(), default_backend())
 
             self.send(cert.public_bytes(serialization.Encoding.PEM))
         else:
