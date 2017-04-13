@@ -109,15 +109,14 @@ System dependencies for Ubuntu 16.04:
 
 .. code:: bash
 
-    apt install -y python python-pip python-dev cython \
-        python-cffi python-configparser python-dateutil \
-        python-pysqlite2 python-mysql.connector python-ldap \
-        build-essential libffi-dev libssl-dev libkrb5-dev \
-        ldap-utils krb5-user \
-        libsasl2-modules-gssapi-mit \
-        libsasl2-dev libldap2-dev
+    apt install -y python python-cffi python-click python-configparser \
+        python-cryptography python-falcon python-humanize \
+        python-ipaddress python-jinja2 python-ldap python-markdown \
+        python-mimeparse python-mysql.connector python-openssl python-pip \
+        python-pyasn1 python-pysqlite2 python-requests \
+        python-setproctitle python-xattr
 
-System dependencies for Fedora 24+:
+System dependencies for Fedora 25+:
 
 .. code:: bash
 
@@ -193,7 +192,7 @@ Setting up Active Directory authentication
 Following assumes you have already set up Kerberos infrastructure and
 Certidude is simply one of the servers making use of that infrastructure.
 
-Install dependencies:
+Install additional dependencies:
 
 .. code:: bash
 
@@ -211,7 +210,7 @@ workgroup and realm accordingly:
     realm = EXAMPLE.COM
     kerberos method = system keytab
 
-Reset Kerberos configuration in ``/etc/krb5.conf``:
+Reset Kerberos client configuration in ``/etc/krb5.conf``:
 
 .. code:: ini
 
@@ -219,13 +218,6 @@ Reset Kerberos configuration in ``/etc/krb5.conf``:
     default_realm = EXAMPLE.COM
     dns_lookup_realm = true
     dns_lookup_kdc = true
-
-Reset LDAP configuration in /etc/ldap/ldap.conf:
-
-.. code:: bash
-
-    BASE dc=example,dc=com
-    URI ldap://dc1.example.com
 
 Initialize Kerberos credentials:
 
@@ -247,23 +239,9 @@ Set up Kerberos keytab for the web service:
     chown root:certidude /etc/certidude/server.keytab
     chmod 640 /etc/certidude/server.keytab
 
-Reconfigure /etc/certidude/server.conf:
-
-.. code:: ini
-
-    [authentication]
-    backends = kerberos
-
-    [authorization]
-    backend = ldap
-    ldap gssapi credential cache = /run/certidude/krb5cc
-    ldap user filter = (&(objectclass=user)(objectcategory=person)(samaccountname=%s))
-    ldap admin filter = (&(memberOf=cn=Domain Admins,cn=Users,dc=example,dc=com)(samaccountname=%s))
-
-User filter here specified which users can log in to Certidude web interface
-at all eg. for generating user certificates for HTTPS.
-Admin filter specifies which users are allowed to sign and revoke certificates.
-Adjust admin filter according to your setup.
+Reconfigure /etc/certidude/server.conf so ``kerberos`` backend is used for authentication,
+and ``ldap`` backend is used for accoutns and authorization.
+Adjust related options as necessary.
 Also make sure there is cron.hourly job for creating GSSAPI credential cache -
 that's necessary for querying LDAP using Certidude machine's credentials.
 
@@ -330,6 +308,16 @@ The VPN connection should immideately become available under network connections
 Development
 -----------
 
+To use dependencies from pip:
+
+.. code:: bash
+
+    apt install \
+        build-essential python-dev cython libffi-dev libssl-dev libkrb5-dev \
+        ldap-utils krb5-user \
+        libsasl2-modules-gssapi-mit \
+        libsasl2-dev libldap2-dev
+
 Clone the repository:
 
 .. code:: bash
@@ -366,6 +354,8 @@ To install the package from the source:
     python setup.py  install --single-version-externally-managed --root /
 
 To uninstall:
+
+.. code:: bash
 
     pip uninstall certidude
 
