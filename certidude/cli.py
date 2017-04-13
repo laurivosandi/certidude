@@ -666,7 +666,7 @@ def certidude_setup_strongswan_networkmanager(authority, remote):
         client_config.set(authority, "key path", "/etc/ipsec.d/private/%s.pem" % const.HOSTNAME)
         client_config.set(authority, "certificate path", "/etc/ipsec.d/certs/%s.pem" % const.HOSTNAME)
         client_config.set(authority, "authority path",  "/etc/ipsec.d/cacerts/ca.pem")
-        client_config.set(authority, "authority path",  "/etc/ipsec.d/crls/ca.pem")
+        client_config.set(authority, "revocations path",  "/etc/ipsec.d/crls/ca.pem")
         with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
             client_config.write(fh)
         os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
@@ -708,7 +708,7 @@ def certidude_setup_openvpn_networkmanager(authority, remote):
         client_config.set(authority, "key path", "/etc/ipsec.d/private/%s.pem" % const.HOSTNAME)
         client_config.set(authority, "certificate path", "/etc/ipsec.d/certs/%s.pem" % const.HOSTNAME)
         client_config.set(authority, "authority path",  "/etc/ipsec.d/cacerts/ca.pem")
-        client_config.set(authority, "authority path",  "/etc/ipsec.d/crls/ca.pem")
+        client_config.set(authority, "revocations path",  "/etc/ipsec.d/crls/ca.pem")
         with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
             client_config.write(fh)
         os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
