@@ -645,7 +645,7 @@ def certidude_setup_strongswan_client(authority, remote):
         client_config.set(authority, "common name", const.HOSTNAME)
         client_config.set(authority, "request path", "%s/ipsec.d/reqs/%s.pem" % (const.STRONGSWAN_PREFIX, const.HOSTNAME))
         client_config.set(authority, "key path", "%s/ipsec.d/private/%s.pem" % (const.STRONGSWAN_PREFIX, const.HOSTNAME))
-        client_config.set(authority, "certificate path", "%s/ipsec.d/certs/%s.pem" % const.HOSTNAME)
+        client_config.set(authority, "certificate path", "%s/ipsec.d/certs/%s.pem" % (const.STRONGSWAN_PREFIX, const.HOSTNAME))
         client_config.set(authority, "authority path", "%s/ipsec.d/cacerts/ca.pem" % const.STRONGSWAN_PREFIX)
         client_config.set(authority, "revocations path", "%s/ipsec.d/crls/ca.pem" % const.STRONGSWAN_PREFIX)
         with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
