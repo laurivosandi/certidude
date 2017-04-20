@@ -3,7 +3,6 @@ import ipaddress
 import json
 import logging
 import os
-import subprocess
 import types
 from datetime import date, time, datetime, timedelta
 from urlparse import urlparse

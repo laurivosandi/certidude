@@ -2,6 +2,7 @@
 import os
 import click
 import ipaddress
+import subprocess
 
 def ip_network(j):
     return ipaddress.ip_network(unicode(j))
