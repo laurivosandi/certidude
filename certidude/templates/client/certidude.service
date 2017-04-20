@@ -1,0 +1,6 @@
+[Unit]
+Description=Renew certificates and update revocation lists
+
+[Service]
+Type=simple
+ExecStart={{ sys.argv[0] }} request

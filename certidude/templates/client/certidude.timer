@@ -1,0 +1,11 @@
+[Unit]
+Description=Run certidude service weekly
+
+[Timer]
+OnCalendar=weekly
+Persistent=true
+Unit=certidude.service
+
+[Install]
+WantedBy=timers.target
+

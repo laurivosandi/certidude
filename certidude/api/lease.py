@@ -29,12 +29,12 @@ class LeaseResource(object):
         # TODO: verify signature
         common_name = req.get_param("client", required=True)
         path, buf, cert = authority.get_signed(common_name) # TODO: catch exceptions
-        if cert.serial != req.get_param_as_int("serial", required=True): # Badum we have OCSP!
-            raise # TODO proper exception
-        if req.get_param("action") == "client-connect":
-            xattr.setxattr(path, "user.lease.address", req.get_param("address", required=True).encode("ascii"))
-            xattr.setxattr(path, "user.lease.last_seen", datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
-            push.publish("lease-update", common_name)
+        if cert.serial != req.get_param_as_int("serial"): # OCSP-ish solution for OpenVPN, not exposed for StrongSwan
+            raise falcon.HTTPForbidden("Forbidden", "Invalid serial number supplied")
+
+        xattr.setxattr(path, "user.lease.address", req.get_param("address", required=True).encode("ascii"))
+        xattr.setxattr(path, "user.lease.last_seen", datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
+        push.publish("lease-update", common_name)
 
         # client-disconnect is pretty much unusable:
         # - Android Connect Client results "IP packet with unknown IP version=2" on gateway

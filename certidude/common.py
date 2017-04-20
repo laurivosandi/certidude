@@ -35,3 +35,29 @@ def expand_paths():
         return wrapped
     return wrapper
 
+
+def apt(packages):
+    """
+    Install packages for Debian and Ubuntu
+    """
+    if os.path.exists("/usr/bin/apt-get"):
+        cmd = ["/usr/bin/apt-get", "install", "-yqq"] + packages.split(" ")
+        click.echo("Running: %s" % " ".join(cmd))
+        subprocess.call(cmd)
+
+
+def rpm(packages):
+    """
+    Install packages for Fedora and CentOS
+    """
+    if os.path.exists("/usr/bin/dnf"):
+        cmd = ["/usr/bin/dnf", "install", "-y"] + packages.split(" ")
+        click.echo("Running: %s" % " ".join(cmd))
+        subprocess.call(cmd)
+
+
+def pip(packages):
+    click.echo("Running: pip install %s" % packages)
+    import pip
+    pip.main(['install'] + packages.split(" "))
+

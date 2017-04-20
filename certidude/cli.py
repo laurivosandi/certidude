@@ -15,8 +15,7 @@ import subprocess
 import sys
 from configparser import ConfigParser, NoOptionError, NoSectionError
 from certidude.helpers import certidude_request_certificate
-from certidude.common import expand_paths, ip_address, ip_network
-from certidude.decorators import apt, rpm, pip
+from certidude.common import expand_paths, ip_address, ip_network, apt, rpm, pip
 from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
 from cryptography.hazmat.backends import default_backend
@@ -38,28 +37,6 @@ env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=Tr
 # Parse command-line argument defaults from environment
 
 NOW = datetime.utcnow().replace(tzinfo=None)
-
-CERTIDUDE_TIMER = """
-[Unit]
-Description=Run certidude service weekly
-
-[Timer]
-OnCalendar=weekly
-Persistent=true
-Unit=certidude.service
-
-[Install]
-WantedBy=timers.target
-"""
-
-CERTIDUDE_SERVICE = """
-[Unit]
-Description=Renew certificates and update revocation lists
-
-[Service]
-Type=simple
-ExecStart=%s request
-"""
 
 @click.command("request", help="Run processes for requesting certificates and configuring services")
 @click.option("-r", "--renew", default=False, is_flag=True, help="Renew now")
@@ -88,15 +65,17 @@ def certidude_request(fork, renew):
     if not os.path.exists(run_dir):
         click.echo("Creating: %s" % run_dir)
         os.makedirs(run_dir)
+    context = globals()
+    context.update(locals())
 
     if not os.path.exists("/etc/systemd/system/certidude.timer"):
         click.echo("Creating systemd timer...")
         with open("/etc/systemd/system/certidude.timer", "w") as fh:
-            fh.write(CERTIDUDE_TIMER)
+            fh.write(env.get_template("client/certidude.timer").render(context))
     if not os.path.exists("/etc/systemd/system/certidude.service"):
         click.echo("Creating systemd service...")
         with open("/etc/systemd/system/certidude.service", "w") as fh:
-            fh.write(CERTIDUDE_SERVICE % sys.argv[0])
+            fh.write(env.get_template("client/certidude.service").render(context))
 
 
     for authority in clients.sections():
@@ -364,6 +343,9 @@ def certidude_request(fork, renew):
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
 def certidude_setup_openvpn_server(authority, config, subnet, route, local, proto, port):
+    # Install dependencies
+    apt("openvpn")
+    rpm("openvpn")
 
     # Create corresponding section in Certidude client configuration file
     client_config = ConfigParser()
@@ -506,9 +488,10 @@ def certidude_setup_nginx(authority, site_config, tls_config, common_name, direc
     default="/etc/openvpn/client-to-site.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
-@apt("openvpn python-requests-kerberos")
-@rpm("openvpn python2-requests-kerberos")
 def certidude_setup_openvpn_client(authority, remote, config, proto):
+    # Install dependencies
+    apt("openvpn")
+    rpm("openvpn")
 
     # Create corresponding section in Certidude client configuration file
     client_config = ConfigParser()
@@ -531,7 +514,7 @@ def certidude_setup_openvpn_client(authority, remote, config, proto):
         click.echo("Section '%s' added to %s" % (authority, const.CLIENT_CONFIG_PATH))
 
     # Create corresponding section in /etc/certidude/services.conf
-    endpoint = "OpenVPN connection to %s" % remote
+    endpoint = "OpenVPN to %s" % remote
     service_config = ConfigParser()
     if os.path.exists(const.SERVICES_CONFIG_PATH):
         service_config.readfp(open(const.SERVICES_CONFIG_PATH))
@@ -574,12 +557,14 @@ def certidude_setup_openvpn_client(authority, remote, config, proto):
 @click.option("--common-name", "-cn", default=const.FQDN, help="Common name, %s by default" % const.FQDN)
 @click.option("--subnet", "-sn", default=u"192.168.33.0/24", type=ip_network, help="IPsec virtual subnet, 192.168.33.0/24 by default")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
-@apt("strongswan python-requests python-requests-kerberos")
-@rpm("strongswan python2-requests python2-requests-kerberos")
-@pip("ipsecparse")
 def certidude_setup_strongswan_server(authority, common_name, subnet, route):
     if "." not in common_name:
         raise ValueError("Hostname has to be fully qualified!")
+
+    # Install dependencies
+    apt("strongswan")
+    rpm("strongswan")
+    pip("ipsecparse")
 
     # Create corresponding section in Certidude client configuration file
     client_config = ConfigParser()
@@ -605,14 +590,10 @@ def certidude_setup_strongswan_server(authority, common_name, subnet, route):
     from ipsecparse import loads
     config = loads(open("%s/ipsec.conf" % const.STRONGSWAN_PREFIX).read())
     config["conn", authority] = dict(
-        leftsourceip="%config",
-        left=common_name,
         leftcert=client_config.get(authority, "certificate path"),
         leftsubnet=",".join(route),
         right="%any",
         rightsourceip=str(subnet),
-        keyexchange="ikev2",
-        keyingtries="300",
         closeaction="restart",
         auto="ignore")
     with open("%s/ipsec.conf.part" % const.STRONGSWAN_PREFIX, "w") as fh:
@@ -629,10 +610,12 @@ def certidude_setup_strongswan_server(authority, common_name, subnet, route):
 @click.command("client", help="Set up strongSwan client")
 @click.argument("authority")
 @click.argument("remote")
-@apt("strongswan python-requests python-requests-kerberos")
-@rpm("strongswan python2-requests python2-requests-kerberos")
-@pip("ipsecparse")
 def certidude_setup_strongswan_client(authority, remote):
+    # Install dependencies
+    apt("strongswan")
+    rpm("strongswan")
+    pip("ipsecparse")
+
     # Create corresponding section in /etc/certidude/client.conf
     client_config = ConfigParser()
     if os.path.exists(const.CLIENT_CONFIG_PATH):
@@ -698,9 +681,11 @@ def certidude_setup_strongswan_client(authority, remote):
 @click.command("networkmanager", help="Set up strongSwan client via NetworkManager")
 @click.argument("authority") # Certidude server
 @click.argument("remote") # StrongSwan gateway
-@apt("strongswan-nm python-requests python-requests-kerberos")
-@rpm("NetworkManager-strongswan-gnome python2-requests python2-requests-kerberos")
 def certidude_setup_strongswan_networkmanager(authority, remote):
+    # Install dependencies
+    apt("strongswan-nm")
+    rpm("NetworkManager-strongswan-gnome")
+
     endpoint = "IPSec to %s" % remote
 
     # Create corresponding section in /etc/certidude/client.conf
@@ -799,11 +784,13 @@ def certidude_setup_openvpn_networkmanager(authority, remote):
 @click.option("--directory", help="Directory for authority files")
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
-@apt("python-setproctitle python-openssl python-falcon python-humanize python-markdown python-xattr")
-@rpm("python-setproctitle pyOpenSSL python-falcon python-humanize python-markdown pyxattr")
 def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags):
-    openvpn_profile_template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates", "openvpn-client.conf")
-    bootstrap_template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates", "bootstrap.conf")
+    # Install dependencies
+    apt("python-setproctitle python-openssl python-falcon python-humanize python-markdown python-xattr")
+    rpm("python-setproctitle pyOpenSSL python-falcon python-humanize python-markdown pyxattr")
+    pip("gssapi")
+
+    template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates")
 
     if not directory:
         if os.getuid():
@@ -848,7 +835,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
             base = ",".join(["dc=" + j for j in domain.split(".")])
             if not os.path.exists("/etc/cron.hourly/certidude"):
                 with open("/etc/cron.hourly/certidude", "w") as fh:
-                    fh.write(env.get_template("ldap-ticket-renewal.sh").render(vars()))
+                    fh.write(env.get_template("server/cronjob").render(vars()))
                 os.chmod("/etc/cron.hourly/certidude", 0o755)
                 click.echo("Created /etc/cron.hourly/certidude for automatic LDAP service ticket renewal, inspect and adjust accordingly")
             os.system("/etc/cron.hourly/certidude")
@@ -865,7 +852,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
             port = "80"
         else:
             port = "8080"
-            nginx_config.write(env.get_template("nginx.conf").render(vars()))
+            nginx_config.write(env.get_template("server/nginx.conf").render(vars()))
             click.echo("Generated: %s" % nginx_config.name)
             if not os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
                 os.symlink("../sites-available/certidude.conf", "/etc/nginx/sites-enabled/certidude.conf")
@@ -880,7 +867,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
                 click.echo("File /etc/systemd/system/certidude.service already exists, remove to regenerate")
             else:
                 with open("/etc/systemd/system/certidude.service", "w") as fh:
-                    fh.write(env.get_template("systemd.service").render(vars()))
+                    fh.write(env.get_template("server/systemd.service").render(vars()))
                 click.echo("File /etc/systemd/system/certidude.service created")
         else:
             NotImplemented # No systemd
@@ -900,7 +887,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         os.umask(0o137)
         push_token = "".join([random.choice(string.ascii_letters + string.digits) for j in range(0,32)])
         with open(const.CONFIG_PATH, "w") as fh:
-            fh.write(env.get_template("certidude-server.conf").render(vars()))
+            fh.write(env.get_template("server/server.conf").render(vars()))
         click.echo("Generated %s" % const.CONFIG_PATH)
 
     if os.path.lexists(directory):
