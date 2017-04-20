@@ -1,5 +1,6 @@
 
 import click
+import falcon
 import logging
 import xattr
 from datetime import datetime
@@ -29,7 +30,7 @@ class LeaseResource(object):
         # TODO: verify signature
         common_name = req.get_param("client", required=True)
         path, buf, cert = authority.get_signed(common_name) # TODO: catch exceptions
-        if cert.serial != req.get_param_as_int("serial"): # OCSP-ish solution for OpenVPN, not exposed for StrongSwan
+        if req.get_param("serial") and cert.serial != req.get_param_as_int("serial"): # OCSP-ish solution for OpenVPN, not exposed for StrongSwan
             raise falcon.HTTPForbidden("Forbidden", "Invalid serial number supplied")
 
         xattr.setxattr(path, "user.lease.address", req.get_param("address", required=True).encode("ascii"))
