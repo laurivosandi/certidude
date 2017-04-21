@@ -1,5 +1,18 @@
-Stored request {{ common_name }}
+Token for setting up VPN
 
-This is simply to notify that certificate signing request for {{ common_name }}
-was stored. You may log in with a certificate authority administration account to sign it.
+{{ issuer }} has provided {{ user }} a token for retrieving
+profile from the link below.
+
+{% if config.BUNDLE_FORMAT == "ovpn" %}
+To set up OpenVPN for your device:
+
+* for Android install [OpenVPN Connect](https://play.google.com/store/apps/details?id=de.blinkt.openvpn) app. After importing the OpenVPN profile in OpenVPN application and delete the downloaded .ovpn file.
+* for iOS device install [OpenVPN Connect](https://itunes.apple.com/us/app/openvpn-connect/id590379981) app. Tap on the token URL below, it should be automatically opened with OpenVPN Connect app. Tap connect to establish connection.
+* for Mac OS X download [Tunnelblick](https://tunnelblick.net/downloads.html)
+* for Ubuntu and Fedora install OpenVPN plugin for NetworkManager. Open network settings, add connection and select "Import from file ...". Supply the file retrieved via the token URL below.
+* for Windows you need to install OpenVPN community edition from [here](https://swupdate.openvpn.org/community/releases/openvpn-install-2.3.14-I601-x86_64.exe) and TAP driver from [here](https://swupdate.openvpn.org/community/releases/tap-windows-9.21.2.exe)
+{% endif %}
+
+Click [here]({{ config.TOKEN_URL }}?{{ args }}) to claim the token.
+Token is usable until {{  token_expires }} (UTC).
 

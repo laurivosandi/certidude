@@ -12,16 +12,17 @@ from urlparse import urlparse
 
 env = Environment(loader=PackageLoader("certidude", "templates/mail"))
 
-def send(template, to=None, attachments=(), **context):
+def send(template, to=None, include_admins=True, attachments=(), **context):
     from certidude import authority, config
     if not config.MAILER_ADDRESS:
         # Mailbox disabled, don't send e-mail
         return
 
-    recipients = u", ".join([unicode(j) for j in User.objects.filter_admins()])
-
+    recipients = ()
+    if include_admins:
+        recipients = tuple(User.objects.filter_admins())
     if to:
-        recipients = to + u", " + recipients
+        recipients = (to,) + recipients
 
     click.echo("Sending e-mail %s to %s" % (template, recipients))
 
@@ -29,12 +30,12 @@ def send(template, to=None, attachments=(), **context):
     html = markdown(text)
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
+    msg["Subject"] = subject.encode("utf-8")
     msg["From"] = "%s <%s>" % (config.MAILER_NAME, config.MAILER_ADDRESS)
-    msg["To"] = recipients
+    msg["To"] = ", ".join([unicode(j) for j in recipients]).encode("utf-8")
 
-    part1 = MIMEText(text, "plain")
-    part2 = MIMEText(html, "html")
+    part1 = MIMEText(text.encode("utf-8"), "plain", "utf-8")
+    part2 = MIMEText(html.encode("utf-8"), "html", "utf-8")
 
     msg.attach(part1)
     msg.attach(part2)
@@ -44,6 +45,7 @@ def send(template, to=None, attachments=(), **context):
         part.add_header('Content-Disposition', 'attachment', filename=suggested_filename)
         part.set_payload(attachment)
         msg.attach(part)
+    click.echo("Sending to: %s" % msg["to"])
 
     conn = smtplib.SMTP("localhost")
-    conn.sendmail(config.MAILER_ADDRESS, recipients, msg.as_string())
+    conn.sendmail(config.MAILER_ADDRESS, [u.mail for u in recipients], msg.as_string())

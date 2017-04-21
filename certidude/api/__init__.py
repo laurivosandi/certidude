@@ -190,6 +190,7 @@ def certidude_app():
     from .tag import TagResource, TagDetailResource
     from .attrib import AttributeResource
     from .bootstrap import BootstrapResource
+    from .token import TokenResource
 
     app = falcon.API(middleware=NormalizeMiddleware())
     app.req_options.auto_parse_form_urlencoded = True
@@ -202,7 +203,9 @@ def certidude_app():
     app.add_route("/api/request/{cn}/", RequestDetailResource())
     app.add_route("/api/request/", RequestListResource())
     app.add_route("/api/", SessionResource())
-    app.add_route("/api/bootstrap/", BootstrapResource())
+
+    if config.BUNDLE_FORMAT and config.USER_ENROLLMENT_ALLOWED:
+        app.add_route("/api/token/", TokenResource())
 
     # Extended attributes for scripting etc.
     app.add_route("/api/signed/{cn}/attr/", AttributeResource())
@@ -217,8 +220,7 @@ def certidude_app():
     # Gateways can submit leases via this API call
     app.add_route("/api/lease/", LeaseResource())
 
-    # Optional user enrollment API call
-    if config.USER_ENROLLMENT_ALLOWED:
-        app.add_route("/api/bundle/", BundleResource())
+    # Bootstrap resource
+    app.add_route("/api/bootstrap/", BootstrapResource())
 
     return app

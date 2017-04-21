@@ -44,8 +44,6 @@ EXPIRED_DIR = cp.get("authority", "expired dir")
 MAILER_NAME = cp.get("mailer", "name")
 MAILER_ADDRESS = cp.get("mailer", "address")
 
-BUNDLE_FORMAT = cp.get("bundle", "format")
-OPENVPN_PROFILE_TEMPLATE = cp.get("bundle", "openvpn profile template")
 BOOTSTRAP_TEMPLATE = cp.get("bootstrap", "services template")
 
 MACHINE_ENROLLMENT_ALLOWED = {
@@ -95,5 +93,11 @@ else:
     raise NotImplementedError("Unknown authorization backend '%s'" % AUTHORIZATION_BACKEND)
 
 TAG_TYPES = [j.split("/", 1) + [cp.get("tagging", j)] for j in cp.options("tagging")]
+
+# Tokens
+BUNDLE_FORMAT = cp.get("token", "format")
+OPENVPN_PROFILE_TEMPLATE = cp.get("token", "openvpn profile template")
+TOKEN_URL = cp.get("token", "url")
+TOKEN_LIFETIME = cp.getint("token", "lifetime")
 
 # TODO: Check if we don't have base or servers
