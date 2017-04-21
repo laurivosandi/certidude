@@ -41,9 +41,8 @@ SIGNED_DIR = cp.get("authority", "signed dir")
 REVOKED_DIR = cp.get("authority", "revoked dir")
 EXPIRED_DIR = cp.get("authority", "expired dir")
 
-OUTBOX = cp.get("authority", "outbox uri")
-OUTBOX_NAME = cp.get("authority", "outbox sender name")
-OUTBOX_MAIL = cp.get("authority", "outbox sender address")
+MAILER_NAME = cp.get("mailer", "name")
+MAILER_ADDRESS = cp.get("mailer", "address")
 
 BUNDLE_FORMAT = cp.get("bundle", "format")
 OPENVPN_PROFILE_TEMPLATE = cp.get("bundle", "openvpn profile template")

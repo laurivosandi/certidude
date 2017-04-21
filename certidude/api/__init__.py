@@ -115,11 +115,10 @@ class SessionResource(object):
                 ),
                 common_name = authority.ca_cert.subject.get_attributes_for_oid(
                     NameOID.COMMON_NAME)[0].value,
-                outbox = dict(
-                    server = config.OUTBOX,
-                    name = config.OUTBOX_NAME,
-                    mail = config.OUTBOX_MAIL
-                ),
+                mailer = dict(
+                    name = config.MAILER_NAME,
+                    address = config.MAILER_ADDRESS
+                ) if config.MAILER_ADDRESS else None,
                 machine_enrollment_allowed=config.MACHINE_ENROLLMENT_ALLOWED,
                 user_enrollment_allowed=config.USER_ENROLLMENT_ALLOWED,
                 user_multiple_certificates=config.USER_MULTIPLE_CERTIFICATES,

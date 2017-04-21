@@ -1313,6 +1313,16 @@ def certidude_setup_yubikey(authority, slot, username, pin):
     subprocess.call(cmd)
 
 
+@click.command("test", help="Test mailer")
+@click.argument("recipient")
+def certidude_test(recipient):
+    from certidude import mailer
+    mailer.send(
+        "test.md",
+        to=recipient
+    )
+
+
 @click.group("strongswan", help="strongSwan helpers")
 def certidude_setup_strongswan(): pass
 
@@ -1344,6 +1354,7 @@ entry_point.add_command(certidude_revoke)
 entry_point.add_command(certidude_list)
 entry_point.add_command(certidude_users)
 entry_point.add_command(certidude_cron)
+entry_point.add_command(certidude_test)
 
 if __name__ == "__main__":
     entry_point()

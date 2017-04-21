@@ -14,7 +14,7 @@ env = Environment(loader=PackageLoader("certidude", "templates/mail"))
 
 def send(template, to=None, attachments=(), **context):
     from certidude import authority, config
-    if not config.OUTBOX:
+    if not config.MAILER_ADDRESS:
         # Mailbox disabled, don't send e-mail
         return
 
@@ -25,52 +25,12 @@ def send(template, to=None, attachments=(), **context):
 
     click.echo("Sending e-mail %s to %s" % (template, recipients))
 
-    scheme, netloc, path, params, query, fragment = urlparse(config.OUTBOX)
-    scheme = scheme.lower()
-
-    if path:
-        raise ValueError("Path for URL not supported")
-    if params:
-        raise ValueError("Parameters for URL not supported")
-    if query:
-        raise ValueError("Query for URL not supported")
-    if fragment:
-        raise ValueError("Fragment for URL not supported")
-
-
-    username = None
-    password = ""
-
-    if scheme == "smtp":
-        secure = False
-        port = 25
-    elif scheme == "smtps":
-        secure = True
-        port = 465
-    else:
-        raise ValueError("Unknown scheme '%s', currently SMTP and SMTPS are only supported" % scheme)
-
-    if "@" in netloc:
-        credentials, netloc = netloc.split("@")
-
-        if ":" in credentials:
-            username, password = credentials.split(":")
-        else:
-            username = credentials
-
-    if ":" in netloc:
-        server, port_str = netloc.split(":")
-        port = int(port_str)
-    else:
-        server = netloc
-
-
     subject, text = env.get_template(template).render(context).split("\n\n", 1)
     html = markdown(text)
 
     msg = MIMEMultipart("alternative")
     msg["Subject"] = subject
-    msg["From"] = "%s <%s>" % (config.OUTBOX_NAME, config.OUTBOX_MAIL)
+    msg["From"] = "%s <%s>" % (config.MAILER_NAME, config.MAILER_ADDRESS)
     msg["To"] = recipients
 
     part1 = MIMEText(text, "plain")
@@ -85,12 +45,5 @@ def send(template, to=None, attachments=(), **context):
         part.set_payload(attachment)
         msg.attach(part)
 
-    # Gmail employs some sort of IPS
-    # https://accounts.google.com/DisplayUnlockCaptcha
-    conn = smtplib.SMTP(server, port)
-    if secure:
-        conn.starttls()
-    if username and password:
-        conn.login(username, password)
-
-    conn.sendmail(config.OUTBOX_MAIL, recipients, msg.as_string())
+    conn = smtplib.SMTP("localhost")
+    conn.sendmail(config.MAILER_ADDRESS, recipients, msg.as_string())

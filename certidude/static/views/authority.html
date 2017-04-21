@@ -18,9 +18,8 @@ as such require complete reset of X509 infrastructure if some of them needs to b
 
 <p>These can be reconfigured via /etc/certidude/server.conf on the server.</p>
 
-{% if session.authority.outbox %}
-    <p>Outgoing mail server: {{ session.authority.outbox.server }}</p>
-    <p>Mails will appear from: {{ session.authority.outbox.name }} &lt;{{ session.authority.outbox.mail }}&gt;</p>
+{% if session.authority.mailer %}
+    <p>Mails will appear from: {{ session.authority.mailer.name }} &lt;{{ session.authority.mailer.address }}&gt;</p>
 {% else %}
     <p>E-mail disabled</p>
 {% endif %}
