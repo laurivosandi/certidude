@@ -120,7 +120,7 @@ def revoke(common_name):
     attach_cert = buf, "application/x-pem-file", common_name + ".crt"
     mailer.send("certificate-revoked.md",
         attachments=(attach_cert,),
-        serial_number="%x" % cert.serial,
+        serial_hex="%x" % cert.serial,
         common_name=common_name)
     return revoked_path
 
@@ -298,11 +298,15 @@ def _sign(csr, buf, overwrite=False):
     from xattr import getxattr, listxattr, setxattr
 
     common_name, = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
-    cert_path = os.path.join(config.SIGNED_DIR, common_name.value + ".pem")
+    cert_path = os.path.join(config.SIGNED_DIR, "%s.pem" % common_name.value)
     renew = False
 
-    signed_path = os.path.join(config.SIGNED_DIR, "%s.pem" % common_name.value)
+    attachments = [
+        (buf, "application/x-pem-file", common_name.value + ".csr"),
+    ]
+
     revoked_path = None
+    overwritten = False
 
     # Move existing certificate if necessary
     if os.path.exists(cert_path):
@@ -313,12 +317,12 @@ def _sign(csr, buf, overwrite=False):
             renew = prev.public_key().public_numbers() == csr.public_key().public_numbers()
 
         if overwrite:
-            if renew:
-                # TODO: is this the best approach?
-                revoked_path = os.path.join(config.REVOKED_DIR, "%x.pem" % prev.serial)
-                os.rename(signed_path, revoked_path)
-            else:
-                revoked_path = revoke(common_name.value)
+            # TODO: is this the best approach?
+            prev_serial_hex = "%x" % prev.serial
+            revoked_path = os.path.join(config.REVOKED_DIR, "%s.pem" % prev_serial_hex)
+            os.rename(cert_path, revoked_path)
+            attachments += [(prev_buf, "application/x-pem-file", "deprecated.crt" if renew else "overwritten.crt")]
+            overwritten = True
         else:
             raise EnvironmentError("Will not overwrite existing certificate")
 
@@ -328,42 +332,21 @@ def _sign(csr, buf, overwrite=False):
     with open(cert_path + ".part", "wb") as fh:
         fh.write(cert_buf)
     os.rename(cert_path + ".part", cert_path)
+    attachments.append((cert_buf, "application/x-pem-file", common_name.value + ".crt"))
+    cert_serial_hex = "%x" % cert.serial
 
     # Copy filesystem attributes to newly signed certificate
     if revoked_path:
         for key in listxattr(revoked_path):
             if not key.startswith("user."):
                 continue
-            setxattr(signed_path, key, getxattr(revoked_path, key))
+            setxattr(cert_path, key, getxattr(revoked_path, key))
 
     # Send mail
-    recipient = None
-
-    if renew:
-        mailer.send(
-            "certificate-renewed.md",
-            to=recipient,
-            attachments=(
-                (prev_buf, "application/x-pem-file", "deprecated.crt"),
-                (cert_buf, "application/x-pem-file", common_name.value + ".crt")
-            ),
-            serial_number="%x" % cert.serial,
-            common_name=common_name.value,
-            certificate=cert,
-        )
-    else:
-        mailer.send(
-            "certificate-signed.md",
-            to=recipient,
-            attachments=(
-                (buf,      "application/x-pem-file", common_name.value + ".csr"),
-                (cert_buf, "application/x-pem-file", common_name.value + ".crt")
-            ),
-            serial_number="%x" % cert.serial,
-            common_name=common_name.value,
-            certificate=cert,
-        )
-
+    if renew: # Same keypair
+        mailer.send("certificate-renewed.md", **locals())
+    else: # New keypair
+        mailer.send("certificate-signed.md", **locals())
 
     if config.LONG_POLL_PUBLISH:
         url = config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest()

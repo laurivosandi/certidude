@@ -1,4 +1,4 @@
-Token for setting up VPN
+Token for {{ user.name }}
 
 {{ issuer }} has provided {{ user }} a token for retrieving
 profile from the link below.

@@ -12,15 +12,14 @@ Introduction
 ------------
 
 Certidude is a novel X.509 Certificate Authority management tool
-with privilege isolation mechanism and Kerberos authentication aiming to
-eventually support PKCS#11 and in far future WebCrypto.
-
-.. figure:: doc/usecase-diagram.png
-
-Certidude is mainly designed for StrongSwan and OpenVPN gateway operators to make
+with privilege isolation mechanism and Kerberos authentication
+mainly designed for OpenVPN gateway operators to make
 VPN client setup on laptops, desktops and mobile devices as painless as possible.
-Certidude can also be used to manage HTTPS client certificates for
-eg. maintaining an extra layer of protection for intranet websites.
+
+.. figure:: doc/certidude.png
+
+Certidude can also be used to manage IPSec certifcates (StrongSwan)
+or HTTPS client certificates to limit access to eg. intranet websites.
 For a full-blown CA you might want to take a look at
 `EJBCA <http://www.ejbca.org/features.html>`_ or
 `OpenCA <https://pki.openca.org/>`_.
@@ -28,6 +27,8 @@ For a full-blown CA you might want to take a look at
 
 Usecases
 --------
+
+.. figure:: doc/usecase-diagram.png
 
 Following usecases are covered:
 
@@ -79,6 +80,7 @@ Common:
 
 Virtual private networking:
 
+* Send OpenVPN profile URL tokens via e-mail, for simplified VPN adoption on Android, iOS, Windows, Mac OS X and Ubuntu.
 * OpenVPN integration, check out ``certidude setup openvpn server`` and ``certidude setup openvpn client``.
 * strongSwan integration, check out ``certidude setup strongswan server`` and ``certidude setup strongswan client``.
 * NetworkManager integration, check out ``certidude setup openvpn networkmanager`` and ``certidude setup strongswan networkmanager``.
@@ -95,7 +97,7 @@ TODO
 * `OCSP <https://tools.ietf.org/html/rfc4557>`_ support, needs a bit hacking since OpenSSL wrappers are not exposing the functionality.
 * `SCEP <https://tools.ietf.org/html/draft-nourse-scep-23>`_ support, a client implementation available `here <https://github.com/certnanny/sscep>`_. Not sure if we can implement server-side events within current standard.
 * WebCrypto support, meanwhile check out `hwcrypto.js <https://github.com/open-eid/hwcrypto.js>`_.
-* Ability to send OpenVPN profile URL tokens via e-mail, for simplified VPN adoption.
+* Use `pki.js <https://pkijs.org/>`_ for generating keypair in the browser when claiming a token.
 * Signer process logging.
 
 

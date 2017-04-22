@@ -1,4 +1,4 @@
-Revoked {{ common_name }} ({{ serial_number }})
+Revoked {{ common_name }} ({{ serial_hex }})
 
 This is simply to notify that certificate {{ common_name }}
 was revoked.

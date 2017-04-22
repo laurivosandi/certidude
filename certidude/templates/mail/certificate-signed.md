@@ -1,11 +1,14 @@
-Signed {{ common_name }} ({{ serial_number }})
+Signed {{ common_name.value }} ({{ cert_serial_hex }})
 
-This is simply to notify that certificate {{ common_name }}
-with serial number {{ serial_number }}
+This is simply to notify that certificate {{ common_name.value }}
+with serial number {{ cert_serial_hex }}
 was signed{% if signer %} by {{ signer }}{% endif %}.
 
-The certificate is valid from {{ certificate.not_valid_before }} until
-{{ certificate.not_valid_after }}.
+The certificate is valid from {{ cert.not_valid_before }} until
+{{ cert.not_valid_after }}.
 
-Any existing certificates with the same common name were rejected by doing so
-and services making use of those certificates might become unavailable.
+{% if overwritten %}
+By doing so existing certificate with the same common name
+and serial number {{ prev_serial_hex }} was rejected
+and services making use of that certificate might become unavailable.
+{% endif %}
