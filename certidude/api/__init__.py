@@ -181,7 +181,6 @@ class NormalizeMiddleware(object):
 
 def certidude_app():
     from certidude import config
-    from .bundle import BundleResource
     from .revoked import RevocationListResource
     from .signed import SignedCertificateDetailResource
     from .request import RequestListResource, RequestDetailResource
