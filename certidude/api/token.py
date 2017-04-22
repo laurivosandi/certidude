@@ -1,4 +1,5 @@
 import click
+import falcon
 import logging
 import hashlib
 import random
@@ -11,12 +12,6 @@ from certidude import config, authority
 from certidude.auth import login_required, authorize_admin
 
 logger = logging.getLogger(__name__)
-
-chars = string.ascii_letters + string.digits + '!@#$%^&*()'
-SECRET = ''.join(random.choice(chars) for i in range(32))
-
-click.echo("Token secret: %s" % SECRET)
-
 
 KEYWORDS = (
     (u"Android", u"android"),
@@ -36,16 +31,17 @@ class TokenResource(object):
         username = req.get_param("u", required=True)
         user = User.objects.get(username)
         csum = hashlib.sha256()
-        csum.update(SECRET)
+        csum.update(config.TOKEN_SECRET)
         csum.update(username)
         csum.update(str(timestamp))
 
         if csum.hexdigest() != req.get_param("c", required=True):
-            raise # TODO
+            raise falcon.HTTPUnauthorized("Forbidden", "Invalid token supplied, did you copy-paste link correctly?")
         if now < timestamp:
-            raise # Token not valid yet
+            raise falcon.HTTPUnauthorized("Forbidden", "Token not valid yet, are you sure server clock is correct?")
         if now > timestamp + config.TOKEN_LIFETIME:
-            raise # token expired
+            raise falcon.HTTPUnauthorized("Forbidden", "Token expired")
+
         # At this point consider token to be legitimate
 
         common_name = username
@@ -83,12 +79,17 @@ class TokenResource(object):
         user = User.objects.get(username)
         timestamp = int(time())
         csum = hashlib.sha256()
-        csum.update(SECRET)
+        csum.update(config.TOKEN_SECRET)
         csum.update(username)
         csum.update(str(timestamp))
         args = "u=%s&t=%d&c=%s" % (username, timestamp, csum.hexdigest())
-        token_created = datetime.utcfromtimestamp(timestamp)
-        token_expires = datetime.utcfromtimestamp(timestamp + config.TOKEN_LIFETIME)
+
+        # Token lifetime in local time, to select timezone: dpkg-reconfigure tzdata
+        token_created = datetime.fromtimestamp(timestamp)
+        token_expires = datetime.fromtimestamp(timestamp + config.TOKEN_LIFETIME)
+        with open("/etc/timezone") as fh:
+            token_timezone = fh.read().strip()
+
         context = globals()
         context.update(locals())
         mailer.send("token.md", to=user, **context)

@@ -99,5 +99,6 @@ BUNDLE_FORMAT = cp.get("token", "format")
 OPENVPN_PROFILE_TEMPLATE = cp.get("token", "openvpn profile template")
 TOKEN_URL = cp.get("token", "url")
 TOKEN_LIFETIME = cp.getint("token", "lifetime")
+TOKEN_SECRET = cp.get("token", "secret")
 
 # TODO: Check if we don't have base or servers

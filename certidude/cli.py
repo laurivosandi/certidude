@@ -790,6 +790,9 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     rpm("python-setproctitle pyOpenSSL python-falcon python-humanize python-markdown pyxattr")
     pip("gssapi")
 
+    # Generate secret for tokens
+    token_secret = ''.join(random.choice(string.letters + string.digits + '!@#$%^&*()') for i in range(50))
+
     template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates")
 
     if not directory:
