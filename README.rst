@@ -71,19 +71,19 @@ Common:
 * Kerberos and basic auth based web interface authentication.
 * PAM and Active Directory compliant authentication backends: Kerberos single sign-on, LDAP simple bind.
 * POSIX groups and Active Directory (LDAP) group membership based authorization.
-* Command-line interface, check out ``certidude list``.
+* Server-side command-line interface, check out ``certidude list``, ``certidude sign`` and ``certidude revoke``.
 * Privilege isolation, separate signer process is spawned per private key isolating
   private key use from the the web interface.
 * Certificate serial numbers are intentionally randomized to avoid leaking information about business practices.
 * Server-side events support via `nchan <https://nchan.slact.net/>`_.
-* E-mail notifications about pending, signed and revoked certificates.
+* E-mail notifications about pending, signed, revoked, renewed and overwritten certificates
 
 Virtual private networking:
 
 * Send OpenVPN profile URL tokens via e-mail, for simplified VPN adoption on Android, iOS, Windows, Mac OS X and Ubuntu.
-* OpenVPN integration, check out ``certidude setup openvpn server`` and ``certidude setup openvpn client``.
-* strongSwan integration, check out ``certidude setup strongswan server`` and ``certidude setup strongswan client``.
-* NetworkManager integration, check out ``certidude setup openvpn networkmanager`` and ``certidude setup strongswan networkmanager``.
+* OpenVPN gateway and roadwarrior integration, check out ``certidude setup openvpn server`` and ``certidude setup openvpn client``.
+* StrongSwan gateway and roadwarrior integration, check out ``certidude setup strongswan server`` and ``certidude setup strongswan client``.
+* NetworkManager integration for Ubuntu and Fedora, check out ``certidude setup openvpn networkmanager`` and ``certidude setup strongswan networkmanager``.
 
 HTTPS:
 

@@ -35,11 +35,12 @@ class TokenResource(object):
         csum.update(username)
         csum.update(str(timestamp))
 
+        margin = 300 # Tolerate 5 minute clock skew as Kerberos does
         if csum.hexdigest() != req.get_param("c", required=True):
             raise falcon.HTTPUnauthorized("Forbidden", "Invalid token supplied, did you copy-paste link correctly?")
-        if now < timestamp:
+        if now < timestamp - margin:
             raise falcon.HTTPUnauthorized("Forbidden", "Token not valid yet, are you sure server clock is correct?")
-        if now > timestamp + config.TOKEN_LIFETIME:
+        if now > timestamp + margin + config.TOKEN_LIFETIME:
             raise falcon.HTTPUnauthorized("Forbidden", "Token expired")
 
         # At this point consider token to be legitimate

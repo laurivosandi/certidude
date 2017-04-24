@@ -98,7 +98,7 @@ TAG_TYPES = [j.split("/", 1) + [cp.get("tagging", j)] for j in cp.options("taggi
 BUNDLE_FORMAT = cp.get("token", "format")
 OPENVPN_PROFILE_TEMPLATE = cp.get("token", "openvpn profile template")
 TOKEN_URL = cp.get("token", "url")
-TOKEN_LIFETIME = cp.getint("token", "lifetime")
+TOKEN_LIFETIME = cp.getint("token", "lifetime") * 60 # Convert minutes to seconds
 TOKEN_SECRET = cp.get("token", "secret")
 
 # TODO: Check if we don't have base or servers

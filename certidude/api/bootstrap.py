@@ -10,5 +10,5 @@ class BootstrapResource(object):
     def on_get(self, req, resp):
         resp.body = Template(open(config.BOOTSTRAP_TEMPLATE).read()).render(
             authority = const.FQDN,
-            servers = [cn for cn, path, buf, cert, server in authority.list_signed() if server])
+            servers = authority.list_server_names())
 

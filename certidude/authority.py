@@ -165,6 +165,9 @@ def list_signed():
 def list_revoked():
     return _list_certificates(config.REVOKED_DIR)
 
+def list_server_names():
+    return [cn for cn, path, buf, cert, server in list_signed() if server]
+
 def export_crl():
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     sock.connect(const.SIGNER_SOCKET_PATH)
@@ -228,7 +231,7 @@ def generate_ovpn_bundle(common_name, owner=None):
 
     bundle = Template(open(config.OPENVPN_PROFILE_TEMPLATE).read()).render(
         ca = ca_buf, key = key_buf, cert = cert_buf, crl=export_crl(),
-        servers = [cn for cn, path, buf, cert, server in list_signed() if server])
+        servers = list_server_names())
     return bundle, cert
 
 def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):

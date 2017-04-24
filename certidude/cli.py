@@ -980,6 +980,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
                 encryption_algorithm=serialization.NoEncryption() # TODO: Implement passphrase
             ))
 
+    click.echo("To enable e-mail notifications install Postfix as sattelite system and set mailer address in %s" % const.CONFIG_PATH)
     click.echo()
     click.echo("Use following commands to inspect the newly created files:")
     click.echo()
@@ -987,9 +988,10 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     click.echo("  openssl rsa -check -in %s" % ca_key)
     click.echo("  openssl verify -CAfile %s %s" % (ca_crt, ca_crt))
     click.echo()
-    click.echo("Use following command to serve CA read-only:")
+    click.echo("To enable and start the service:")
     click.echo()
-    click.echo("  certidude serve")
+    click.echo("  systemctl enable certidude")
+    click.echo("  systemctl start certidude")
 
 
 @click.command("users", help="List users")
