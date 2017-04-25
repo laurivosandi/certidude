@@ -1,4 +1,4 @@
-sudo: false
+sudo: required
 language: python
 dist: trusty
 python:
@@ -12,8 +12,9 @@ install:
   - pip install --editable .
   - pip install codecov pytest-cov click ipaddress humanize falcon simplepam
 script:
-  - useradd adminbot -G sudo -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
-  - useradd userbot -G users -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
+  - sudo useradd adminbot -G sudo -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
+  - sudo useradd userbot -G users -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
+  - sudo usermod -a -G shadow $USER
   - py.test --cov-report xml --cov=certidude tests/
 cache:
   directories:
