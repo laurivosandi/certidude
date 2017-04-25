@@ -5,6 +5,7 @@ from certidude.cli import entry_point as cli
 from datetime import datetime, timedelta
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509.oid import NameOID
+import thread
 from xattr import setxattr
 
 runner = CliRunner()
@@ -20,9 +21,7 @@ def test_cli_setup_authority():
     assert authority.ca_cert.not_valid_before < datetime.now()
     assert authority.ca_cert.not_valid_after > datetime.now() + timedelta(days=7000)
 
-    result = runner.invoke(cli, ['serve', '-f', '-p', '8080'])
-    assert not result.exception
-
+    thread.start_new_thread(runner.invoke, (cli, ['serve', '-p', '8080']))
 
     from cryptography import x509
     from cryptography.hazmat.primitives.asymmetric import rsa, padding
