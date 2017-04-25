@@ -1,5 +1,6 @@
 
 import click
+import falcon
 import logging
 import os
 import re
@@ -133,7 +134,8 @@ def authenticate(optional=False):
 
             import simplepam
             if not simplepam.authenticate(user, passwd, "sshd"):
-                logger.critical(u"Basic authentication failed for user %s from  %s",
+                logger.critical(u"Basic authentication failed for user %s from  %s, "
+                    "are you sure server process has read access to /etc/shadow?",
                     repr(user), req.context.get("remote_addr"))
                 raise falcon.HTTPUnauthorized("Forbidden", "Invalid password", ("Basic",))
 

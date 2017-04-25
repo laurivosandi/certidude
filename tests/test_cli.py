@@ -1,5 +1,7 @@
 import os
 import requests
+import subprocess
+import pwd
 from falcon import testing
 from click.testing import CliRunner
 from certidude.cli import entry_point as cli
@@ -42,6 +44,39 @@ def test_cli_setup_authority():
     assert authority.ca_cert.serial_number <= 0xfffffffffffffffffffffffffffffffffffffff
     assert authority.ca_cert.not_valid_before < datetime.now()
     assert authority.ca_cert.not_valid_after > datetime.now() + timedelta(days=7000)
+
+    try:
+        pwd.getpwnam("userbot")
+    except KeyError:
+        # useradd userbot -G users -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
+        cmd = "useradd", "userbot", "-G", "users", "-p", "$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1" # bot
+        subprocess.call(cmd)
+
+    try:
+        pwd.getpwnam("adminbot")
+    except KeyError:
+        # Note: on Fedora use group 'wheel' instead of 'sudo'
+        # useradd adminbot -G sudo -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
+        cmd = "useradd", "adminbot", "-G", "sudo", "-p", "$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1" # bot
+        subprocess.call(cmd)
+
+    usertoken = "Basic dXNlcmJvdDpib3Q="
+    admintoken = "Basic YWRtaW5ib3Q6Ym90"
+
+    result = runner.invoke(cli, ['users'])
+    assert not result.exception
+
+
+    # Test session API call
+    r = client().simulate_get("/api/", headers={"Authorization":usertoken})
+    assert r.status_code == 200
+
+    r = client().simulate_get("/api/", headers={"Authorization":admintoken})
+    assert r.status_code == 200
+
+    r = client().simulate_get("/api/")
+    assert r.status_code == 401
+
 
     # Try starting up forked server
     result = runner.invoke(cli, ['serve', '-f', '-p', '8080'])
@@ -171,6 +206,13 @@ def test_cli_setup_authority():
     # Tags should not be visible anonymously
     r = client().simulate_get("/api/signed/test2/tag/")
     assert r.status_code == 401
+
+    r = client().simulate_get("/api/signed/test2/tag/", headers={"Authorization":usertoken})
+    assert r.status_code == 403
+
+    r = client().simulate_get("/api/signed/test2/tag/", headers={"Authorization":admintoken})
+    assert r.status_code == 200
+
 
     # Revoke all valid ones
     result = runner.invoke(cli, ['revoke', 'test2'])

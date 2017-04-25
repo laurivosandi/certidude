@@ -60,6 +60,13 @@ class PosixUserManager(object):
         _, _, gid, members = grp.getgrnam(config.ADMIN_GROUP)
         return user.name in members
 
+    def all(self):
+        _, _, gid, members = grp.getgrnam(config.USERS_GROUP)
+        for username in members:
+            yield self.get(username)
+        for user in self.filter_admins(): # TODO: dedup
+            yield user
+
 
 class DirectoryConnection(object):
     def __enter__(self):
