@@ -77,6 +77,9 @@ def test_cli_setup_authority():
 
 
     # Test signed certificate API call
+    r = client().simulate_get("/api/signed/nonexistant")
+    assert r.status_code == 404
+
     r = client().simulate_get("/api/signed/test2")
     assert r.status_code == 200
     assert r.headers.get('content-type') == "application/x-pem-file"
@@ -84,6 +87,9 @@ def test_cli_setup_authority():
     r = client().simulate_get("/api/signed/test2", headers={"Accept":"application/json"})
     assert r.status_code == 200
     assert r.headers.get('content-type') == "application/json"
+
+    r = client().simulate_get("/api/signed/test2", headers={"Accept":"text/plain"})
+    assert r.status_code == 415
 
 
     # Test revocations API call

@@ -18,7 +18,7 @@ class SignedCertificateDetailResource(object):
         except EnvironmentError:
             logger.warning(u"Failed to serve non-existant certificate %s to %s",
                 cn, req.context.get("remote_addr"))
-            raise falcon.HTTPNotFound("No certificate CN=%s found" % cn)
+            raise falcon.HTTPNotFound()
         else:
             if preferred_type == "application/x-pem-file":
                 resp.set_header("Content-Type", "application/x-pem-file")
