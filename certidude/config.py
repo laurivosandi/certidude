@@ -74,7 +74,7 @@ LONG_POLL_SUBSCRIBE = cp.get("push", "long poll subscribe")
 if os.getenv("TRAVIS"): # TODO: include nginx setup in Travis
     EVENT_SOURCE_PUBLISH = ""
     LONG_POLL_PUBLISH = ""
-    LONG_POLL_SUBSCRIBE = ""
+    LONG_POLL_SUBSCRIBE = "//nonexistant/lp/sub/%s"
 
 LOGGING_BACKEND = cp.get("logging", "backend")
 
