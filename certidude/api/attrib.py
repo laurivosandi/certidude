@@ -35,7 +35,11 @@ class AttributeResource(object):
                         current = current[component]
                 current[key] = value
 
-            whitelist = ip_address(attribs.get("user").get("lease").get("address").decode("ascii"))
+            try:
+                whitelist = ip_address(attribs.get("user").get("lease").get("address").decode("ascii"))
+            except AttributeError: # TODO: probably race condition
+                raise falcon.HTTPForbidden("Forbidden",
+                    "Attributes only accessible to the machine")
 
             if req.context.get("remote_addr") != whitelist:
                 logger.info("Attribute access denied from %s, expected %s for %s",
