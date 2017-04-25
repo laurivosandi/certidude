@@ -29,4 +29,3 @@ addons:
     - python-configparser
     - python-pyasn1
     - python-openssl
-    - python-sqlite2
