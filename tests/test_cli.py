@@ -21,13 +21,14 @@ def client():
     from certidude.api import certidude_app
     return testing.TestClient(certidude_app())
 
-def generate_csr():
+def generate_csr(cn=None):
     key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=1024,
         backend=default_backend())
-    csr = x509.CertificateSigningRequestBuilder(
-        ).subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, u"test")]))
+    csr = x509.CertificateSigningRequestBuilder()
+    if cn is not None:
+        csr = csr.subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, cn)]))
     buf = csr.sign(key, hashes.SHA256(), default_backend()
         ).public_bytes(serialization.Encoding.PEM)
     return buf
@@ -61,7 +62,7 @@ def test_cli_setup_authority():
     assert r.headers.get('content-type') == "application/x-x509-ca-cert"
 
     # Test request submission
-    buf = generate_csr()
+    buf = generate_csr(cn=u"test")
 
     r = client().simulate_post("/api/request/", body=buf)
     assert r.status_code == 415 # wrong content type
@@ -83,24 +84,31 @@ def test_cli_setup_authority():
     assert r.status_code == 303 # redirect to long poll
 
     r = client().simulate_post("/api/request/",
-        body=generate_csr(),
+        body=generate_csr(cn=u"test"),
         headers={"content-type":"application/pkcs10"})
     assert r.status_code == 409 # duplicate cn, different keypair
 
     r = client().simulate_get("/api/request/test/", headers={"Accept":"application/json"})
-    assert r.status_code == 200
+    assert r.status_code == 200 # fetch as JSON ok
     assert r.headers.get('content-type') == "application/json"
 
     r = client().simulate_get("/api/request/test/", headers={"Accept":"application/x-pem-file"})
-    assert r.status_code == 200
+    assert r.status_code == 200 # fetch as PEM ok
     assert r.headers.get('content-type') == "application/x-pem-file"
 
     r = client().simulate_get("/api/request/test/", headers={"Accept":"text/plain"})
-    assert r.status_code == 415
+    assert r.status_code == 415 # not available as plaintext
 
     r = client().simulate_get("/api/request/nonexistant/", headers={"Accept":"application/json"})
-    assert r.status_code == 404
+    assert r.status_code == 404 # nonexistant common names
 
+    r = client().simulate_post("/api/request/", query_string="autosign=1",
+        body=buf,
+        headers={"content-type":"application/pkcs10"})
+    assert r.status_code == 200 # autosign successful
+    assert r.headers.get('content-type') == "application/x-pem-file"
+
+    # TODO: submit messed up CSR-s: no CN, empty CN etc
 
     # Test command line interface
     result = runner.invoke(cli, ['list', '-srv'])
