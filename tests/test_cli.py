@@ -45,21 +45,6 @@ def test_cli_setup_authority():
     assert authority.ca_cert.not_valid_before < datetime.now()
     assert authority.ca_cert.not_valid_after > datetime.now() + timedelta(days=7000)
 
-    try:
-        pwd.getpwnam("userbot")
-    except KeyError:
-        # useradd userbot -G users -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
-        cmd = "useradd", "userbot", "-G", "users", "-p", "$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1" # bot
-        subprocess.call(cmd)
-
-    try:
-        pwd.getpwnam("adminbot")
-    except KeyError:
-        # Note: on Fedora use group 'wheel' instead of 'sudo'
-        # useradd adminbot -G sudo -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
-        cmd = "useradd", "adminbot", "-G", "sudo", "-p", "$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1" # bot
-        subprocess.call(cmd)
-
     usertoken = "Basic dXNlcmJvdDpib3Q="
     admintoken = "Basic YWRtaW5ib3Q6Ym90"
 
