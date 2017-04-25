@@ -179,7 +179,7 @@ class NormalizeMiddleware(object):
         if isinstance(resp.location, unicode):
             resp.location = resp.location.encode("ascii")
 
-def certidude_app():
+def certidude_app(log_handlers=[]):
     from certidude import config
     from .revoked import RevocationListResource
     from .signed import SignedCertificateDetailResource
@@ -224,5 +224,19 @@ def certidude_app():
 
     # Add sink for serving static files
     app.add_sink(StaticResource(os.path.join(__file__, "..", "..", "static")))
+
+    # Set up log handlers
+    if config.LOGGING_BACKEND == "sql":
+        from certidude.mysqllog import LogHandler
+        from certidude.api.log import LogResource
+        uri = config.cp.get("logging", "database")
+        log_handlers.append(LogHandler(uri))
+        app.add_route("/api/log/", LogResource(uri))
+    elif config.LOGGING_BACKEND == "syslog":
+        from logging.handlers import SyslogHandler
+        log_handlers.append(SysLogHandler())
+        # Browsing syslog via HTTP is obviously not possible out of the box
+    elif config.LOGGING_BACKEND:
+        raise ValueError("Invalid logging.backend = %s" % config.LOGGING_BACKEND)
 
     return app

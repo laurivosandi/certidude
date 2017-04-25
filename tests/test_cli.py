@@ -52,11 +52,6 @@ def test_cli_setup_authority():
     result = runner.invoke(cli, ['users'])
     assert not result.exception
 
-
-    # Try starting up forked server
-    result = runner.invoke(cli, ['serve', '-f', '-p', '8080'])
-    assert not result.exception
-
     # Check that we can retrieve empty CRL
     r = client().simulate_get("/api/revoked/")
     assert r.status_code == 200
@@ -264,4 +259,18 @@ def test_cli_setup_authority():
     assert r.status_code == 200
 
 
+    # Log can be read only by admin
+    r = client().simulate_get("/api/log/")
+    assert r.status_code == 401
+    r = client().simulate_get("/api/log/",
+        headers={"Authorization":usertoken})
+    assert r.status_code == 403
+    r = client().simulate_get("/api/log/",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 200
+    assert r.headers.get('content-type') == "application/json; charset=UTF-8"
+
+    # Try starting up forked server
+    result = runner.invoke(cli, ['serve', '-f', '-p', '8080'])
+    assert not result.exception
 

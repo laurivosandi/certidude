@@ -1204,7 +1204,7 @@ def certidude_serve(port, listen, fork):
 
     click.echo("Listening on %s:%d" % (listen, port))
 
-    app = certidude_app()
+    app = certidude_app(log_handlers)
 
     httpd = make_server(listen, port, app, ThreadingWSGIServer)
 
@@ -1235,21 +1235,6 @@ def certidude_serve(port, listen, fork):
             ("certidude", os.getuid(), os.getgid(), ", ".join([str(j) for j in os.getgroups()])))
 
         os.umask(0o007)
-
-
-    # Set up log handlers
-    if config.LOGGING_BACKEND == "sql":
-        from certidude.mysqllog import LogHandler
-        from certidude.api.log import LogResource
-        uri = config.cp.get("logging", "database")
-        log_handlers.append(LogHandler(uri))
-        app.add_route("/api/log/", LogResource(uri))
-    elif config.LOGGING_BACKEND == "syslog":
-        from logging.handlers import SyslogHandler
-        log_handlers.append(SysLogHandler())
-        # Browsing syslog via HTTP is obviously not possible out of the box
-    elif config.LOGGING_BACKEND:
-        raise ValueError("Invalid logging.backend = %s" % config.LOGGING_BACKEND)
 
     if config.EVENT_SOURCE_PUBLISH:
         from certidude.push import EventSourceLogHandler
