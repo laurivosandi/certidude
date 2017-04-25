@@ -45,6 +45,10 @@ def test_cli_setup_authority():
     assert authority.ca_cert.not_valid_before < datetime.now()
     assert authority.ca_cert.not_valid_after > datetime.now() + timedelta(days=7000)
 
+    # Start server before any signing operations are performed
+    result = runner.invoke(cli, ['serve', '-f', '-p', '8080'])
+    assert not result.exception
+
     # Password is bot, users created by Travis
     usertoken = "Basic dXNlcmJvdDpib3Q="
     admintoken = "Basic YWRtaW5ib3Q6Ym90"
@@ -269,8 +273,3 @@ def test_cli_setup_authority():
         headers={"Authorization":admintoken})
     assert r.status_code == 200
     assert r.headers.get('content-type') == "application/json; charset=UTF-8"
-
-    # Try starting up forked server
-    result = runner.invoke(cli, ['serve', '-f', '-p', '8080'])
-    assert not result.exception
-
