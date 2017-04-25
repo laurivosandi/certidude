@@ -1197,7 +1197,7 @@ def certidude_serve(port, listen, fork):
     click.echo("Serving API at %s:%d" % (listen, port))
     from wsgiref.simple_server import make_server, WSGIServer
     from SocketServer import ThreadingMixIn, ForkingMixIn
-    from certidude.api import certidude_app, StaticResource
+    from certidude.api import certidude_app
 
     class ThreadingWSGIServer(ForkingMixIn, WSGIServer):
         pass
@@ -1205,7 +1205,6 @@ def certidude_serve(port, listen, fork):
     click.echo("Listening on %s:%d" % (listen, port))
 
     app = certidude_app()
-    app.add_sink(StaticResource(os.path.join(os.path.dirname(__file__), "static")))
 
     httpd = make_server(listen, port, app, ThreadingWSGIServer)
 

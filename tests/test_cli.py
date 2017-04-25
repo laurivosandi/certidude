@@ -53,17 +53,6 @@ def test_cli_setup_authority():
     assert not result.exception
 
 
-    # Test session API call
-    r = client().simulate_get("/api/", headers={"Authorization":usertoken})
-    assert r.status_code == 200
-
-    r = client().simulate_get("/api/", headers={"Authorization":admintoken})
-    assert r.status_code == 200
-
-    r = client().simulate_get("/api/")
-    assert r.status_code == 401
-
-
     # Try starting up forked server
     result = runner.invoke(cli, ['serve', '-f', '-p', '8080'])
     assert not result.exception
@@ -145,6 +134,18 @@ def test_cli_setup_authority():
     result = runner.invoke(cli, ['cron'])
     assert not result.exception
 
+
+    # Test session API call
+    r = client().simulate_get("/api/", headers={"Authorization":usertoken})
+    assert r.status_code == 200
+
+    r = client().simulate_get("/api/", headers={"Authorization":admintoken})
+    assert r.status_code == 200
+
+    r = client().simulate_get("/api/")
+    assert r.status_code == 401
+
+
     # Test signed certificate API call
     r = client().simulate_get("/api/signed/nonexistant/")
     assert r.status_code == 404
@@ -181,35 +182,86 @@ def test_cli_setup_authority():
     # Test attribute fetching API call
     r = client().simulate_get("/api/signed/test2/attr/")
     assert r.status_code == 403
+    r = client().simulate_get("/api/signed/test2/lease/", headers={"Authorization":admintoken})
+    assert r.status_code == 404
 
+    # Insert lease as if VPN gateway had submitted it
     path, _, _ = authority.get_signed("test2")
     setxattr(path, "user.lease.address", b"127.0.0.1")
-
+    setxattr(path, "user.lease.last_seen", b"random")
     r = client().simulate_get("/api/signed/test2/attr/")
     assert r.status_code == 200
+
+    # Test lease retrieval
+    r = client().simulate_get("/api/signed/test2/lease/")
+    assert r.status_code == 401
+    r = client().simulate_get("/api/signed/test2/lease/", headers={"Authorization":usertoken})
+    assert r.status_code == 403
+    r = client().simulate_get("/api/signed/test2/lease/", headers={"Authorization":admintoken})
+    assert r.status_code == 200
+    assert r.headers.get('content-type') == "application/json; charset=UTF-8"
+
 
     # Tags should not be visible anonymously
     r = client().simulate_get("/api/signed/test2/tag/")
     assert r.status_code == 401
-
     r = client().simulate_get("/api/signed/test2/tag/", headers={"Authorization":usertoken})
     assert r.status_code == 403
-
     r = client().simulate_get("/api/signed/test2/tag/", headers={"Authorization":admintoken})
     assert r.status_code == 200
+
+    # Tags can be added only by admin
+    r = client().simulate_post("/api/signed/test2/tag/")
+    assert r.status_code == 401
+    r = client().simulate_post("/api/signed/test2/tag/",
+        headers={"Authorization":usertoken})
+    assert r.status_code == 403
+    r = client().simulate_post("/api/signed/test2/tag/",
+        body="key=other&value=something",
+        headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
+    assert r.status_code == 200
+
+    # Tags can be overwritten only by admin
+    r = client().simulate_put("/api/signed/test2/tag/other/")
+    assert r.status_code == 401
+    r = client().simulate_put("/api/signed/test2/tag/other/",
+        headers={"Authorization":usertoken})
+    assert r.status_code == 403
+    r = client().simulate_put("/api/signed/test2/tag/other/",
+        body="value=else",
+        headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
+    assert r.status_code == 200
+
+    # Tags can be deleted only by admin
+    r = client().simulate_delete("/api/signed/test2/tag/else/")
+    assert r.status_code == 401
+    r = client().simulate_delete("/api/signed/test2/tag/else/",
+        headers={"Authorization":usertoken})
+    assert r.status_code == 403
+    r = client().simulate_delete("/api/signed/test2/tag/else/",
+        headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
+    assert r.status_code == 200
+
 
     # Test revocation
     r = client().simulate_delete("/api/signed/test2/")
     assert r.status_code == 401
-
-    r = client().simulate_delete("/api/signed/test2/", headers={"Authorization":usertoken})
+    r = client().simulate_delete("/api/signed/test2/",
+        headers={"Authorization":usertoken})
     assert r.status_code == 403
-
-    r = client().simulate_delete("/api/signed/test2/", headers={"Authorization":admintoken})
+    r = client().simulate_delete("/api/signed/test2/",
+        headers={"Authorization":admintoken})
     assert r.status_code == 200
-
     result = runner.invoke(cli, ['revoke', 'test3'])
     assert not result.exception
+
+
+    # Test static
+    r = client().simulate_delete("/nonexistant.html")
+    assert r.status_code == 404
+
+    r = client().simulate_delete("/index.html")
+    assert r.status_code == 200
 
 
 

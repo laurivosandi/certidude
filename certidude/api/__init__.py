@@ -222,4 +222,7 @@ def certidude_app():
     # Bootstrap resource
     app.add_route("/api/bootstrap/", BootstrapResource())
 
+    # Add sink for serving static files
+    app.add_sink(StaticResource(os.path.join(__file__, "..", "..", "static")))
+
     return app

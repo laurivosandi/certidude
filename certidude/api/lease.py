@@ -18,11 +18,14 @@ class LeaseDetailResource(object):
     @login_required
     @authorize_admin
     def on_get(self, req, resp, cn):
-        path, buf, cert = authority.get_signed(cn)
-        return dict(
-            last_seen = xattr.getxattr(path, "user.lease.last_seen"),
-            address = xattr.getxattr(path, "user.lease.address").decode("ascii")
-        )
+        try:
+            path, buf, cert = authority.get_signed(cn)
+            return dict(
+                last_seen = xattr.getxattr(path, "user.lease.last_seen"),
+                address = xattr.getxattr(path, "user.lease.address").decode("ascii")
+            )
+        except EnvironmentError: # Certificate or attribute not found
+            raise falcon.HTTPNotFound()
 
 
 class LeaseResource(object):
