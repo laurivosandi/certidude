@@ -87,6 +87,21 @@ def test_cli_setup_authority():
         headers={"content-type":"application/pkcs10"})
     assert r.status_code == 409 # duplicate cn, different keypair
 
+    r = client().simulate_get("/api/request/test/", headers={"Accept":"application/json"})
+    assert r.status_code == 200
+    assert r.headers.get('content-type') == "application/json"
+
+    r = client().simulate_get("/api/request/test/", headers={"Accept":"application/x-pem-file"})
+    assert r.status_code == 200
+    assert r.headers.get('content-type') == "application/x-pem-file"
+
+    r = client().simulate_get("/api/request/test/", headers={"Accept":"text/plain"})
+    assert r.status_code == 415
+
+    r = client().simulate_get("/api/request/nonexistant/", headers={"Accept":"application/json"})
+    assert r.status_code == 404
+
+
     # Test command line interface
     result = runner.invoke(cli, ['list', '-srv'])
     assert not result.exception

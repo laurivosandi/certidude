@@ -19,28 +19,28 @@ class SignedCertificateDetailResource(object):
             logger.warning(u"Failed to serve non-existant certificate %s to %s",
                 cn, req.context.get("remote_addr"))
             raise falcon.HTTPNotFound()
+
+        if preferred_type == "application/x-pem-file":
+            resp.set_header("Content-Type", "application/x-pem-file")
+            resp.set_header("Content-Disposition", ("attachment; filename=%s.pem" % cn))
+            resp.body = buf
+            logger.debug(u"Served certificate %s to %s as application/x-pem-file",
+                cn, req.context.get("remote_addr"))
+        elif preferred_type == "application/json":
+            resp.set_header("Content-Type", "application/json")
+            resp.set_header("Content-Disposition", ("attachment; filename=%s.json" % cn))
+            resp.body = json.dumps(dict(
+                common_name = cn,
+                serial_number = "%x" % cert.serial,
+                signed = cert.not_valid_before.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                expires = cert.not_valid_after.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                sha256sum = hashlib.sha256(buf).hexdigest()))
+            logger.debug(u"Served certificate %s to %s as application/json",
+                cn, req.context.get("remote_addr"))
         else:
-            if preferred_type == "application/x-pem-file":
-                resp.set_header("Content-Type", "application/x-pem-file")
-                resp.set_header("Content-Disposition", ("attachment; filename=%s.pem" % cn))
-                resp.body = buf
-                logger.debug(u"Served certificate %s to %s as application/x-pem-file",
-                    cn, req.context.get("remote_addr"))
-            elif preferred_type == "application/json":
-                resp.set_header("Content-Type", "application/json")
-                resp.set_header("Content-Disposition", ("attachment; filename=%s.json" % cn))
-                resp.body = json.dumps(dict(
-                    common_name = cn,
-                    serial_number = "%x" % cert.serial,
-                    signed = cert.not_valid_before.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-                    expires = cert.not_valid_after.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-                    sha256sum = hashlib.sha256(buf).hexdigest()))
-                logger.debug(u"Served certificate %s to %s as application/json",
-                    cn, req.context.get("remote_addr"))
-            else:
-                logger.debug("Client did not accept application/json or application/x-pem-file")
-                raise falcon.HTTPUnsupportedMediaType(
-                    "Client did not accept application/json or application/x-pem-file")
+            logger.debug("Client did not accept application/json or application/x-pem-file")
+            raise falcon.HTTPUnsupportedMediaType(
+                "Client did not accept application/json or application/x-pem-file")
 
     @csrf_protection
     @login_required

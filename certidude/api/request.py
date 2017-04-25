@@ -154,8 +154,15 @@ class RequestDetailResource(object):
         """
         Fetch certificate signing request as PEM
         """
+
+        try:
+            _, buf, _ = authority.get_request(cn)
+        except EnvironmentError:
+            logger.warning(u"Failed to serve non-existant request %s to %s",
+                cn, req.context.get("remote_addr"))
+            raise falcon.HTTPNotFound()
+
         resp.set_header("Content-Type", "application/pkcs10")
-        _, buf, _ = authority.get_request(cn)
         logger.debug(u"Signing request %s was downloaded by %s",
             cn, req.context.get("remote_addr"))
 
