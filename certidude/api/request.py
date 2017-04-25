@@ -51,7 +51,7 @@ class RequestListResource(object):
                     "Common name %s differs from Kerberos credential %s!" % (common_name.value, machine))
 
             # Automatic enroll with Kerberos machine cerdentials
-            resp.set_header("Content-Type", "application/x-x509-user-cert")
+            resp.set_header("Content-Type", "application/x-pem-file")
             cert, resp.body = authority._sign(csr, body, overwrite=True)
             logger.info(u"Automatically enrolled Kerberos authenticated machine %s from %s",
                 machine, req.context.get("remote_addr"))
@@ -110,7 +110,7 @@ class RequestListResource(object):
             for subnet in config.AUTOSIGN_SUBNETS:
                 if req.context.get("remote_addr") in subnet:
                     try:
-                        resp.set_header("Content-Type", "application/x-x509-user-cert")
+                        resp.set_header("Content-Type", "application/x-pem-file")
                         _, resp.body = authority._sign(csr, body)
                         logger.info("Autosigned %s as %s is whitelisted", common_name.value, req.context.get("remote_addr"))
                         return
