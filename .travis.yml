@@ -10,7 +10,7 @@ virtualenv:
 install:
   - pip install -r requirements.txt
   - pip install --editable .
-  - pip install codecov pytest-cov click ipaddress humanize falcon
+  - pip install codecov pytest-cov click ipaddress humanize falcon simplepam
 script:
   - py.test --cov-report xml --cov=certidude tests/
 cache:
