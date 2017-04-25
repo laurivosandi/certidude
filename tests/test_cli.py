@@ -45,6 +45,7 @@ def test_cli_setup_authority():
     assert authority.ca_cert.not_valid_before < datetime.now()
     assert authority.ca_cert.not_valid_after > datetime.now() + timedelta(days=7000)
 
+    # Password is bot, users created by Travis
     usertoken = "Basic dXNlcmJvdDpib3Q="
     admintoken = "Basic YWRtaW5ib3Q6Ym90"
 
@@ -159,7 +160,6 @@ def test_cli_setup_authority():
     r = client().simulate_get("/api/signed/test2/", headers={"Accept":"text/plain"})
     assert r.status_code == 415
 
-
     # Test revocations API call
     r = client().simulate_get("/api/revoked/")
     assert r.status_code == 200
@@ -198,10 +198,15 @@ def test_cli_setup_authority():
     r = client().simulate_get("/api/signed/test2/tag/", headers={"Authorization":admintoken})
     assert r.status_code == 200
 
+    # Test revocation
+    r = client().simulate_delete("/api/signed/test2/")
+    assert r.status_code == 401
 
-    # Revoke all valid ones
-    result = runner.invoke(cli, ['revoke', 'test2'])
-    assert not result.exception
+    r = client().simulate_delete("/api/signed/test2/", headers={"Authorization":usertoken})
+    assert r.status_code == 403
+
+    r = client().simulate_delete("/api/signed/test2/", headers={"Authorization":admintoken})
+    assert r.status_code == 200
 
     result = runner.invoke(cli, ['revoke', 'test3'])
     assert not result.exception
