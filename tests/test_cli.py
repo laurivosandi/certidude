@@ -292,8 +292,14 @@ def test_cli_setup_authority():
     r2 = client().simulate_get("/api/token/",
         query_string="u=userbot&t=1493184342&c=ac9b71421d5741800c5a4905b20c1072594a2df863e60ba836464888786bf2a6",
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
-    assert r2.status_code == 403 # invalid checksum/timestamp
+    assert r2.status_code == 403 # invalid checksum
     r2 = client().simulate_get("/api/token/", query_string=r.content,
         headers={"User-Agent":"Mozilla/5.0 (X11; Fedora; Linux x86_64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36"})
-    assert r2.status_code == 200 # token consumed by anyone
+    assert r2.status_code == 200 # token consumed by anyone on Fedora
+    assert r2.headers.get('content-type') == "application/x-openvpn"
+
+    config.BUNDLE_FORMAT = "p12" # Switch to PKCS#12
+    r2 = client().simulate_get("/api/token/", query_string=r.content)
+    assert r2.status_code == 200 # token consumed by anyone on unknown device
+    assert r2.headers.get('content-type') == "application/x-pkcs12"
