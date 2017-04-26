@@ -20,6 +20,10 @@ cache:
   directories:
     - $HOME/.cache/pip
 addons:
+  hostname: ca
+  hosts:
+    - ca.example.lan ca
+    - router.example.lan router
   apt:
     packages:
     - python-xattr
