@@ -37,11 +37,11 @@ class TokenResource(object):
 
         margin = 300 # Tolerate 5 minute clock skew as Kerberos does
         if csum.hexdigest() != req.get_param("c", required=True):
-            raise falcon.HTTPUnauthorized("Forbidden", "Invalid token supplied, did you copy-paste link correctly?")
+            raise falcon.HTTPForbidden("Forbidden", "Invalid token supplied, did you copy-paste link correctly?")
         if now < timestamp - margin:
-            raise falcon.HTTPUnauthorized("Forbidden", "Token not valid yet, are you sure server clock is correct?")
+            raise falcon.HTTPForbidden("Forbidden", "Token not valid yet, are you sure server clock is correct?")
         if now > timestamp + margin + config.TOKEN_LIFETIME:
-            raise falcon.HTTPUnauthorized("Forbidden", "Token expired")
+            raise falcon.HTTPForbidden("Forbidden", "Token expired")
 
         # At this point consider token to be legitimate
 
@@ -88,9 +88,12 @@ class TokenResource(object):
         # Token lifetime in local time, to select timezone: dpkg-reconfigure tzdata
         token_created = datetime.fromtimestamp(timestamp)
         token_expires = datetime.fromtimestamp(timestamp + config.TOKEN_LIFETIME)
-        with open("/etc/timezone") as fh:
-            token_timezone = fh.read().strip()
-
+        try:
+            with open("/etc/timezone") as fh:
+                token_timezone = fh.read().strip()
+        except EnvironmentError:
+            token_timezone = None
         context = globals()
         context.update(locals())
         mailer.send("token.md", to=user, **context)
+        resp.body = args

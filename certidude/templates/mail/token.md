@@ -15,5 +15,5 @@ To set up OpenVPN for your device:
 {% endif %}
 
 Click [here]({{ config.TOKEN_URL }}?{{ args }}) to claim the token.
-Token is usable until {{  token_expires }} ({{ token_timezone }} time).
+Token is usable until {{  token_expires }}{% if token_timezone %} ({{ token_timezone }} time){% endif %}.
 
