@@ -190,6 +190,10 @@ def certidude_request(fork, renew):
                 if os.path.exists("/bin/systemctl"):
                     click.echo("Re-running systemd generators for OpenVPN...")
                     os.system("systemctl daemon-reload")
+                if not os.path.exists("/etc/systemd/system/openvpn-reconnect.service"):
+                    with open("/etc/systemd/system/openvpn-reconnect.service", "wb") as fh:
+                        fh.write(env.get_template("client/openvpn-reconnect.service").render(context))
+                    click.echo("Created /etc/systemd/system/openvpn-reconnect.service")
                 click.echo("Starting OpenVPN...")
                 os.system("service openvpn start")
                 continue
@@ -534,7 +538,7 @@ def certidude_setup_openvpn_client(authority, remote, config, proto):
     config.write("remote %s\n" % remote)
     config.write("remote-cert-tls server\n")
     config.write("proto %s\n" % proto)
-    config.write("dev tap\n")
+    config.write("dev tun\n")
     config.write("nobind\n")
     config.write("key %s\n" % client_config.get(authority, "key path"))
     config.write("cert %s\n" % client_config.get(authority, "certificate path"))
@@ -545,6 +549,8 @@ def certidude_setup_openvpn_client(authority, remote, config, proto):
     config.write("group nogroup\n")
     config.write("persist-tun\n")
     config.write("persist-key\n")
+    config.write("up /etc/openvpn/update-resolv-conf")
+    config.write("down /etc/openvpn/update-resolv-conf")
 
     click.echo("Generated %s" % config.name)
     click.echo("Inspect generated files and issue following to request certificate:")

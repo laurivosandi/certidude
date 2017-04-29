@@ -5,6 +5,8 @@ include certidude/templates/*.ovpn
 include certidude/templates/*.conf
 include certidude/templates/*.ini
 include certidude/templates/mail/*.md
+include certidude/templates/client/*.timer
+include certidude/templates/client/*.service
 include certidude/static/js/*.js
 include certidude/static/css/*.css
 include certidude/static/fonts/*.woff2
