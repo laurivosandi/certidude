@@ -81,6 +81,8 @@ def test_cli_setup_authority():
     result = runner.invoke(cli, ['serve', '-f'])
     assert not result.exception, result.output
 
+    import requests
+
     # Password is bot, users created by Travis
     usertoken = "Basic dXNlcmJvdDpib3Q="
     admintoken = "Basic YWRtaW5ib3Q6Ym90"
@@ -99,6 +101,10 @@ def test_cli_setup_authority():
 
     # Test CA certificate fetch
     r = client().simulate_get("/api/certificate")
+    assert r.status_code == 200
+    assert r.headers.get('content-type') == "application/x-x509-ca-cert"
+
+    r = requests.get("http://ca.example.lan/api/certificate")
     assert r.status_code == 200
     assert r.headers.get('content-type') == "application/x-x509-ca-cert"
 
@@ -197,7 +203,16 @@ def test_cli_setup_authority():
     assert r.status_code == 200
     assert r.headers.get('content-type') == "application/x-pkcs7-crl"
 
+    r = requests.get("http://ca.example.lan/api/revoked/")
+    assert r.status_code == 200
+    assert r.headers.get('content-type') == "application/x-pkcs7-crl"
+
     r = client().simulate_get("/api/revoked/",
+        headers={"Accept":"application/x-pem-file"})
+    assert r.status_code == 200
+    assert r.headers.get('content-type') == "application/x-pem-file"
+
+    r = requests.get("http://ca.example.lan/api/revoked/",
         headers={"Accept":"application/x-pem-file"})
     assert r.status_code == 200
     assert r.headers.get('content-type') == "application/x-pem-file"
