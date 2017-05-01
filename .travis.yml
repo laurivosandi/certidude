@@ -27,5 +27,4 @@ addons:
     - ipsec.example.lan
   apt:
     packages:
-    - python-click
     - python-configparser
