@@ -81,9 +81,21 @@ def test_cli_setup_authority():
     result = runner.invoke(cli, ['serve', '-f'])
     assert not result.exception, result.output
 
-    assert authority.export_crl(), "Failed to export CRL"
-
     import requests
+
+    # Test CA certificate fetch
+    buf = open("/var/lib/certidude/ca.example.lan/ca_crt.pem").read()
+
+    r = client().simulate_get("/api/certificate")
+    assert r.status_code == 200
+    assert r.headers.get('content-type') == "application/x-x509-ca-cert"
+    assert r.text == buf
+
+    r = requests.get("http://ca.example.lan/api/certificate")
+    assert r.status_code == 200
+    assert r.headers.get('content-type') == "application/x-x509-ca-cert"
+    assert r.text == buf
+
 
     # Password is bot, users created by Travis
     usertoken = "Basic dXNlcmJvdDpib3Q="
@@ -93,6 +105,7 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
 
     # Check that we can retrieve empty CRL
+    assert authority.export_crl(), "Failed to export CRL"
     r = client().simulate_get("/api/revoked/")
     assert r.status_code == 200, r.text
 
@@ -100,15 +113,6 @@ def test_cli_setup_authority():
     # Test command line interface
     result = runner.invoke(cli, ['list', '-srv'])
     assert not result.exception, result.output
-
-    # Test CA certificate fetch
-    r = client().simulate_get("/api/certificate")
-    assert r.status_code == 200
-    assert r.headers.get('content-type') == "application/x-x509-ca-cert"
-
-    r = requests.get("http://ca.example.lan/api/certificate")
-    assert r.status_code == 200
-    assert r.headers.get('content-type') == "application/x-x509-ca-cert"
 
     # Test static
     r = client().simulate_get("/nonexistant.html")
