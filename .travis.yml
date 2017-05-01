@@ -21,10 +21,6 @@ cache:
     - $HOME/.cache/pip
 addons:
   hostname: ca
-  hosts:
-    - ca.example.lan ca
-    - vpn.example.lan
-    - ipsec.example.lan
   apt:
     packages:
     - python-configparser
