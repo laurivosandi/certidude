@@ -828,6 +828,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     if os.getuid() == 0:
         try:
             pwd.getpwnam("certidude")
+            click.echo("User 'certidude' already exists")
         except KeyError:
             cmd = "adduser", "--system", "--no-create-home", "--group", "certidude"
             if subprocess.call(cmd):
@@ -871,8 +872,8 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
             port = "80"
         else:
             port = "8080"
+            click.echo("Generating: %s" % nginx_config.name)
             nginx_config.write(env.get_template("server/nginx.conf").render(vars()))
-            click.echo("Generated: %s" % nginx_config.name)
             if not os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
                 os.symlink("../sites-available/certidude.conf", "/etc/nginx/sites-enabled/certidude.conf")
                 click.echo("Symlinked %s -> /etc/nginx/sites-enabled/" % nginx_config.name)
@@ -889,7 +890,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
                     fh.write(env.get_template("server/systemd.service").render(vars()))
                 click.echo("File /etc/systemd/system/certidude.service created")
         else:
-            NotImplemented # No systemd
+            click.echo("Not systemd based OS, don't know how to set up initscripts")
 
         _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
         os.setgid(gid)
