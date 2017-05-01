@@ -37,7 +37,11 @@ class RevocationListResource(object):
                     "Content-Disposition",
                     ("attachment; filename=%s-crl.pem" % const.HOSTNAME).encode("ascii"))
                 logger.debug(u"Serving revocation list to %s in PEM format", req.context.get("remote_addr"))
-                resp.body = export_crl()
+                try:
+                    resp.body = export_crl()
+                except:
+                    logger.debug(u"Failed to export CRL, are you sure signer is running?")
+                    raise
         else:
             logger.debug(u"Client %s asked revocation list in unsupported format" % req.context.get("remote_addr"))
             raise falcon.HTTPUnsupportedMediaType(

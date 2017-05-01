@@ -199,14 +199,6 @@ def test_cli_setup_authority():
     assert r.status_code == 415
 
     # Test revocations API call
-    r = client().simulate_get("/api/revoked/")
-    assert r.status_code == 200
-    assert r.headers.get('content-type') == "application/x-pkcs7-crl"
-
-    r = requests.get("http://ca.example.lan/api/revoked/")
-    assert r.status_code == 200
-    assert r.headers.get('content-type') == "application/x-pkcs7-crl"
-
     r = client().simulate_get("/api/revoked/",
         headers={"Accept":"application/x-pem-file"})
     assert r.status_code == 200
@@ -216,6 +208,14 @@ def test_cli_setup_authority():
         headers={"Accept":"application/x-pem-file"})
     assert r.status_code == 200
     assert r.headers.get('content-type') == "application/x-pem-file"
+
+    r = client().simulate_get("/api/revoked/")
+    assert r.status_code == 200
+    assert r.headers.get('content-type') == "application/x-pkcs7-crl"
+
+    r = requests.get("http://ca.example.lan/api/revoked/")
+    assert r.status_code == 200
+    assert r.headers.get('content-type') == "application/x-pkcs7-crl"
 
     r = client().simulate_get("/api/revoked/",
         headers={"Accept":"text/plain"})
