@@ -22,7 +22,7 @@ cache:
 addons:
   hostname: ca
   hosts:
-    - ca.example.lan
+    - ca.example.lan ca
     - vpn.example.lan
     - ipsec.example.lan
   apt:
