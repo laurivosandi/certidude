@@ -115,7 +115,7 @@ def test_cli_setup_authority():
     assert r.status_code == 404, r.text
     r = client().simulate_get("/index.html")
     assert r.status_code == 200, r.text
-    r = requests.get("/index.html")
+    r = requests.get("http://ca.example.lan/index.html")
     assert r.status_code == 200, r.text
 
 
