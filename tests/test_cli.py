@@ -35,10 +35,6 @@ def generate_csr(cn=None):
 def test_cli_setup_authority():
     import shutil
     import os
-    with open("/etc/hosts", "w") as fh:
-        fh.write("127.0.0.1 localhost\n")
-        fh.write("127.0.0.1 ca.example.lan ca\n")
-        fh.write("127.0.0.1 vpn.example.lan\n")
     if os.path.exists("/run/certidude/signer.pid"):
         with open("/run/certidude/signer.pid") as fh:
             try:

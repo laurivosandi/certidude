@@ -8,6 +8,9 @@ after_success:
 virtualenv:
   system_site_packages: true
 install:
+  - echo "127.0.0.1 localhost" | sudo tee /etc/hosts
+  - echo "127.0.0.1 ca.example.lan ca" | sudo tee -a /etc/hosts
+  - echo "127.0.0.1 vpn.koodur.lan | sudo tee -a /etc/hosts
   - pip install -r requirements.txt
   - pip install codecov pytest-cov
   - pip install --editable .
