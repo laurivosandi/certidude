@@ -353,7 +353,7 @@ def test_cli_setup_authority():
 
     # pregen dhparam
     result = runner.invoke(cli, ["request", "--no-wait"])
-    assert not result.exception, result.output
+    assert not result.exception, "server responded %s, server logs say %s"  % (result.output, open("/var/log/certidude.log").read())
     result = runner.invoke(cli, ['sign', 'vpn.example.lan'])
     assert not result.exception, result.output
     result = runner.invoke(cli, ["request", "--no-wait"])
