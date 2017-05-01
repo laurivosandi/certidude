@@ -81,6 +81,8 @@ def test_cli_setup_authority():
     result = runner.invoke(cli, ['serve', '-f'])
     assert not result.exception, result.output
 
+    assert authority.export_crl(), "Failed to export CRL"
+
     import requests
 
     # Password is bot, users created by Travis
