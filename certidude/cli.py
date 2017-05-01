@@ -872,7 +872,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         certidude_path = sys.argv[0]
 
         # Push server config generation
-        if not os.path.exists("/etc/nginx"):
+        if not os.path.exists("/etc/nginx") or os.getenv("TRAVIS"):
             click.echo("Directory /etc/nginx does not exist, hence not creating nginx configuration")
             listen = "0.0.0.0"
             port = "80"
