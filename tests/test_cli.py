@@ -69,7 +69,7 @@ def test_cli_setup_authority():
     from certidude import const
 
     result = runner.invoke(cli, ['setup', 'authority'])
-    assert not result.exception
+    assert not result.exception, result.output
 
     from certidude import config, authority
     assert authority.ca_cert.serial_number >= 0x100000000000000000000000000000000000000
@@ -79,14 +79,14 @@ def test_cli_setup_authority():
 
     # Start server before any signing operations are performed
     result = runner.invoke(cli, ['serve', '-f'])
-    assert not result.exception
+    assert not result.exception, result.output
 
     # Password is bot, users created by Travis
     usertoken = "Basic dXNlcmJvdDpib3Q="
     admintoken = "Basic YWRtaW5ib3Q6Ym90"
 
     result = runner.invoke(cli, ['users'])
-    assert not result.exception
+    assert not result.exception, result.output
 
     # Check that we can retrieve empty CRL
     r = client().simulate_get("/api/revoked/")
@@ -95,7 +95,7 @@ def test_cli_setup_authority():
 
     # Test command line interface
     result = runner.invoke(cli, ['list', '-srv'])
-    assert not result.exception
+    assert not result.exception, result.output
 
     # Test CA certificate fetch
     r = client().simulate_get("/api/certificate")
@@ -153,17 +153,17 @@ def test_cli_setup_authority():
 
     # Test command line interface
     result = runner.invoke(cli, ['list', '-srv'])
-    assert not result.exception
+    assert not result.exception, result.output
     result = runner.invoke(cli, ['sign', 'test', '-o'])
-    assert not result.exception
+    assert not result.exception, result.output
     result = runner.invoke(cli, ['revoke', 'test'])
-    assert not result.exception
+    assert not result.exception, result.output
     authority.generate_ovpn_bundle(u"test2")
     authority.generate_pkcs12_bundle(u"test3")
     result = runner.invoke(cli, ['list', '-srv'])
-    assert not result.exception
+    assert not result.exception, result.output
     result = runner.invoke(cli, ['cron'])
-    assert not result.exception
+    assert not result.exception, result.output
 
 
     # Test session API call
@@ -285,7 +285,7 @@ def test_cli_setup_authority():
         headers={"Authorization":admintoken})
     assert r.status_code == 200
     result = runner.invoke(cli, ['revoke', 'test3'])
-    assert not result.exception
+    assert not result.exception, result.output
 
 
     # Test static
@@ -339,10 +339,10 @@ def test_cli_setup_authority():
 
 
     result = runner.invoke(cli, ['setup', 'openvpn', 'server', "-cn", "vpn.example.lan", "ca.example.lan"])
-    assert not result.exception
+    assert not result.exception, result.output
 
     result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "roadwarrior1", "ca.example.lan", "vpn.example.lan"])
-    assert not result.exception
+    assert not result.exception, result.output
 
     import os
     if not os.path.exists("/etc/openvpn/keys"):
@@ -353,8 +353,8 @@ def test_cli_setup_authority():
 
     # pregen dhparam
     result = runner.invoke(cli, ["request", "--no-wait"])
-    assert not result.exception
+    assert not result.exception, result.output
     result = runner.invoke(cli, ['sign', 'vpn.example.lan'])
-    assert not result.exception
+    assert not result.exception, result.output
     result = runner.invoke(cli, ["request", "--no-wait"])
-    assert not result.exception
+    assert not result.exception, result.output
