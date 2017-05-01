@@ -1,7 +1,6 @@
 import subprocess
 import pwd
 from click.testing import CliRunner
-from certidude.cli import entry_point as cli
 from datetime import datetime, timedelta
 import pytest
 
@@ -70,6 +69,7 @@ def test_cli_setup_authority():
         if os.path.exists("/etc/openvpn/keys"):
             shutil.rmtree("/etc/openvpn/keys")
 
+    from certidude.cli import entry_point as cli
     from certidude import const
 
     result = runner.invoke(cli, ['setup', 'authority'])
