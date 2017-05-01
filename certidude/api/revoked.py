@@ -13,8 +13,6 @@ logger = logging.getLogger(__name__)
 
 class RevocationListResource(object):
     def on_get(self, req, resp):
-        logger.debug(u"Revocation list requested by %s", req.context.get("remote_addr"))
-
         # Primarily offer DER encoded CRL as per RFC5280
         # This is also what StrongSwan expects
         if req.client_accepts("application/x-pkcs7-crl"):
@@ -23,6 +21,7 @@ class RevocationListResource(object):
                 "Content-Disposition",
                 ("attachment; filename=%s.crl" % const.HOSTNAME).encode("ascii"))
             # Convert PEM to DER
+            logger.debug(u"Serving revocation list to %s in DER format", req.context.get("remote_addr"))
             resp.body = x509.load_pem_x509_crl(export_crl(),
                 default_backend()).public_bytes(Encoding.DER)
         elif req.client_accepts("application/x-pem-file"):
@@ -37,7 +36,9 @@ class RevocationListResource(object):
                 resp.append_header(
                     "Content-Disposition",
                     ("attachment; filename=%s-crl.pem" % const.HOSTNAME).encode("ascii"))
+                logger.debug(u"Serving revocation list to %s in PEM format", req.context.get("remote_addr"))
                 resp.body = export_crl()
         else:
+            logger.debug(u"Client %s asked revocation list in unsupported format" % req.context.get("remote_addr"))
             raise falcon.HTTPUnsupportedMediaType(
                 "Client did not accept application/x-pkcs7-crl or application/x-pem-file")
