@@ -120,7 +120,7 @@ def test_cli_setup_authority():
     r = client().simulate_get("/index.html")
     assert r.status_code == 200, r.text
     r = requests.get("http://ca.example.lan/index.html")
-    assert r.status_code == 200, r.text
+    assert r.status_code == 200, "server responded %s, logs say %s" % (r.text, open("/var/log/certidude.log").read())
 
 
     # Test request submission

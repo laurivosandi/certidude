@@ -154,7 +154,6 @@ class StaticResource(object):
 
         if os.path.isdir(path):
             path = os.path.join(path, "index.html")
-        click.echo("Serving: %s" % path)
 
         if os.path.exists(path):
             content_type, content_encoding = mimetypes.guess_type(path)
@@ -163,10 +162,11 @@ class StaticResource(object):
             if content_encoding:
                 resp.append_header("Content-Encoding", content_encoding)
             resp.stream = open(path, "rb")
+            logger.info("Serving '%s' from '%s'", req.path, path)
         else:
             resp.status = falcon.HTTP_404
             resp.body = "File '%s' not found" % req.path
-
+            logger.info("Faile '%s' not found, path resolved to '%s'", req.path, path)
 import ipaddress
 
 class NormalizeMiddleware(object):
