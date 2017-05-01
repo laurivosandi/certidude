@@ -11,9 +11,9 @@ install:
   - echo "127.0.0.1 localhost" | sudo tee /etc/hosts
   - echo "127.0.0.1 ca.example.lan ca" | sudo tee -a /etc/hosts
   - echo "127.0.0.1 vpn.koodur.lan" | sudo tee -a /etc/hosts
-  - pip install -r requirements.txt
-  - pip install codecov pytest-cov
-  - pip install --editable .
+  - sudo pip install -r requirements.txt
+  - sudo pip install codecov pytest-cov
+  - sudo pip install --editable .
 script:
   - sudo useradd adminbot -G sudo -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
   - sudo useradd userbot -G users -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
