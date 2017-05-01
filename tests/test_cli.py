@@ -92,7 +92,7 @@ def test_cli_setup_authority():
 
     # Check that we can retrieve empty CRL
     r = client().simulate_get("/api/revoked/")
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
 
 
     # Test command line interface
@@ -185,51 +185,51 @@ def test_cli_setup_authority():
 
     # Test signed certificate API call
     r = client().simulate_get("/api/signed/nonexistant/")
-    assert r.status_code == 404
+    assert r.status_code == 404, r.text
 
     r = client().simulate_get("/api/signed/test2/")
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     assert r.headers.get('content-type') == "application/x-pem-file"
 
     r = client().simulate_get("/api/signed/test2/", headers={"Accept":"application/json"})
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     assert r.headers.get('content-type') == "application/json"
 
     r = client().simulate_get("/api/signed/test2/", headers={"Accept":"text/plain"})
-    assert r.status_code == 415
+    assert r.status_code == 415, r.text
 
     # Test revocations API call
     r = client().simulate_get("/api/revoked/",
         headers={"Accept":"application/x-pem-file"})
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     assert r.headers.get('content-type') == "application/x-pem-file"
 
     r = requests.get("http://ca.example.lan/api/revoked/",
         headers={"Accept":"application/x-pem-file"})
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     assert r.headers.get('content-type') == "application/x-pem-file"
 
     r = client().simulate_get("/api/revoked/")
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     assert r.headers.get('content-type') == "application/x-pkcs7-crl"
 
     r = requests.get("http://ca.example.lan/api/revoked/")
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     assert r.headers.get('content-type') == "application/x-pkcs7-crl"
 
     r = client().simulate_get("/api/revoked/",
         headers={"Accept":"text/plain"})
-    assert r.status_code == 415
+    assert r.status_code == 415, r.text
 
     r = client().simulate_get("/api/revoked/", query_string="wait=true",
         headers={"Accept":"application/x-pem-file"})
-    assert r.status_code == 303
+    assert r.status_code == 303, r.text
 
     # Test attribute fetching API call
     r = client().simulate_get("/api/signed/test2/attr/")
-    assert r.status_code == 403
+    assert r.status_code == 403, r.text
     r = client().simulate_get("/api/signed/test2/lease/", headers={"Authorization":admintoken})
-    assert r.status_code == 404
+    assert r.status_code == 404, r.text
 
     # Insert lease as if VPN gateway had submitted it
     path, _, _ = authority.get_signed("test2")
@@ -237,92 +237,92 @@ def test_cli_setup_authority():
     setxattr(path, "user.lease.address", b"127.0.0.1")
     setxattr(path, "user.lease.last_seen", b"random")
     r = client().simulate_get("/api/signed/test2/attr/")
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
 
     # Test lease retrieval
     r = client().simulate_get("/api/signed/test2/lease/")
-    assert r.status_code == 401
+    assert r.status_code == 401, r.text
     r = client().simulate_get("/api/signed/test2/lease/", headers={"Authorization":usertoken})
-    assert r.status_code == 403
+    assert r.status_code == 403, r.text
     r = client().simulate_get("/api/signed/test2/lease/", headers={"Authorization":admintoken})
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     assert r.headers.get('content-type') == "application/json; charset=UTF-8"
 
 
     # Tags should not be visible anonymously
     r = client().simulate_get("/api/signed/test2/tag/")
-    assert r.status_code == 401
+    assert r.status_code == 401, r.text
     r = client().simulate_get("/api/signed/test2/tag/", headers={"Authorization":usertoken})
-    assert r.status_code == 403
+    assert r.status_code == 403, r.text
     r = client().simulate_get("/api/signed/test2/tag/", headers={"Authorization":admintoken})
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
 
     # Tags can be added only by admin
     r = client().simulate_post("/api/signed/test2/tag/")
-    assert r.status_code == 401
+    assert r.status_code == 401, r.text
     r = client().simulate_post("/api/signed/test2/tag/",
         headers={"Authorization":usertoken})
-    assert r.status_code == 403
+    assert r.status_code == 403, r.text
     r = client().simulate_post("/api/signed/test2/tag/",
         body="key=other&value=something",
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
 
     # Tags can be overwritten only by admin
     r = client().simulate_put("/api/signed/test2/tag/other/")
-    assert r.status_code == 401
+    assert r.status_code == 401, r.text
     r = client().simulate_put("/api/signed/test2/tag/other/",
         headers={"Authorization":usertoken})
-    assert r.status_code == 403
+    assert r.status_code == 403, r.text
     r = client().simulate_put("/api/signed/test2/tag/other/",
         body="value=else",
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
 
     # Tags can be deleted only by admin
     r = client().simulate_delete("/api/signed/test2/tag/else/")
-    assert r.status_code == 401
+    assert r.status_code == 401, r.text
     r = client().simulate_delete("/api/signed/test2/tag/else/",
         headers={"Authorization":usertoken})
-    assert r.status_code == 403
+    assert r.status_code == 403, r.text
     r = client().simulate_delete("/api/signed/test2/tag/else/",
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
 
 
     # Test revocation
     r = client().simulate_delete("/api/signed/test2/")
-    assert r.status_code == 401
+    assert r.status_code == 401, r.text
     r = client().simulate_delete("/api/signed/test2/",
         headers={"Authorization":usertoken})
-    assert r.status_code == 403
+    assert r.status_code == 403, r.text
     r = client().simulate_delete("/api/signed/test2/",
         headers={"Authorization":admintoken})
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     result = runner.invoke(cli, ['revoke', 'test3'])
     assert not result.exception, result.output
 
 
     # Test static
     r = client().simulate_delete("/nonexistant.html")
-    assert r.status_code == 404
+    assert r.status_code == 404, r.text
     r = client().simulate_delete("/index.html")
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
 
     # Log can be read only by admin
     r = client().simulate_get("/api/log/")
-    assert r.status_code == 401
+    assert r.status_code == 401, r.text
     r = client().simulate_get("/api/log/",
         headers={"Authorization":usertoken})
-    assert r.status_code == 403
+    assert r.status_code == 403, r.text
     r = client().simulate_get("/api/log/",
         headers={"Authorization":admintoken})
-    assert r.status_code == 200
+    assert r.status_code == 200, r.text
     assert r.headers.get('content-type') == "application/json; charset=UTF-8"
 
     # Test token mech
     r = client().simulate_post("/api/token/")
-    assert r.status_code == 404
+    assert r.status_code == 404, r.text
 
     config.BUNDLE_FORMAT = "ovpn"
     config.USER_ENROLLMENT_ALLOWED = True

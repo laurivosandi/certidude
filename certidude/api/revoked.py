@@ -41,7 +41,7 @@ class RevocationListResource(object):
                     resp.body = export_crl()
                 except:
                     logger.debug(u"Failed to export CRL, are you sure signer is running?")
-                    raise
+                    raise falcon.HTTPInternalServerError("Failed to export CRL")
         else:
             logger.debug(u"Client %s asked revocation list in unsupported format" % req.context.get("remote_addr"))
             raise falcon.HTTPUnsupportedMediaType(
