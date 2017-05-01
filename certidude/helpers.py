@@ -71,6 +71,7 @@ def certidude_request_certificate(server, system_keytab_required, key_path, requ
 
     # Fetch certificate revocation list
     r = requests.get(revoked_url, headers={'accept': 'application/x-pem-file'}, stream=True)
+    assert r.status_code == 200, "Failed to fetch CRL from %s, got %s" % (revoked_url, r.text)
     click.echo("Fetching CRL from %s to %s" % (revoked_url, revocations_path))
     revocations_partial = tempfile.mktemp(prefix=revocations_path + ".part")
     with open(revocations_partial, 'wb') as f:
