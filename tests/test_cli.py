@@ -221,7 +221,7 @@ def test_cli_setup_authority():
 
     r = requests.get("http://ca.example.lan/api/revoked/",
         headers={"Accept":"application/x-pem-file"})
-    assert r.status_code == 200, "Server responded with %s" % r.text
+    assert r.status_code == 200, "Server responded with %s, server logs say %s" % (r.text, open("/var/log/certidude.log").read())
     assert r.headers.get('content-type') == "application/x-pem-file"
 
     r = client().simulate_get("/api/revoked/")
