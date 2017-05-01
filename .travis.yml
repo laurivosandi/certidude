@@ -4,7 +4,7 @@ dist: trusty
 python:
   - "2.7"
 after_success:
-  - codecov
+  - sudo codecov
 virtualenv:
   system_site_packages: true
 install:
