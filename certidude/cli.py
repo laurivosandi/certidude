@@ -921,11 +921,11 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     else:
         click.echo("CA configuration files are saved to: {}".format(directory))
 
-        click.echo("Generating 4096-bit RSA key...")
+        click.echo("Generating %d-bit RSA key..." % const.KEY_SIZE)
 
         key = rsa.generate_private_key(
             public_exponent=65537,
-            key_size=4096,
+            key_size=const.KEY_SIZE,
             backend=default_backend()
         )
 
@@ -1145,7 +1145,7 @@ def certidude_cron():
             click.echo("Moved %s to %s" % (path, expired_path))
 
 @click.command("serve", help="Run server")
-@click.option("-p", "--port", default=8080 if os.getuid() else 80, help="Listen port")
+@click.option("-p", "--port", default=80, help="Listen port")
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 def certidude_serve(port, listen, fork):
@@ -1158,21 +1158,19 @@ def certidude_serve(port, listen, fork):
 
     from certidude import config
 
-    # Fetch UID, GID of certidude user
-    if os.getuid() == 0:
-        # Process directories
-        if not os.path.exists(const.RUN_DIR):
-            click.echo("Creating: %s" % const.RUN_DIR)
-            os.makedirs(const.RUN_DIR)
+    # Process directories
+    if not os.path.exists(const.RUN_DIR):
+        click.echo("Creating: %s" % const.RUN_DIR)
+        os.makedirs(const.RUN_DIR)
 
-        import pwd
-        _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
-        restricted_groups = []
-        restricted_groups.append(gid)
-        from logging.handlers import RotatingFileHandler
-        rh = RotatingFileHandler("/var/log/certidude.log", maxBytes=1048576*5, backupCount=5)
-        rh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-        log_handlers.append(rh)
+    import pwd
+    _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
+    restricted_groups = []
+    restricted_groups.append(gid)
+    from logging.handlers import RotatingFileHandler
+    rh = RotatingFileHandler("/var/log/certidude.log", maxBytes=1048576*5, backupCount=5)
+    rh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    log_handlers.append(rh)
 
 
     """

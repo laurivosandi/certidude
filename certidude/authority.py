@@ -204,11 +204,11 @@ def delete_request(common_name):
 
 def generate_ovpn_bundle(common_name, owner=None):
     # Construct private key
-    click.echo("Generating 4096-bit RSA key...")
+    click.echo("Generating %d-bit RSA key..." % const.KEY_SIZE)
 
     key = rsa.generate_private_key(
         public_exponent=65537,
-        key_size=4096,
+        key_size=const.KEY_SIZE,
         backend=default_backend()
     )
 
@@ -234,17 +234,17 @@ def generate_ovpn_bundle(common_name, owner=None):
         servers = list_server_names())
     return bundle, cert
 
-def generate_pkcs12_bundle(common_name, key_size=4096, owner=None):
+def generate_pkcs12_bundle(common_name, owner=None):
     """
     Generate private key, sign certificate and return PKCS#12 bundle
     """
 
     # Construct private key
-    click.echo("Generating %d-bit RSA key..." % key_size)
+    click.echo("Generating %d-bit RSA key..." % const.KEY_SIZE)
 
     key = rsa.generate_private_key(
         public_exponent=65537,
-        key_size=4096,
+        key_size=const.KEY_SIZE,
         backend=default_backend()
     )
 

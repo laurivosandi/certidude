@@ -4,6 +4,7 @@ import os
 import socket
 import sys
 
+KEY_SIZE = 1024 if os.getenv("TRAVIS") else 4096
 RUN_DIR = "/run/certidude"
 CONFIG_DIR = os.path.expanduser("~/.certidude") if os.getuid() else "/etc/certidude"
 CONFIG_PATH = os.path.join(CONFIG_DIR, "server.conf")

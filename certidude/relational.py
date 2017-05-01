@@ -16,24 +16,11 @@ class RelationalMixin(object):
 
     def __init__(self, uri):
         self.uri = urlparse(uri)
-        if self.SQL_CREATE_TABLES and self.SQL_CREATE_TABLES not in SCRIPTS:
-            conn = self.sql_connect()
-            cur = conn.cursor()
-            with open(self.sql_resolve_script(self.SQL_CREATE_TABLES)) as fh:
-                click.echo("Executing: %s" % fh.name)
-                if self.uri.scheme == "sqlite":
-                    cur.executescript(fh.read())
-                else:
-                    cur.execute(fh.read(), multi=True)
-            conn.commit()
-            cur.close()
-            conn.close()
-
 
     def sql_connect(self):
         if self.uri.scheme == "mysql":
             import mysql.connector
-            return mysql.connector.connect(
+            conn = mysql.connector.connect(
                 user=self.uri.username,
                 password=self.uri.password,
                 host=self.uri.hostname,
@@ -42,10 +29,21 @@ class RelationalMixin(object):
             if self.uri.netloc:
                 raise ValueError("Malformed database URI %s" % self.uri)
             import sqlite3
-            return sqlite3.connect(self.uri.path)
+            conn = sqlite3.connect(self.uri.path)
         else:
             raise NotImplementedError("Unsupported database scheme %s, currently only mysql://user:pass@host/database or sqlite:///path/to/database.sqlite is supported" % o.scheme)
 
+        if self.SQL_CREATE_TABLES and self.SQL_CREATE_TABLES not in SCRIPTS:
+            cur = conn.cursor()
+            buf, path = self.sql_load(self.SQL_CREATE_TABLES)
+            click.echo("Executing: %s" % path)
+            if self.uri.scheme == "sqlite":
+                cur.executescript(buf)
+            else:
+                cur.execute(buf, multi=True)
+            conn.commit()
+            cur.close()
+        return conn
 
     def sql_resolve_script(self, filename):
         return os.path.realpath(os.path.join(os.path.dirname(__file__),
@@ -59,16 +57,17 @@ class RelationalMixin(object):
         fh = open(self.sql_resolve_script(filename))
         click.echo("Caching SQL script: %s" % fh.name)
         buf = re.sub("\s*\n\s*", " ", fh.read())
-        SCRIPTS[filename] = buf
+        SCRIPTS[filename] = buf, fh.name
         fh.close()
-        return buf
+        return buf, fh.name
 
 
     def sql_execute(self, script, *args):
         conn = self.sql_connect()
         cursor = conn.cursor()
         click.echo("Executing %s with %s" % (script, args))
-        cursor.execute(self.sql_load(script), args)
+        buf, path = self.sql_load(script)
+        cursor.execute(buf, args)
         rowid = cursor.lastrowid
         conn.commit()
         cursor.close()

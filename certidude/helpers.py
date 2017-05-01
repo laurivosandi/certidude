@@ -134,10 +134,10 @@ def certidude_request_certificate(server, system_keytab_required, key_path, requ
     except EnvironmentError:
 
         # Construct private key
-        click.echo("Generating 4096-bit RSA key...")
+        click.echo("Generating %d-bit RSA key..." % const.KEY_SIZE)
         key = rsa.generate_private_key(
             public_exponent=65537,
-            key_size=4096,
+            key_size=const.KEY_SIZE,
             backend=default_backend()
         )
 

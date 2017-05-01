@@ -7,6 +7,8 @@ include certidude/templates/*.ini
 include certidude/templates/mail/*.md
 include certidude/templates/client/*.timer
 include certidude/templates/client/*.service
+include certidude/templates/server/*.service
+include certidude/templates/server/*.conf
 include certidude/static/js/*.js
 include certidude/static/css/*.css
 include certidude/static/fonts/*.woff2
