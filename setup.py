@@ -20,12 +20,7 @@ setup(
     # Include here only stuff required to run certidude client
     install_requires=[
         "click",
-        "cryptography",
-        "configparser",
-        "jinja2",
-        "pyasn1",
-        "requests",
-        "requests-kerberos"
+        "configparser"
     ],
     scripts=[
         "misc/certidude"

@@ -1,7 +1,2 @@
 click>=6.7
 configparser>=3.5.0
-cryptography>=1.7.1
-Jinja2>=2.8
-pyasn1>=0.1.9
-requests>=2.12.4
-requests-kerberos>=0.7.0

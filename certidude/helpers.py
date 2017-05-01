@@ -6,15 +6,7 @@ import tempfile
 from base64 import b64encode
 from datetime import datetime, timedelta
 from certidude import errors, const
-from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.serialization import Encoding
-from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID, AuthorityInformationAccessOID
 from configparser import ConfigParser
-from cryptography import x509
-from cryptography.hazmat.backends import default_backend
 
 def selinux_fixup(path):
     """
@@ -30,6 +22,12 @@ def certidude_request_certificate(server, system_keytab_required, key_path, requ
     Exchange CSR for certificate using Certidude HTTP API server
     """
     import requests
+    from cryptography import x509
+    from cryptography.hazmat.primitives.asymmetric import rsa, padding
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.serialization import Encoding
+    from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID, AuthorityInformationAccessOID
 
     # Create directories
     for path in key_path, request_path, certificate_path, authority_path, revocations_path:

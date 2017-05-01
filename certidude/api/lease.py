@@ -4,7 +4,6 @@ import falcon
 import logging
 import xattr
 from datetime import datetime
-from pyasn1.codec.der import decoder
 from certidude import config, authority, push
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize

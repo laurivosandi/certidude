@@ -1,18 +1,9 @@
-import os
-import requests
 import subprocess
 import pwd
-from falcon import testing
 from click.testing import CliRunner
 from certidude.cli import entry_point as cli
 from datetime import datetime, timedelta
-from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.backends import default_backend
-from cryptography.x509.oid import NameOID
 import pytest
-from xattr import setxattr
 
 # pkill py && rm -Rfv ~/.certidude && TRAVIS=1 py.test tests
 
@@ -21,9 +12,16 @@ runner = CliRunner()
 @pytest.fixture(scope='module')
 def client():
     from certidude.api import certidude_app
-    return testing.TestClient(certidude_app())
+    from falcon import testing
+    app = certidude_app()
+    return testing.TestClient(app)
 
 def generate_csr(cn=None):
+    from cryptography import x509
+    from cryptography.hazmat.primitives.asymmetric import rsa, padding
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.x509.oid import NameOID
     key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=1024,
@@ -36,17 +34,50 @@ def generate_csr(cn=None):
     return buf
 
 def test_cli_setup_authority():
+    import shutil
+    import os
+    if os.path.exists("/run/certidude/signer.pid"):
+        with open("/run/certidude/signer.pid") as fh:
+            try:
+                os.kill(int(fh.read()), 15)
+            except OSError:
+                pass
+        os.unlink("/run/certidude/signer.pid")
+    if os.path.exists("/run/certidude/server.pid"):
+        with open("/run/certidude/server.pid") as fh:
+            try:
+                os.kill(int(fh.read()), 15)
+            except OSError:
+                pass
+        os.unlink("/run/certidude/server.pid")
+
+    if os.path.exists("/var/lib/certidude/ca.example.lan"):
+        shutil.rmtree("/var/lib/certidude/ca.example.lan")
+    if os.path.exists("/etc/certidude/server.conf"):
+        os.unlink("/etc/certidude/server.conf")
+    if os.path.exists("/etc/certidude/client.conf"):
+        os.unlink("/etc/certidude/client.conf")
+
+    # Remove OpenVPN stuff
+    for filename in os.listdir("/etc/openvpn"):
+        if filename.endswith(".conf"):
+            os.unlink(os.path.join("/etc/openvpn", filename))
+    if os.path.exists("/etc/openvpn/keys"):
+        shutil.rmtree("/etc/openvpn/keys")
+
+    from certidude import const
+
     result = runner.invoke(cli, ['setup', 'authority'])
     assert not result.exception
 
-    from certidude import const, config, authority
+    from certidude import config, authority
     assert authority.ca_cert.serial_number >= 0x100000000000000000000000000000000000000
     assert authority.ca_cert.serial_number <= 0xfffffffffffffffffffffffffffffffffffffff
     assert authority.ca_cert.not_valid_before < datetime.now()
     assert authority.ca_cert.not_valid_after > datetime.now() + timedelta(days=7000)
 
     # Start server before any signing operations are performed
-    result = runner.invoke(cli, ['serve', '-f', '-p', '8080'])
+    result = runner.invoke(cli, ['serve', '-f'])
     assert not result.exception
 
     # Password is bot, users created by Travis
@@ -186,6 +217,7 @@ def test_cli_setup_authority():
 
     # Insert lease as if VPN gateway had submitted it
     path, _, _ = authority.get_signed("test2")
+    from xattr import setxattr
     setxattr(path, "user.lease.address", b"127.0.0.1")
     setxattr(path, "user.lease.last_seen", b"random")
     r = client().simulate_get("/api/signed/test2/attr/")
@@ -303,3 +335,25 @@ def test_cli_setup_authority():
     r2 = client().simulate_get("/api/token/", query_string=r.content)
     assert r2.status_code == 200 # token consumed by anyone on unknown device
     assert r2.headers.get('content-type') == "application/x-pkcs12"
+
+
+    result = runner.invoke(cli, ['setup', 'openvpn', 'server', "-cn", "vpn.example.lan", "ca.example.lan"])
+    assert not result.exception
+
+    result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "roadwarrior1", "ca.example.lan", "vpn.example.lan"])
+    assert not result.exception
+
+    import os
+    if not os.path.exists("/etc/openvpn/keys"):
+        os.makedirs("/etc/openvpn/keys")
+
+    with open("/etc/certidude/client.conf", "a") as fh:
+        fh.write("insecure = true\n")
+
+    # pregen dhparam
+    result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception
+    result = runner.invoke(cli, ['sign', 'vpn.example.lan'])
+    assert not result.exception
+    result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception

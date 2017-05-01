@@ -16,18 +16,10 @@ import sys
 from configparser import ConfigParser, NoOptionError, NoSectionError
 from certidude.helpers import certidude_request_certificate
 from certidude.common import expand_paths, ip_address, ip_network, apt, rpm, pip
-from cryptography import x509
-from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives import hashes, serialization
-from cryptography.hazmat.primitives.asymmetric import rsa
 from datetime import datetime, timedelta
-from jinja2 import Environment, PackageLoader
 import const
 
 logger = logging.getLogger(__name__)
-env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
 
 # http://www.mad-hacking.net/documentation/linux/security/ssl-tls/creating-ca.xml
 # https://kjur.github.io/jsrsasign/
@@ -41,8 +33,13 @@ NOW = datetime.utcnow().replace(tzinfo=None)
 @click.command("request", help="Run processes for requesting certificates and configuring services")
 @click.option("-r", "--renew", default=False, is_flag=True, help="Renew now")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
-def certidude_request(fork, renew):
+@click.option("-nw", "--no-wait", default=False, is_flag=True, help="Return immideately if server doesn't autosign")
+def certidude_request(fork, renew, no_wait):
+    rpm("openssl")
+    apt("openssl")
     import requests
+    from jinja2 import Environment, PackageLoader
+    env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
 
     if not os.path.exists(const.CLIENT_CONFIG_PATH):
         click.echo("No %s!" % const.CLIENT_CONFIG_PATH)
@@ -59,12 +56,10 @@ def certidude_request(fork, renew):
     service_config.readfp(open(const.SERVICES_CONFIG_PATH))
 
     # Process directories
-    run_dir = "/run/certidude"
+    if not os.path.exists(const.RUN_DIR):
+        click.echo("Creating: %s" % const.RUN_DIR)
+        os.makedirs(const.RUN_DIR)
 
-    # Prepare signer PID-s directory
-    if not os.path.exists(run_dir):
-        click.echo("Creating: %s" % run_dir)
-        os.makedirs(run_dir)
     context = globals()
     context.update(locals())
 
@@ -82,7 +77,7 @@ def certidude_request(fork, renew):
         try:
             endpoint_dhparam = clients.get(authority, "dhparam path")
             if not os.path.exists(endpoint_dhparam):
-                cmd = "openssl", "dhparam", "-out", endpoint_dhparam, "2048"
+                cmd = "openssl", "dhparam", "-out", endpoint_dhparam, ("512" if os.getenv("TRAVIS") else "2048")
                 subprocess.check_call(cmd)
         except NoOptionError:
             pass
@@ -125,7 +120,7 @@ def certidude_request(fork, renew):
         elif clients.get(authority, "trigger") != "interface up":
             continue
 
-        pid_path = os.path.join(run_dir, authority + ".pid")
+        pid_path = os.path.join(const.RUN_DIR, authority + ".pid")
 
         try:
             with open(pid_path) as fh:
@@ -163,7 +158,7 @@ def certidude_request(fork, renew):
                     endpoint_common_name,
                     insecure=endpoint_insecure,
                     autosign=True,
-                    wait=True,
+                    wait=not no_wait,
                     renew=renew)
                 break
             except requests.exceptions.Timeout:
@@ -337,6 +332,7 @@ def certidude_request(fork, renew):
 
 @click.command("server", help="Set up OpenVPN server")
 @click.argument("authority")
+@click.option("--common-name", "-cn", default=const.FQDN, help="Common name, %s by default" % const.FQDN)
 @click.option("--subnet", "-s", default="192.168.33.0/24", type=ip_network, help="OpenVPN subnet, 192.168.33.0/24 by default")
 @click.option("--local", "-l", default="0.0.0.0", help="OpenVPN listening address, defaults to all interfaces")
 @click.option("--port", "-p", default=1194, type=click.IntRange(1,60000), help="OpenVPN listening port, 1194 by default")
@@ -346,7 +342,7 @@ def certidude_request(fork, renew):
     default="/etc/openvpn/site-to-client.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
-def certidude_setup_openvpn_server(authority, config, subnet, route, local, proto, port):
+def certidude_setup_openvpn_server(authority, common_name, config, subnet, route, local, proto, port):
     # Install dependencies
     apt("openvpn")
     rpm("openvpn")
@@ -358,11 +354,13 @@ def certidude_setup_openvpn_server(authority, config, subnet, route, local, prot
     if client_config.has_section(authority):
         click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
     else:
+        client_config.add_section(authority)
         client_config.set(authority, "trigger", "interface up")
-        client_config.set(authority, "common name", const.HOSTNAME)
-        client_config.set(authority, "request path", "/etc/openvpn/keys/%s.csr" % const.HOSTNAME)
-        client_config.set(authority, "key path", "/etc/openvpn/keys/%s.key" % const.HOSTNAME)
-        client_config.set(authority, "certificate path", "/etc/openvpn/keys/%s.crt" % const.HOSTNAME)
+        client_config.set(authority, "common name", common_name)
+        slug = common_name.replace(".", "-")
+        client_config.set(authority, "request path", "/etc/openvpn/keys/%s.csr" % slug)
+        client_config.set(authority, "key path", "/etc/openvpn/keys/%s.key" % slug)
+        client_config.set(authority, "certificate path", "/etc/openvpn/keys/%s.crt" % slug)
         client_config.set(authority, "authority path",  "/etc/openvpn/keys/ca.crt")
         client_config.set(authority, "revocations path",  "/etc/openvpn/keys/ca.crl")
         client_config.set(authority, "dhparam path", "/etc/openvpn/keys/dhparam.pem")
@@ -373,7 +371,7 @@ def certidude_setup_openvpn_server(authority, config, subnet, route, local, prot
 
 
     # Create corresponding section in /etc/certidude/services.conf
-    endpoint = "OpenVPN server %s of %s" % (const.FQDN, authority)
+    endpoint = "OpenVPN server %s of %s" % (common_name, authority)
     service_config = ConfigParser()
     if os.path.exists(const.SERVICES_CONFIG_PATH):
         service_config.readfp(open(const.SERVICES_CONFIG_PATH))
@@ -487,12 +485,13 @@ def certidude_setup_nginx(authority, site_config, tls_config, common_name, direc
 @click.command("client", help="Set up OpenVPN client")
 @click.argument("authority")
 @click.argument("remote")
+@click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
 @click.option('--proto', "-t", default="udp", type=click.Choice(['udp', 'tcp']), help="OpenVPN transport protocol, UDP by default")
 @click.option("--config", "-o",
     default="/etc/openvpn/client-to-site.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
-def certidude_setup_openvpn_client(authority, remote, config, proto):
+def certidude_setup_openvpn_client(authority, remote, common_name, config, proto):
     # Install dependencies
     apt("openvpn")
     rpm("openvpn")
@@ -506,10 +505,10 @@ def certidude_setup_openvpn_client(authority, remote, config, proto):
     else:
         client_config.add_section(authority)
         client_config.set(authority, "trigger", "interface up")
-        client_config.set(authority, "common name", const.HOSTNAME)
-        client_config.set(authority, "request path", "/etc/openvpn/keys/%s.csr" % const.HOSTNAME)
-        client_config.set(authority, "key path", "/etc/openvpn/keys/%s.key" % const.HOSTNAME)
-        client_config.set(authority, "certificate path", "/etc/openvpn/keys/%s.crt" % const.HOSTNAME)
+        client_config.set(authority, "common name", common_name)
+        client_config.set(authority, "request path", "/etc/openvpn/keys/%s.csr" % const.common_name)
+        client_config.set(authority, "key path", "/etc/openvpn/keys/%s.key" % common_name)
+        client_config.set(authority, "certificate path", "/etc/openvpn/keys/%s.crt" % common_name)
         client_config.set(authority, "authority path",  "/etc/openvpn/keys/ca.crt")
         client_config.set(authority, "revocations path",  "/etc/openvpn/keys/ca.crl")
         with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
@@ -549,8 +548,8 @@ def certidude_setup_openvpn_client(authority, remote, config, proto):
     config.write("group nogroup\n")
     config.write("persist-tun\n")
     config.write("persist-key\n")
-    config.write("up /etc/openvpn/update-resolv-conf")
-    config.write("down /etc/openvpn/update-resolv-conf")
+    config.write("up /etc/openvpn/update-resolv-conf\n")
+    config.write("down /etc/openvpn/update-resolv-conf\n")
 
     click.echo("Generated %s" % config.name)
     click.echo("Inspect generated files and issue following to request certificate:")
@@ -791,10 +790,21 @@ def certidude_setup_openvpn_networkmanager(authority, remote):
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
 def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags):
-    # Install dependencies
-    apt("python-setproctitle python-openssl python-falcon python-humanize python-markdown python-xattr")
-    rpm("python-setproctitle pyOpenSSL python-falcon python-humanize python-markdown pyxattr")
-    pip("gssapi")
+    if "." not in common_name:
+	raise ValueError("No FQDN configured on this system!")
+    # Install only rarely changing stuff from OS package management
+    apt("python-setproctitle cython python-dev libkrb5-dev libldap2-dev libffi-dev libssl-dev")
+    apt("python-mimeparse python-markdown python-xattr python-jinja2 python-cffi python-openssl")
+    pip("gssapi falcon cryptography humanize ipaddress simplepam humanize requests")
+
+    from cryptography import x509
+    from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
+    from cryptography.hazmat.backends import default_backend
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    from jinja2 import Environment, PackageLoader
+    env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
 
     # Generate secret for tokens
     token_secret = ''.join(random.choice(string.letters + string.digits + '!@#$%^&*()') for i in range(50))
@@ -961,16 +971,21 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
 
         click.echo("Signing %s..." % cert.subject)
 
-        # Create authority directory with 750 permissions
+        # Create directories with 770 permissions
         os.umask(0o027)
         if not os.path.exists(directory):
             os.makedirs(directory)
 
         # Create subdirectories with 770 permissions
         os.umask(0o007)
-        for subdir in ("signed", "requests", "revoked", "expired"):
+        for subdir in ("signed", "requests", "revoked", "expired", "meta"):
             if not os.path.exists(os.path.join(directory, subdir)):
                 os.mkdir(os.path.join(directory, subdir))
+
+        # Create SQLite database file with correct permissions
+        os.umask(0o117)
+        with open(os.path.join(directory, "meta", "db.sqlite"), "wb") as fh:
+            pass
 
         # Set permission bits to 640
         os.umask(0o137)
@@ -1138,6 +1153,11 @@ def certidude_serve(port, listen, fork):
 
     # Fetch UID, GID of certidude user
     if os.getuid() == 0:
+        # Process directories
+        if not os.path.exists(const.RUN_DIR):
+            click.echo("Creating: %s" % const.RUN_DIR)
+            os.makedirs(const.RUN_DIR)
+
         import pwd
         _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
         restricted_groups = []
@@ -1211,7 +1231,6 @@ def certidude_serve(port, listen, fork):
     click.echo("Listening on %s:%d" % (listen, port))
 
     app = certidude_app(log_handlers)
-
     httpd = make_server(listen, port, app, ThreadingWSGIServer)
 
 
@@ -1219,28 +1238,17 @@ def certidude_serve(port, listen, fork):
     Drop privileges
     """
 
-    if os.getuid() == 0:
 
-        # Initialize LDAP service ticket
-        if os.path.exists("/etc/cron.hourly/certidude"):
-            os.system("/etc/cron.hourly/certidude")
+    # Initialize LDAP service ticket
+    if os.path.exists("/etc/cron.hourly/certidude"):
+        os.system("/etc/cron.hourly/certidude")
 
-        # Drop privileges
-        if config.AUTHENTICATION_BACKENDS == {"pam"}:
-            # PAM needs access to /etc/shadow
-            import grp
-            name, passwd, num, mem = grp.getgrnam("shadow")
-            click.echo("Adding current user to shadow group due to PAM authentication backend")
-            restricted_groups.append(num)
-
-        os.setgroups(restricted_groups)
-        os.setgid(gid)
-        os.setuid(uid)
-
-        click.echo("Switched to user %s (uid=%d, gid=%d); member of groups %s" %
-            ("certidude", os.getuid(), os.getgid(), ", ".join([str(j) for j in os.getgroups()])))
-
-        os.umask(0o007)
+    # PAM needs access to /etc/shadow
+    if config.AUTHENTICATION_BACKENDS == {"pam"}:
+        import grp
+        name, passwd, num, mem = grp.getgrnam("shadow")
+        click.echo("Adding current user to shadow group due to PAM authentication backend")
+        restricted_groups.append(num)
 
     if config.EVENT_SOURCE_PUBLISH:
         from certidude.push import EventSourceLogHandler
@@ -1254,13 +1262,28 @@ def certidude_serve(port, listen, fork):
                     j.addHandler(handler)
 
 
-    def exit_handler():
-        logger.debug("Shutting down Certidude")
-    import atexit
-    atexit.register(exit_handler)
-    logger.debug("Started Certidude at %s", const.FQDN)
-
     if not fork or not os.fork():
+        pid = os.getpid()
+        with open(const.SERVER_PID_PATH, "w") as pidfile:
+            pidfile.write("%d\n" % pid)
+
+        def exit_handler():
+            logger.debug("Shutting down Certidude")
+        import atexit
+        atexit.register(exit_handler)
+        logger.debug("Started Certidude at %s", const.FQDN)
+
+
+        # Drop privileges
+        os.setgroups(restricted_groups)
+        os.setgid(gid)
+        os.setuid(uid)
+
+        click.echo("Switched to user %s (uid=%d, gid=%d); member of groups %s" %
+            ("certidude", os.getuid(), os.getgid(), ", ".join([str(j) for j in os.getgroups()])))
+
+        os.umask(0o007)
+
         httpd.serve_forever()
 
 

@@ -1,13 +1,14 @@
 
 import os
 import click
-import ipaddress
 import subprocess
 
 def ip_network(j):
+    import ipaddress
     return ipaddress.ip_network(unicode(j))
 
 def ip_address(j):
+    import ipaddress
     return ipaddress.ip_address(unicode(j))
 
 def expand_paths():
