@@ -59,11 +59,12 @@ def test_cli_setup_authority():
         os.unlink("/etc/certidude/client.conf")
 
     # Remove OpenVPN stuff
-    for filename in os.listdir("/etc/openvpn"):
-        if filename.endswith(".conf"):
-            os.unlink(os.path.join("/etc/openvpn", filename))
-    if os.path.exists("/etc/openvpn/keys"):
-        shutil.rmtree("/etc/openvpn/keys")
+    if os.path.exists("/etc/openvpn"):
+        for filename in os.listdir("/etc/openvpn"):
+            if filename.endswith(".conf"):
+                os.unlink(os.path.join("/etc/openvpn", filename))
+        if os.path.exists("/etc/openvpn/keys"):
+            shutil.rmtree("/etc/openvpn/keys")
 
     from certidude import const
 
