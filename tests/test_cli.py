@@ -41,14 +41,12 @@ def test_cli_setup_authority():
                 os.kill(int(fh.read()), 15)
             except OSError:
                 pass
-        os.unlink("/run/certidude/signer.pid")
     if os.path.exists("/run/certidude/server.pid"):
         with open("/run/certidude/server.pid") as fh:
             try:
                 os.kill(int(fh.read()), 15)
             except OSError:
                 pass
-        os.unlink("/run/certidude/server.pid")
 
     if os.path.exists("/var/lib/certidude/ca.example.lan"):
         shutil.rmtree("/var/lib/certidude/ca.example.lan")
@@ -56,6 +54,8 @@ def test_cli_setup_authority():
         os.unlink("/etc/certidude/server.conf")
     if os.path.exists("/etc/certidude/client.conf"):
         os.unlink("/etc/certidude/client.conf")
+    if os.path.exists("/run/certidude"):
+        shutil.rmtree("/run/certidude")
 
     # Remove OpenVPN stuff
     if os.path.exists("/etc/openvpn"):

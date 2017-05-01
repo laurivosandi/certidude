@@ -1162,6 +1162,9 @@ def certidude_serve(port, listen, fork):
     if not os.path.exists(const.RUN_DIR):
         click.echo("Creating: %s" % const.RUN_DIR)
         os.makedirs(const.RUN_DIR)
+        os.chmod(const.RUN_DIR, 0755)
+
+    # TODO: umask!
 
     import pwd
     _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
