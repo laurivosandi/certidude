@@ -110,6 +110,15 @@ def test_cli_setup_authority():
     assert r.status_code == 200
     assert r.headers.get('content-type') == "application/x-x509-ca-cert"
 
+    # Test static
+    r = client().simulate_get("/nonexistant.html")
+    assert r.status_code == 404, r.text
+    r = client().simulate_get("/index.html")
+    assert r.status_code == 200, r.text
+    r = requests.get("/index.html")
+    assert r.status_code == 200, r.text
+
+
     # Test request submission
     buf = generate_csr(cn=u"test")
 
@@ -208,7 +217,7 @@ def test_cli_setup_authority():
 
     r = requests.get("http://ca.example.lan/api/revoked/",
         headers={"Accept":"application/x-pem-file"})
-    assert r.status_code == 200, r.text
+    assert r.status_code == 200, "Server responded with %s" % r.text
     assert r.headers.get('content-type') == "application/x-pem-file"
 
     r = client().simulate_get("/api/revoked/")
@@ -304,12 +313,6 @@ def test_cli_setup_authority():
     result = runner.invoke(cli, ['revoke', 'test3'])
     assert not result.exception, result.output
 
-
-    # Test static
-    r = client().simulate_delete("/nonexistant.html")
-    assert r.status_code == 404, r.text
-    r = client().simulate_delete("/index.html")
-    assert r.status_code == 200, r.text
 
     # Log can be read only by admin
     r = client().simulate_get("/api/log/")
