@@ -792,11 +792,13 @@ def certidude_setup_openvpn_networkmanager(authority, remote):
 def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags):
     if "." not in common_name:
 	raise ValueError("No FQDN configured on this system!")
+    click.echo("Using fully qualified hostname: %s" % common_name)
+
     # Install only rarely changing stuff from OS package management
     apt("python-setproctitle cython python-dev libkrb5-dev libldap2-dev libffi-dev libssl-dev")
     apt("python-mimeparse python-markdown python-xattr python-jinja2 python-cffi python-openssl")
     pip("gssapi falcon cryptography humanize ipaddress simplepam humanize requests")
-
+    click.echo("Software dependencies installed")
     from cryptography import x509
     from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
     from cryptography.hazmat.backends import default_backend
@@ -810,16 +812,20 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     token_secret = ''.join(random.choice(string.letters + string.digits + '!@#$%^&*()') for i in range(50))
 
     template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates")
+    click.echo("Using templates from %s" % template_path)
 
     if not directory:
         if os.getuid():
-            directory = os.path.join(os.path.expanduser("~/.certidude"), const.FQDN)
+            directory = os.path.join(os.path.expanduser("~/.certidude"), common_name)
         else:
-            directory = os.path.join("/var/lib/certidude", const.FQDN)
+            directory = os.path.join("/var/lib/certidude", common_name)
+    click.echo("Placing authority files in %s" % directory)
 
-    click.echo("Using fully qualified hostname: %s" % common_name)
     certificate_url = "http://%s/api/certificate/" % common_name
+    click.echo("Setting CA certificate URL to %s" % certificate_url)
+
     revoked_url = "http://%s/api/revoked/" % common_name
+    click.echo("Setting revocation list URL to %s" % revoked_url)
 
     # Expand variables
     ca_key = os.path.join(directory, "ca_key.pem")
