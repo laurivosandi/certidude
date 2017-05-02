@@ -78,6 +78,7 @@ def test_cli_setup_authority():
     assert authority.ca_cert.not_valid_after > datetime.now() + timedelta(days=7000)
 
     # Start server before any signing operations are performed
+    config.CERTIFICATE_RENEWAL_ALLOWED = True
     result = runner.invoke(cli, ['serve', '-f', '-p', '80', '-l', '127.0.1.1'])
     assert not result.exception, result.output
 
@@ -381,4 +382,6 @@ def test_cli_setup_authority():
     result = runner.invoke(cli, ['sign', 'vpn.example.lan'])
     assert not result.exception, result.output
     result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception, result.output
+    result = runner.invoke(cli, ["request", "--renew"])
     assert not result.exception, result.output
