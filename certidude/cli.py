@@ -15,8 +15,9 @@ import subprocess
 import sys
 from configparser import ConfigParser, NoOptionError, NoSectionError
 from certidude.helpers import certidude_request_certificate
-from certidude.common import expand_paths, ip_address, ip_network, apt, rpm, pip
+from certidude.common import expand_paths, ip_address, ip_network, apt, rpm, pip, drop_privileges
 from datetime import datetime, timedelta
+from time import sleep
 import const
 
 logger = logging.getLogger(__name__)
@@ -815,10 +816,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     click.echo("Using templates from %s" % template_path)
 
     if not directory:
-        if os.getuid():
-            directory = os.path.join(os.path.expanduser("~/.certidude"), common_name)
-        else:
-            directory = os.path.join("/var/lib/certidude", common_name)
+        directory = os.path.join("/var/lib/certidude", common_name)
     click.echo("Placing authority files in %s" % directory)
 
     certificate_url = "http://%s/api/certificate/" % common_name
@@ -831,77 +829,74 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     ca_key = os.path.join(directory, "ca_key.pem")
     ca_crt = os.path.join(directory, "ca_crt.pem")
 
-    if os.getuid() == 0:
-        try:
-            pwd.getpwnam("certidude")
-            click.echo("User 'certidude' already exists")
-        except KeyError:
-            cmd = "adduser", "--system", "--no-create-home", "--group", "certidude"
-            if subprocess.call(cmd):
-                click.echo("Failed to create system user 'certidude'")
-                return 255
+    try:
+        pwd.getpwnam("certidude")
+        click.echo("User 'certidude' already exists")
+    except KeyError:
+        cmd = "adduser", "--system", "--no-create-home", "--group", "certidude"
+        if subprocess.call(cmd):
+            click.echo("Failed to create system user 'certidude'")
+            return 255
 
-        if os.path.exists(kerberos_keytab):
-            click.echo("Service principal keytab found in '%s'" % kerberos_keytab)
-        else:
-            click.echo("To use 'kerberos' authentication backend join the domain and create service principal with:")
-            click.echo()
-            click.echo("  KRB5_KTNAME=FILE:%s net ads keytab add HTTP -P" % kerberos_keytab)
-            click.echo("  chown %s %s" % (username, kerberos_keytab))
-            click.echo()
-
-        if os.path.exists("/etc/krb5.keytab") and os.path.exists("/etc/samba/smb.conf"):
-            # Fetch Kerberos ticket for system account
-            cp = ConfigParser()
-            cp.read("/etc/samba/smb.conf")
-            realm = cp.get("global", "realm")
-            domain = realm.lower()
-            name = cp.get("global", "netbios name")
-
-            base = ",".join(["dc=" + j for j in domain.split(".")])
-            if not os.path.exists("/etc/cron.hourly/certidude"):
-                with open("/etc/cron.hourly/certidude", "w") as fh:
-                    fh.write(env.get_template("server/cronjob").render(vars()))
-                os.chmod("/etc/cron.hourly/certidude", 0o755)
-                click.echo("Created /etc/cron.hourly/certidude for automatic LDAP service ticket renewal, inspect and adjust accordingly")
-            os.system("/etc/cron.hourly/certidude")
-        else:
-            click.echo("Warning: /etc/krb5.keytab or /etc/samba/smb.conf not found, Kerberos unconfigured")
-
-        static_path = os.path.join(os.path.realpath(os.path.dirname(__file__)), "static")
-        certidude_path = sys.argv[0]
-
-        # Push server config generation
-        if not os.path.exists("/etc/nginx") or os.getenv("TRAVIS"):
-            click.echo("Directory /etc/nginx does not exist, hence not creating nginx configuration")
-            listen = "0.0.0.0"
-            port = "80"
-        else:
-            port = "8080"
-            click.echo("Generating: %s" % nginx_config.name)
-            nginx_config.write(env.get_template("server/nginx.conf").render(vars()))
-            if not os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
-                os.symlink("../sites-available/certidude.conf", "/etc/nginx/sites-enabled/certidude.conf")
-                click.echo("Symlinked %s -> /etc/nginx/sites-enabled/" % nginx_config.name)
-            if os.path.exists("/etc/nginx/sites-enabled/default"):
-                os.unlink("/etc/nginx/sites-enabled/default")
-            if not push_server:
-                click.echo("Remember to install nchan capable nginx instead of regular nginx!")
-
-        if os.path.exists("/etc/systemd"):
-            if os.path.exists("/etc/systemd/system/certidude.service"):
-                click.echo("File /etc/systemd/system/certidude.service already exists, remove to regenerate")
-            else:
-                with open("/etc/systemd/system/certidude.service", "w") as fh:
-                    fh.write(env.get_template("server/systemd.service").render(vars()))
-                click.echo("File /etc/systemd/system/certidude.service created")
-        else:
-            click.echo("Not systemd based OS, don't know how to set up initscripts")
-
-        _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
-        os.setgid(gid)
+    if os.path.exists(kerberos_keytab):
+        click.echo("Service principal keytab found in '%s'" % kerberos_keytab)
     else:
-        click.echo("Not root, skipping user and system config creation")
+        click.echo("To use 'kerberos' authentication backend join the domain and create service principal with:")
+        click.echo()
+        click.echo("  KRB5_KTNAME=FILE:%s net ads keytab add HTTP -P" % kerberos_keytab)
+        click.echo("  chown %s %s" % (username, kerberos_keytab))
+        click.echo()
+
+    if os.path.exists("/etc/krb5.keytab") and os.path.exists("/etc/samba/smb.conf"):
+        # Fetch Kerberos ticket for system account
+        cp = ConfigParser()
+        cp.read("/etc/samba/smb.conf")
+        realm = cp.get("global", "realm")
+        domain = realm.lower()
+        name = cp.get("global", "netbios name")
+
+        base = ",".join(["dc=" + j for j in domain.split(".")])
+        if not os.path.exists("/etc/cron.hourly/certidude"):
+            with open("/etc/cron.hourly/certidude", "w") as fh:
+                fh.write(env.get_template("server/cronjob").render(vars()))
+            os.chmod("/etc/cron.hourly/certidude", 0o755)
+            click.echo("Created /etc/cron.hourly/certidude for automatic LDAP service ticket renewal, inspect and adjust accordingly")
+        os.system("/etc/cron.hourly/certidude")
+    else:
+        click.echo("Warning: /etc/krb5.keytab or /etc/samba/smb.conf not found, Kerberos unconfigured")
+
+    static_path = os.path.join(os.path.realpath(os.path.dirname(__file__)), "static")
+    certidude_path = sys.argv[0]
+
+    # Push server config generation
+    if not os.path.exists("/etc/nginx") or os.getenv("TRAVIS"):
+        click.echo("Directory /etc/nginx does not exist, hence not creating nginx configuration")
+        listen = "0.0.0.0"
+        port = "80"
+    else:
+        port = "8080"
+        click.echo("Generating: %s" % nginx_config.name)
+        nginx_config.write(env.get_template("server/nginx.conf").render(vars()))
+        if not os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
+            os.symlink("../sites-available/certidude.conf", "/etc/nginx/sites-enabled/certidude.conf")
+            click.echo("Symlinked %s -> /etc/nginx/sites-enabled/" % nginx_config.name)
+        if os.path.exists("/etc/nginx/sites-enabled/default"):
+            os.unlink("/etc/nginx/sites-enabled/default")
+        if not push_server:
+            click.echo("Remember to install nchan capable nginx instead of regular nginx!")
+
+    if os.path.exists("/etc/systemd"):
+        if os.path.exists("/etc/systemd/system/certidude.service"):
+            click.echo("File /etc/systemd/system/certidude.service already exists, remove to regenerate")
+        else:
+            with open("/etc/systemd/system/certidude.service", "w") as fh:
+                fh.write(env.get_template("server/systemd.service").render(vars()))
+            click.echo("File /etc/systemd/system/certidude.service created")
+    else:
+        click.echo("Not systemd based OS, don't know how to set up initscripts")
+
+    _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
+    os.setgid(gid)
 
     if not os.path.exists(const.CONFIG_DIR):
         click.echo("Creating %s" % const.CONFIG_DIR)
@@ -1121,6 +1116,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
 @click.argument("common_name")
 @click.option("--overwrite", "-o", default=False, is_flag=True, help="Revoke valid certificate with same CN")
 def certidude_sign(common_name, overwrite):
+    drop_privileges()
     from certidude import authority
     cert = authority.sign(common_name, overwrite)
 
@@ -1128,6 +1124,7 @@ def certidude_sign(common_name, overwrite):
 @click.command("revoke", help="Revoke certificate")
 @click.argument("common_name")
 def certidude_revoke(common_name):
+    drop_privileges()
     from certidude import authority
     authority.revoke(common_name)
 
@@ -1144,6 +1141,7 @@ def certidude_cron():
             os.rename(path, expired_path)
             click.echo("Moved %s to %s" % (path, expired_path))
 
+
 @click.command("serve", help="Run server")
 @click.option("-p", "--port", default=80, help="Listen port")
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
@@ -1151,8 +1149,9 @@ def certidude_cron():
 def certidude_serve(port, listen, fork):
     from setproctitle import setproctitle
     from certidude.signer import SignServer
-    from certidude import const
+    from certidude import authority, const
     click.echo("Using configuration from: %s" % const.CONFIG_PATH)
+
 
     log_handlers = []
 
@@ -1166,10 +1165,7 @@ def certidude_serve(port, listen, fork):
 
     # TODO: umask!
 
-    import pwd
-    _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
-    restricted_groups = []
-    restricted_groups.append(gid)
+
     from logging.handlers import RotatingFileHandler
     rh = RotatingFileHandler("/var/log/certidude.log", maxBytes=1048576*5, backupCount=5)
     rh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
@@ -1180,11 +1176,10 @@ def certidude_serve(port, listen, fork):
     Spawn signer process
     """
 
-    child_pid = os.fork()
+    if os.path.exists(const.SIGNER_SOCKET_PATH):
+        os.unlink(const.SIGNER_SOCKET_PATH)
 
-    if child_pid:
-        pass
-    else:
+    if not os.fork():
         click.echo("Signer process spawned with PID %d at %s" % (os.getpid(), const.SIGNER_SOCKET_PATH))
         setproctitle("[signer]")
 
@@ -1199,21 +1194,30 @@ def certidude_serve(port, listen, fork):
         server = SignServer()
 
         # Drop privileges
-        if not os.getuid():
-            os.chown(const.SIGNER_SOCKET_PATH, uid, gid)
-            os.chmod(const.SIGNER_SOCKET_PATH, 0770)
+        _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
+        os.chown(const.SIGNER_SOCKET_PATH, uid, gid)
+        os.chmod(const.SIGNER_SOCKET_PATH, 0770)
 
-            click.echo("Dropping privileges of signer")
-            _, _, uid, gid, gecos, root, shell = pwd.getpwnam("nobody")
-            os.setgroups([])
-            os.setgid(gid)
-            os.setuid(uid)
-        else:
-            click.echo("Not dropping privileges of signer process")
+        click.echo("Dropping privileges of signer")
+        _, _, uid, gid, gecos, root, shell = pwd.getpwnam("nobody")
+        os.setgroups([])
+        os.setgid(gid)
+        os.setuid(uid)
 
-        asyncore.loop()
+        try:
+            asyncore.loop()
+        except asyncore.ExitNow:
+            pass
+        click.echo("Signer was shut down")
         return
-
+    click.echo("Waiting for signer to start up")
+    time_left = 2.0
+    delay = 0.1
+    while not os.path.exists(const.SIGNER_SOCKET_PATH) and time_left > 0:
+        sleep(delay)
+        time_left -= delay
+    assert authority.signer_exec("ping") == "pong"
+    click.echo("Signer alive")
 
     click.echo("Users subnets: %s" %
         ", ".join([str(j) for j in config.USER_SUBNETS]))
@@ -1230,7 +1234,7 @@ def certidude_serve(port, listen, fork):
 
     click.echo("Serving API at %s:%d" % (listen, port))
     from wsgiref.simple_server import make_server, WSGIServer
-    from SocketServer import ThreadingMixIn, ForkingMixIn
+    from SocketServer import ForkingMixIn
     from certidude.api import certidude_app
 
     class ThreadingWSGIServer(ForkingMixIn, WSGIServer):
@@ -1250,13 +1254,6 @@ def certidude_serve(port, listen, fork):
     # Initialize LDAP service ticket
     if os.path.exists("/etc/cron.hourly/certidude"):
         os.system("/etc/cron.hourly/certidude")
-
-    # PAM needs access to /etc/shadow
-    if config.AUTHENTICATION_BACKENDS == {"pam"}:
-        import grp
-        name, passwd, num, mem = grp.getgrnam("shadow")
-        click.echo("Adding current user to shadow group due to PAM authentication backend")
-        restricted_groups.append(num)
 
     if config.EVENT_SOURCE_PUBLISH:
         from certidude.push import EventSourceLogHandler
@@ -1281,17 +1278,13 @@ def certidude_serve(port, listen, fork):
         atexit.register(exit_handler)
         logger.debug("Started Certidude at %s", const.FQDN)
 
+        drop_privileges()
 
-        # Drop privileges
-        os.setgroups(restricted_groups)
-        os.setgid(gid)
-        os.setuid(uid)
-
-        click.echo("Switched to user %s (uid=%d, gid=%d); member of groups %s" %
-            ("certidude", os.getuid(), os.getgid(), ", ".join([str(j) for j in os.getgroups()])))
-
-        os.umask(0o007)
-
+        def quit_handler(*args, **kwargs):
+            click.echo("Shutting down HTTP server...")
+            import threading
+            threading.Thread(target=httpd.shutdown).start()
+        signal.signal(signal.SIGHUP, quit_handler)
         httpd.serve_forever()
 
 

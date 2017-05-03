@@ -3,6 +3,27 @@ import os
 import click
 import subprocess
 
+def drop_privileges():
+    from certidude import config
+    import pwd
+    _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
+    restricted_groups = []
+    restricted_groups.append(gid)
+
+    # PAM needs access to /etc/shadow
+    if config.AUTHENTICATION_BACKENDS == {"pam"}:
+        import grp
+        name, passwd, num, mem = grp.getgrnam("shadow")
+        click.echo("Adding current user to shadow group due to PAM authentication backend")
+        restricted_groups.append(num)
+
+    os.setgroups(restricted_groups)
+    os.setgid(gid)
+    os.setuid(uid)
+    click.echo("Switched to user %s (uid=%d, gid=%d); member of groups %s" %
+        ("certidude", os.getuid(), os.getgid(), ", ".join([str(j) for j in os.getgroups()])))
+    os.umask(0o007)
+
 def ip_network(j):
     import ipaddress
     return ipaddress.ip_network(unicode(j))

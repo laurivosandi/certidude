@@ -353,7 +353,17 @@ To install the package from the source:
 
 .. code:: bash
 
-    python setup.py  install --single-version-externally-managed --root /
+    pip install -e .
+
+To run tests and measure code coverage grab a clean VM or container:
+
+.. code:: bash
+
+    pip install codecov pytest-cov
+    rm .coverage*
+    TRAVIS=1 coverage run --parallel-mode --source certidude -m py.test tests
+    coverage combine
+    coverage report
 
 To uninstall:
 

@@ -20,7 +20,10 @@ script:
   - sudo useradd adminbot -G sudo -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
   - sudo useradd userbot -G users -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
   - sudo adduser --system --no-create-home --group certidude
-  - sudo py.test -s -v --cov-report xml --cov=certidude tests/
+  - sudo coverage run --parallel-mode --source certidude -m py.test tests
+  - sudo coverage combine
+  - sudo coverage report
+  - sudo coverage xml
 cache:
   directories:
     - $HOME/.cache/pip

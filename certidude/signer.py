@@ -55,8 +55,14 @@ class SignHandler(asynchat.async_chat):
 
             self.send(crl.public_bytes(Encoding.PEM))
 
-        elif cmd == "ocsp-request":
-            NotImplemented # TODO: Implement OCSP
+        elif cmd == "ping":
+            self.send("pong")
+            self.close()
+
+        elif cmd == "exit":
+            self.send("ok")
+            self.close()
+            raise asyncore.ExitNow()
 
         elif cmd == "sign-request":
             # Only common name and public key are used from request

@@ -17,18 +17,6 @@ from certidude import const, config
 
 logger = logging.getLogger(__name__)
 
-class CertificateStatusResource(object):
-    """
-    openssl ocsp -issuer CAcert_class1.pem -serial 0x<serial no in hex> -url http://localhost -CAfile cacert_both.pem
-    """
-    def on_post(self, req, resp):
-        ocsp_request = req.stream.read(req.content_length)
-        for component in decoder.decode(ocsp_request):
-            click.echo(component)
-        resp.append_header("Content-Type", "application/ocsp-response")
-        resp.status = falcon.HTTP_200
-        raise NotImplementedError()
-
 
 class CertificateAuthorityResource(object):
     def on_get(self, req, resp):
@@ -195,7 +183,6 @@ def certidude_app(log_handlers=[]):
     app.req_options.auto_parse_form_urlencoded = True
 
     # Certificate authority API calls
-    app.add_route("/api/ocsp/", CertificateStatusResource())
     app.add_route("/api/certificate/", CertificateAuthorityResource())
     app.add_route("/api/revoked/", RevocationListResource())
     app.add_route("/api/signed/{cn}/", SignedCertificateDetailResource())

@@ -96,7 +96,7 @@ def signer_exec(cmd, *bits):
     sock.sendall(b"\n\n")
     buf = sock.recv(8192)
     if not buf:
-        raise
+        raise Exception("Connection lost")
     return buf
 
 
