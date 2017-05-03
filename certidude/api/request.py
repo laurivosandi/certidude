@@ -119,7 +119,7 @@ class RequestListResource(object):
                             logger.info("Autosigned %s as %s is whitelisted", common_name.value, req.context.get("remote_addr"))
                             return
                         except EnvironmentError:
-                            logger.info("Autosign for %s failed, signed certificate already exists",
+                            logger.info("Autosign for %s from %s failed, signed certificate already exists",
                                 common_name.value, req.context.get("remote_addr"))
                             reason = "Autosign failed, signed certificate already exists"
                         break

@@ -6,6 +6,9 @@ import pytest
 import shutil
 import os
 
+UA_FEDORA_FIREFOX = "Mozilla/5.0 (X11; Fedora; Linux x86_64) " \
+    "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36"
+
 smtp=None
 inbox=[]
 
@@ -186,8 +189,27 @@ def test_cli_setup_authority():
 
     r = client().simulate_post("/api/request/", body=buf)
     assert r.status_code == 415 # wrong content type
-    assert not inbox
 
+    r = client().simulate_post("/api/request/",
+        body=buf,
+        headers={"content-type":"application/pkcs10"})
+    assert r.status_code == 202 # success
+    assert "Stored request " in inbox.pop(), inbox
+
+    # Test request deletion
+    r = client().simulate_delete("/api/request/test/")
+    assert r.status_code == 401, r.text
+    r = client().simulate_delete("/api/request/test/",
+        headers={"Authorization":usertoken})
+    assert r.status_code == 403, r.text
+    r = client().simulate_delete("/api/request/test/",
+        headers={"User-Agent":UA_FEDORA_FIREFOX, "Authorization":admintoken})
+    assert r.status_code == 403, r.text # CSRF prevented
+    r = client().simulate_delete("/api/request/test/",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 200, r.text
+
+    # Test request submission corner cases
     r = client().simulate_post("/api/request/",
         body=buf,
         headers={"content-type":"application/pkcs10"})
@@ -227,6 +249,25 @@ def test_cli_setup_authority():
     r = client().simulate_get("/api/request/nonexistant/", headers={"Accept":"application/json"})
     assert r.status_code == 404 # nonexistant common names
 
+    # TODO: submit messed up CSR-s: no CN, empty CN etc
+
+    # Test command line interface
+    result = runner.invoke(cli, ['list', '-srv'])
+    assert not result.exception, result.output
+
+    # Test sign API call
+    r = client().simulate_patch("/api/request/test/")
+    assert r.status_code == 401, r.text
+    r = client().simulate_patch("/api/request/test/",
+        headers={"Authorization":usertoken})
+    assert r.status_code == 403, r.text
+    r = client().simulate_patch("/api/request/test/",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 201, r.text
+    assert "Signed " in inbox.pop(), inbox
+
+    # Test autosign
+    buf = generate_csr(cn=u"test2")
     r = client().simulate_post("/api/request/",
         query_string="autosign=1",
         body=buf,
@@ -234,22 +275,23 @@ def test_cli_setup_authority():
     assert r.status_code == 200 # autosign successful
     assert r.headers.get('content-type') == "application/x-pem-file"
     assert "Signed " in inbox.pop(), inbox
+    assert not inbox
 
-    # TODO: submit messed up CSR-s: no CN, empty CN etc
+    r = client().simulate_post("/api/request/",
+        query_string="autosign=1",
+        body=buf,
+        headers={"content-type":"application/pkcs10"})
+    assert r.status_code == 303 # already signed, redirect to signed certificate
+    assert not inbox
 
-    # Test command line interface
-    result = runner.invoke(cli, ['list', '-srv'])
-    assert not result.exception, result.output
-
-    # Some commands have side effects (setuid, setgid etc)
-    child_pid = os.fork()
-    if not child_pid:
-        result = runner.invoke(cli, ['sign', 'test', '-o'])
-        assert not result.exception, result.output
-        return
-    else:
-        os.waitpid(child_pid, 0)
-        assert not inbox # forked processes don't reach the mailbox
+    buf = generate_csr(cn=u"test2")
+    r = client().simulate_post("/api/request/",
+        query_string="autosign=1",
+        body=buf,
+        headers={"content-type":"application/pkcs10"})
+    assert r.status_code == 202 # duplicate CN, request stored
+    assert "Stored request " in inbox.pop(), inbox
+    assert not inbox
 
     # Test session API call
     r = client().simulate_get("/api/", headers={"Authorization":usertoken})
@@ -257,6 +299,9 @@ def test_cli_setup_authority():
 
     r = client().simulate_get("/api/", headers={"Authorization":admintoken})
     assert r.status_code == 200
+
+    r = client().simulate_get("/api/", headers={"Accept":"text/plain", "Authorization":admintoken})
+    assert r.status_code == 415 # invalid media type
 
     r = client().simulate_get("/api/")
     assert r.status_code == 401
@@ -408,8 +453,7 @@ def test_cli_setup_authority():
     assert r2.status_code == 403 # invalid checksum
     r2 = client().simulate_get("/api/token/",
         query_string=r.content,
-        headers={"User-Agent":"Mozilla/5.0 (X11; Fedora; Linux x86_64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36"})
+        headers={"User-Agent":UA_FEDORA_FIREFOX})
     assert r2.status_code == 200 # token consumed by anyone on Fedora
     assert r2.headers.get('content-type') == "application/x-openvpn"
     assert "Signed " in inbox.pop(), inbox

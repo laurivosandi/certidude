@@ -198,9 +198,10 @@ def delete_request(common_name):
     push.publish("request-deleted", common_name)
 
     # Write empty certificate to long-polling URL
-    requests.delete(
-        config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest(),
-        headers={"User-Agent": "Certidude API"})
+    if config.LONG_POLL_PUBLISH:
+        requests.delete(
+            config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest(),
+            headers={"User-Agent": "Certidude API"})
 
 def generate_ovpn_bundle(common_name, owner=None):
     # Construct private key
