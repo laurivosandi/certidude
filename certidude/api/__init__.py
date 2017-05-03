@@ -11,7 +11,7 @@ from time import sleep
 from certidude import authority, mailer
 from certidude.auth import login_required, authorize_admin
 from certidude.user import User
-from certidude.decorators import serialize, event_source, csrf_protection
+from certidude.decorators import serialize, csrf_protection
 from cryptography.x509.oid import NameOID
 from certidude import const, config
 
@@ -31,7 +31,6 @@ class SessionResource(object):
     @csrf_protection
     @serialize
     @login_required
-    @event_source
     def on_get(self, req, resp):
         import xattr
 

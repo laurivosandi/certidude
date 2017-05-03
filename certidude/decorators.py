@@ -40,16 +40,6 @@ def csrf_protection(func):
     return wrapped
 
 
-def event_source(func):
-    import falcon
-    def wrapped(self, req, resp, *args, **kwargs):
-        if req.get_header("Accept") == "text/event-stream":
-            resp.status = falcon.HTTP_SEE_OTHER
-            resp.location = req.context.get("ca").push_server + "/ev/" + req.context.get("ca").uuid
-            resp.body = "Redirecting to:" + resp.location
-        return func(self, req, resp, *args, **kwargs)
-    return wrapped
-
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
         from certidude.auth import User
