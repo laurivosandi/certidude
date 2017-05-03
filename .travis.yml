@@ -11,7 +11,7 @@ install:
   - echo "127.0.0.1 localhost" | sudo tee /etc/hosts
   - echo "127.0.1.1 ca.example.lan ca" | sudo tee -a /etc/hosts
   - echo "127.0.0.1 vpn.koodur.lan" | sudo tee -a /etc/hosts
-  - sudo mkdir -p /etc/systemd/system
+  - sudo mkdir -p /etc/systemd/system /etc/NetworkManager/system-connections
   - sudo pip install -r requirements.txt
   - sudo pip install codecov pytest-cov
   - sudo pip install -e .
