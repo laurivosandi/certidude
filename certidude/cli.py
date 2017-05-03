@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 NOW = datetime.utcnow().replace(tzinfo=None)
 
-def setup_client(prefix="client_"):
+def setup_client(prefix="client_", dh=False):
     # Create section in /etc/certidude/client.conf
     def wrapper(func):
         def wrapped(**arguments):
@@ -39,6 +39,14 @@ def setup_client(prefix="client_"):
             common_name = arguments.get("common_name")
             authority = arguments.get("authority")
             b = os.path.join(const.STORAGE_PATH, authority)
+            if dh:
+                path = os.path.join(const.STORAGE_PATH, "dh.pem")
+                if not os.path.exists(path):
+                    rpm("openssl")
+                    apt("openssl")
+                    cmd = "openssl", "dhparam", "-out", path, ("1024" if os.getenv("TRAVIS") else "2048")
+                    subprocess.check_call(cmd)
+                arguments["dhparam_path"] = path
 
             # Create corresponding section in Certidude client configuration file
             client_config = ConfigParser()
@@ -62,24 +70,11 @@ def setup_client(prefix="client_"):
 
             for j in ("key", "request", "certificate", "authority", "revocations"):
                 arguments["%s_path" % j] = client_config.get(authority, "%s path" % j)
+
             return func(**arguments)
         return wrapped
     return wrapper
 
-
-def generate_dhparam(path):
-    # Prevent logjam etc for OpenVPN and nginx server
-    def wrapper(func):
-        def wrapped(**arguments):
-            if not os.path.exists(path):
-                rpm("openssl")
-                apt("openssl")
-                cmd = "openssl", "dhparam", "-out", path, ("1024" if os.getenv("TRAVIS") else "2048")
-                subprocess.check_call(cmd)
-            arguments["dhparam_path"] = path
-            return func(**arguments)
-        return wrapped
-    return wrapper
 
 @click.command("request", help="Run processes for requesting certificates and configuring services")
 @click.option("-r", "--renew", default=False, is_flag=True, help="Renew now")
@@ -388,8 +383,7 @@ def certidude_request(fork, renew, no_wait):
     default="/etc/openvpn/site-to-client.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
-@generate_dhparam("/etc/openvpn/dh.pem")
-@setup_client(prefix="server_")
+@setup_client(prefix="server_", dh=True)
 def certidude_setup_openvpn_server(authority, common_name, config, subnet, route, local, proto, port, **paths):
     # Install dependencies
     apt("openvpn")
@@ -449,8 +443,7 @@ def certidude_setup_openvpn_server(authority, common_name, config, subnet, route
     type=click.File(mode="w", atomic=True, lazy=True),
     help="Site configuration file of nginx, /etc/nginx/sites-available/%s.conf by default" % const.HOSTNAME)
 @click.option("--verify-client", "-vc", default="optional", type=click.Choice(['optional', 'on', 'off']))
-@generate_dhparam("/etc/nginx/ssl/dh.pem")
-@setup_client(prefix="server_")
+@setup_client(prefix="server_", dh=True)
 def certidude_setup_nginx(authority, common_name, site_config, tls_config, verify_client, **paths):
     apt("nginx")
     rpm("nginx")
