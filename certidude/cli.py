@@ -206,9 +206,9 @@ def certidude_request(fork, renew, no_wait):
                     if config[section_type,section_name]["leftcert"] != endpoint_certificate_path:
                         continue
 
-                    if config[section_type,section_name]["left"] == "%defaultroute":
+                    if config[section_type,section_name].get("left", "") == "%defaultroute":
                         config[section_type,section_name]["auto"] = "start" # This is client
-                    elif config[section_type,section_name]["leftsourceip"]:
+                    elif config[section_type,section_name].get("leftsourceip", ""):
                         config[section_type,section_name]["auto"] = "add" # This is server
                     else:
                         config[section_type,section_name]["auto"] = "route" # This is site-to-site tunnel
@@ -616,7 +616,8 @@ def certidude_setup_strongswan_server(authority, common_name, subnet, route):
 @click.command("client", help="Set up strongSwan client")
 @click.argument("authority")
 @click.argument("remote")
-def certidude_setup_strongswan_client(authority, remote):
+@click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
+def certidude_setup_strongswan_client(authority, remote, common_name):
     # Install dependencies
     apt("strongswan")
     rpm("strongswan")
@@ -631,10 +632,10 @@ def certidude_setup_strongswan_client(authority, remote):
     else:
         client_config.add_section(authority)
         client_config.set(authority, "trigger", "interface up")
-        client_config.set(authority, "common name", const.HOSTNAME)
-        client_config.set(authority, "request path", "%s/ipsec.d/reqs/%s.pem" % (const.STRONGSWAN_PREFIX, const.HOSTNAME))
-        client_config.set(authority, "key path", "%s/ipsec.d/private/%s.pem" % (const.STRONGSWAN_PREFIX, const.HOSTNAME))
-        client_config.set(authority, "certificate path", "%s/ipsec.d/certs/%s.pem" % (const.STRONGSWAN_PREFIX, const.HOSTNAME))
+        client_config.set(authority, "common name", common_name)
+        client_config.set(authority, "request path", "%s/ipsec.d/reqs/%s.pem" % (const.STRONGSWAN_PREFIX, common_name))
+        client_config.set(authority, "key path", "%s/ipsec.d/private/%s.pem" % (const.STRONGSWAN_PREFIX, common_name))
+        client_config.set(authority, "certificate path", "%s/ipsec.d/certs/%s.pem" % (const.STRONGSWAN_PREFIX, common_name))
         client_config.set(authority, "authority path", "%s/ipsec.d/cacerts/ca.pem" % const.STRONGSWAN_PREFIX)
         client_config.set(authority, "revocations path", "%s/ipsec.d/crls/ca.pem" % const.STRONGSWAN_PREFIX)
         with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
@@ -687,7 +688,8 @@ def certidude_setup_strongswan_client(authority, remote):
 @click.command("networkmanager", help="Set up strongSwan client via NetworkManager")
 @click.argument("authority") # Certidude server
 @click.argument("remote") # StrongSwan gateway
-def certidude_setup_strongswan_networkmanager(authority, remote):
+@click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
+def certidude_setup_strongswan_networkmanager(authority, remote, common_name):
     # Install dependencies
     apt("strongswan-nm")
     rpm("NetworkManager-strongswan-gnome")
@@ -703,10 +705,10 @@ def certidude_setup_strongswan_networkmanager(authority, remote):
     else:
         client_config.add_section(authority)
         client_config.set(authority, "trigger", "interface up")
-        client_config.set(authority, "common name", const.HOSTNAME)
-        client_config.set(authority, "request path", "/etc/ipsec.d/reqs/%s.pem" % const.HOSTNAME)
-        client_config.set(authority, "key path", "/etc/ipsec.d/private/%s.pem" % const.HOSTNAME)
-        client_config.set(authority, "certificate path", "/etc/ipsec.d/certs/%s.pem" % const.HOSTNAME)
+        client_config.set(authority, "common name", common_name)
+        client_config.set(authority, "request path", "/etc/ipsec.d/reqs/%s.pem" % common_name)
+        client_config.set(authority, "key path", "/etc/ipsec.d/private/%s.pem" % common_name)
+        client_config.set(authority, "certificate path", "/etc/ipsec.d/certs/%s.pem" % common_name)
         client_config.set(authority, "authority path",  "/etc/ipsec.d/cacerts/ca.pem")
         client_config.set(authority, "revocations path",  "/etc/ipsec.d/crls/ca.pem")
         with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
@@ -735,20 +737,20 @@ def certidude_setup_strongswan_networkmanager(authority, remote):
 @click.argument("authority")
 @click.argument("remote") # OpenVPN gateway
 @click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
-def certidude_setup_openvpn_networkmanager(authority, remote):
+def certidude_setup_openvpn_networkmanager(authority, remote, common_name):
     # Create corresponding section in /etc/certidude/client.conf
     client_config = ConfigParser()
     if os.path.exists(const.CLIENT_CONFIG_PATH):
         client_config.readfp(open(const.CLIENT_CONFIG_PATH))
-    if client_config.has_section(server):
+    if client_config.has_section(authority):
         click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
     else:
         client_config.add_section(authority)
         client_config.set(authority, "trigger", "interface up")
-        client_config.set(authority, "common name", const.HOSTNAME)
-        client_config.set(authority, "request path", "/etc/ipsec.d/reqs/%s.pem" % const.HOSTNAME)
-        client_config.set(authority, "key path", "/etc/ipsec.d/private/%s.pem" % const.HOSTNAME)
-        client_config.set(authority, "certificate path", "/etc/ipsec.d/certs/%s.pem" % const.HOSTNAME)
+        client_config.set(authority, "common name", common_name)
+        client_config.set(authority, "request path", "/etc/ipsec.d/reqs/%s.pem" % common_name)
+        client_config.set(authority, "key path", "/etc/ipsec.d/private/%s.pem" % common_name)
+        client_config.set(authority, "certificate path", "/etc/ipsec.d/certs/%s.pem" % common_name)
         client_config.set(authority, "authority path",  "/etc/ipsec.d/cacerts/ca.pem")
         client_config.set(authority, "revocations path",  "/etc/ipsec.d/crls/ca.pem")
         with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
