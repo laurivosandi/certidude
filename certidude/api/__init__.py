@@ -154,7 +154,7 @@ class StaticResource(object):
         else:
             resp.status = falcon.HTTP_404
             resp.body = "File '%s' not found" % req.path
-            logger.info("Faile '%s' not found, path resolved to '%s'", req.path, path)
+            logger.info("Fail '%s' not found, path resolved to '%s'", req.path, path)
 import ipaddress
 
 class NormalizeMiddleware(object):

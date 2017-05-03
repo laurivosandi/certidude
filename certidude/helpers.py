@@ -16,12 +16,12 @@ def selinux_fixup(path):
     cmd = "chcon", "--type=home_cert_t", path
     subprocess.call(cmd)
 
-def certidude_request_certificate(server, system_keytab_required, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, autosign=False, wait=False, bundle=False, renew=False, insecure=False):
+def certidude_request_certificate(server, system_keytab_required, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, renewal_overlap, autosign=False, wait=False, bundle=False, renew=False, insecure=False):
     """
     Exchange CSR for certificate using Certidude HTTP API server
     """
     import requests
-    from certidude import errors, const
+    from certidude import errors, const, config
     from cryptography import x509
     from cryptography.hazmat.primitives.asymmetric import rsa, padding
     from cryptography.hazmat.backends import default_backend
@@ -178,14 +178,15 @@ def certidude_request_certificate(server, system_keytab_required, key_path, requ
         cert_buf = open(certificate_path).read()
         cert = x509.load_pem_x509_certificate(cert_buf, default_backend())
         lifetime = (cert.not_valid_after - cert.not_valid_before)
-        overlap = lifetime / 4 # TODO: Make overlap configurable
-        if datetime.now() > cert.not_valid_after - overlap:
-            click.echo("Certificate expired %s" % cert.not_valid_after)
+        if renewal_overlap and datetime.now() > cert.not_valid_after - timedelta(days=renewal_overlap):
+            click.echo("Certificate will expire %s, will attempt to renew" % cert.not_valid_after)
             renew = True
         else:
             click.echo("Found valid certificate: %s" % certificate_path)
             if not renew: # Don't do anything if renewal wasn't requested explicitly
                 return
+    else:
+        cert = None
 
     # If machine is joined to domain attempt to present machine credentials for authentication
     if system_keytab_required:
@@ -211,7 +212,7 @@ def certidude_request_certificate(server, system_keytab_required, key_path, requ
         "Accept": "application/x-x509-user-cert,application/x-pem-file"
     }
 
-    if renew:
+    if renew and cert:
         signer = key.signer(
             padding.PSS(
                 mgf=padding.MGF1(hashes.SHA512()),
@@ -233,7 +234,7 @@ def certidude_request_certificate(server, system_keytab_required, key_path, requ
     if submission.status_code == requests.codes.ok:
         pass
     if submission.status_code == requests.codes.accepted:
-        # Server stored the request for processing (202 Accepted), but waiting was not requested, hence quitting for now
+        click.echo("Server accepted the request, but refused to sign immideately (%s). Waiting was not requested, hence quitting for now" % submission.text) 
         return
     if submission.status_code == requests.codes.conflict:
         raise errors.DuplicateCommonNameError("Different signing request with same CN is already present on server, server refuses to overwrite")

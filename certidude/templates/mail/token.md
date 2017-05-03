@@ -1,7 +1,11 @@
 Token for {{ user.name }}
 
+{% if issuer == user %}
+Token has been issued for {{ user }} for retrieving profile from link below.
+{% else %}
 {{ issuer }} has provided {{ user }} a token for retrieving
 profile from the link below.
+{% endif %}
 
 {% if config.BUNDLE_FORMAT == "ovpn" %}
 To set up OpenVPN for your device:

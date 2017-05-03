@@ -55,6 +55,21 @@ def generate_csr(cn=None):
         ).public_bytes(serialization.Encoding.PEM)
     return buf
 
+
+def clean_client():
+    assert os.getuid() == 0 and os.getgid() == 0
+    if os.path.exists("/etc/certidude/client.conf"):
+        os.unlink("/etc/certidude/client.conf")
+    if os.path.exists("/etc/certidude/services.conf"):
+        os.unlink("/etc/certidude/services.conf")
+
+    # Remove client storage area
+    if os.path.exists("/tmp/ca.example.lan"):
+        for filename in os.listdir("/tmp/ca.example.lan"):
+            if filename.endswith(".pem"):
+                os.unlink(os.path.join("/tmp/ca.example.lan", filename))
+
+
 def test_cli_setup_authority():
     import os
     import sys
@@ -78,12 +93,18 @@ def test_cli_setup_authority():
         shutil.rmtree("/var/lib/certidude/ca.example.lan")
     if os.path.exists("/etc/certidude/server.conf"):
         os.unlink("/etc/certidude/server.conf")
-    if os.path.exists("/etc/certidude/client.conf"):
-        os.unlink("/etc/certidude/client.conf")
     if os.path.exists("/run/certidude"):
         shutil.rmtree("/run/certidude")
     if os.path.exists("/var/log/certidude.log"):
         os.unlink("/var/log/certidude.log")
+
+    # Remove nginx stuff
+    if os.path.exists("/etc/nginx/sites-available/ca.conf"):
+        os.unlink("/etc/nginx/sites-available/ca.conf")
+    if os.path.exists("/etc/nginx/sites-enabled/ca.conf"):
+        os.unlink("/etc/nginx/sites-enabled/ca.conf")
+    if os.path.exists("/etc/nginx/conf.d/tls.conf"):
+        os.unlink("/etc/nginx/conf.d/tls.conf")
 
     with open("/etc/ipsec.conf", "w") as fh: # TODO: make compatible with Fedora
         pass
@@ -95,6 +116,8 @@ def test_cli_setup_authority():
                 os.unlink(os.path.join("/etc/openvpn", filename))
         if os.path.exists("/etc/openvpn/keys"):
             shutil.rmtree("/etc/openvpn/keys")
+
+    clean_client()
 
     from certidude.cli import entry_point as cli
     from certidude import const
@@ -397,34 +420,62 @@ def test_cli_setup_authority():
     assert r2.headers.get('content-type') == "application/x-pkcs12"
     assert "Signed " in inbox.pop(), inbox
 
-    result = runner.invoke(cli, ['setup', 'openvpn', 'server', "-cn", "vpn.example.lan", "ca.example.lan"])
-    assert not result.exception, result.output
+    # Beyond this point don't use client()
+    const.STORAGE_PATH = "/tmp/"
 
-    result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "roadwarrior1", "ca.example.lan", "vpn.example.lan"])
-    assert not result.exception, result.output
+    #############
+    ### nginx ###
+    #############
+    clean_client()
 
-    result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
-    assert not result.exception, result.output
-
-    result = runner.invoke(cli, ['setup', 'strongswan', 'client', "-cn", "roadwarrior2", "ca.example.lan", "ipsec.example.lan"])
-    assert not result.exception, result.output
-
-    result = runner.invoke(cli, ['setup', 'openvpn', 'networkmanager', "-cn", "roadwarrior3", "ca.example.lan", "vpn.example.lan"])
-    assert not result.exception, result.output
-
-    result = runner.invoke(cli, ['setup', 'strongswan', 'networkmanager', "-cn", "roadwarrior4", "ca.example.lan", "ipsec.example.lan"])
+    result = runner.invoke(cli, ["setup", "nginx", "-cn", "www.example.lan", "ca.example.lan"])
     assert not result.exception, result.output
 
     import os
-    if not os.path.exists("/etc/openvpn/keys"):
-        os.makedirs("/etc/openvpn/keys")
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")
 
-    # pregen dhparam
     result = runner.invoke(cli, ["request", "--no-wait"])
-    assert not result.exception, "server responded %s, server logs say %s"  % (result.output, open("/var/log/certidude.log").read())
+    assert not result.exception, result.output
+
+    child_pid = os.fork()
+    if not child_pid:
+        result = runner.invoke(cli, ['sign', 'www.example.lan'])
+        assert not result.exception, result.output
+        return
+    else:
+        os.waitpid(child_pid, 0)
+
+    result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception, result.output
+    assert "Writing certificate to:" in result.output, result.output
+
+    result = runner.invoke(cli, ["request", "--renew", "--no-wait"])
+    assert not result.exception, result.output
+    assert "Writing certificate to:" in result.output, result.output
+
+    # Test nginx setup
+    assert os.system("nginx -t") == 0, "Generated nginx config was invalid"
+
+
+    ###############
+    ### OpenVPN ###
+    ###############
+
+    clean_client()
+
+    if not os.path.exists("/etc/openvpn/keys"):
+        os.makedirs("/etc/openvpn/keys")
+
+    result = runner.invoke(cli, ['setup', 'openvpn', 'server', "-cn", "vpn.example.lan", "ca.example.lan"])
+    assert not result.exception, result.output
+
+    with open("/etc/certidude/client.conf", "a") as fh:
+        fh.write("insecure = true\n")
+
+    result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception, result.output
 
     child_pid = os.fork()
     if not child_pid:
@@ -436,13 +487,87 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
-    result = runner.invoke(cli, ["request", "--renew"])
+    assert "Writing certificate to:" in result.output, result.output
+    assert os.path.exists("/tmp/ca.example.lan/server_cert.pem")
+
+    # Reset config
+    os.unlink("/etc/certidude/client.conf")
+    os.unlink("/etc/certidude/services.conf")
+
+    result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "roadwarrior1", "ca.example.lan", "vpn.example.lan"])
     assert not result.exception, result.output
+
+    with open("/etc/certidude/client.conf", "a") as fh:
+        fh.write("insecure = true\n")
+
+    result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception, result.output
+    assert "Writing certificate to:" in result.output, result.output
+
+    # TODO: test client verification with curl
+
+    ###############
+    ### IPSec ###
+    ###############
+
+    clean_client()
+
+    result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
+    assert not result.exception, result.output
+
+    with open("/etc/certidude/client.conf", "a") as fh:
+        fh.write("insecure = true\n")
+
+    result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception, result.output
+
+    child_pid = os.fork()
+    if not child_pid:
+        result = runner.invoke(cli, ['sign', 'ipsec.example.lan'])
+        assert not result.exception, result.output
+        return
+    else:
+        os.waitpid(child_pid, 0)
+
+    result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception, result.output
+    assert "Writing certificate to:" in result.output, result.output
+    assert os.path.exists("/tmp/ca.example.lan/server_cert.pem")
+
+    # Reset config
+    os.unlink("/etc/certidude/client.conf")
+    os.unlink("/etc/certidude/services.conf")
+
+    result = runner.invoke(cli, ['setup', 'strongswan', 'client', "-cn", "roadwarrior2", "ca.example.lan", "ipsec.example.lan"])
+    assert not result.exception, result.output
+
+    with open("/etc/certidude/client.conf", "a") as fh:
+        fh.write("insecure = true\n")
+
+    result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception, result.output
+    assert "Writing certificate to:" in result.output, result.output
+
+
+    ######################
+    ### NetworkManager ###
+    ######################
+
+    result = runner.invoke(cli, ['setup', 'openvpn', 'networkmanager', "-cn", "roadwarrior3", "ca.example.lan", "vpn.example.lan"])
+    assert not result.exception, result.output
+
+    result = runner.invoke(cli, ['setup', 'strongswan', 'networkmanager', "-cn", "roadwarrior4", "ca.example.lan", "ipsec.example.lan"])
+    assert not result.exception, result.output
+
+
+    ###################
+    ### Final tests ###
+    ###################
 
     # Test revocation on command-line
     child_pid = os.fork()
     if not child_pid:
-        result = runner.invoke(cli, ['revoke', 'vpn.example.lan'])
+        result = runner.invoke(cli, ['revoke', 'www.example.lan'])
         assert not result.exception, result.output
         return
     else:

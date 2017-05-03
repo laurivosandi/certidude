@@ -15,7 +15,7 @@ import subprocess
 import sys
 from configparser import ConfigParser, NoOptionError, NoSectionError
 from certidude.helpers import certidude_request_certificate
-from certidude.common import expand_paths, ip_address, ip_network, apt, rpm, pip, drop_privileges
+from certidude.common import ip_address, ip_network, apt, rpm, pip, drop_privileges
 from datetime import datetime, timedelta
 from time import sleep
 import const
@@ -30,6 +30,56 @@ logger = logging.getLogger(__name__)
 # Parse command-line argument defaults from environment
 
 NOW = datetime.utcnow().replace(tzinfo=None)
+
+def setup_client(prefix="client_"):
+    # Create section in /etc/certidude/client.conf
+    def wrapper(func):
+        def wrapped(**arguments):
+            from certidude import const
+            common_name = arguments.get("common_name")
+            authority = arguments.get("authority")
+            b = os.path.join(const.STORAGE_PATH, authority)
+
+            # Create corresponding section in Certidude client configuration file
+            client_config = ConfigParser()
+            if os.path.exists(const.CLIENT_CONFIG_PATH):
+                client_config.readfp(open(const.CLIENT_CONFIG_PATH))
+            if client_config.has_section(authority):
+                click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
+            else:
+                client_config.add_section(authority)
+                client_config.set(authority, "trigger", "interface up")
+                client_config.set(authority, "common name", common_name)
+                client_config.set(authority, "request path", os.path.join(b, prefix + "req.pem"))
+                client_config.set(authority, "key path", os.path.join(b, prefix + "key.pem"))
+                client_config.set(authority, "certificate path", os.path.join(b, prefix + "cert.pem"))
+                client_config.set(authority, "authority path",  os.path.join(b, "ca_cert.pem"))
+                client_config.set(authority, "revocations path",  os.path.join(b, "ca_crl.pem"))
+                with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
+                    client_config.write(fh)
+                os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
+                click.echo("Section '%s' added to %s" % (authority, const.CLIENT_CONFIG_PATH))
+
+            for j in ("key", "request", "certificate", "authority", "revocations"):
+                arguments["%s_path" % j] = client_config.get(authority, "%s path" % j)
+            return func(**arguments)
+        return wrapped
+    return wrapper
+
+
+def generate_dhparam(path):
+    # Prevent logjam etc for OpenVPN and nginx server
+    def wrapper(func):
+        def wrapped(**arguments):
+            if not os.path.exists(path):
+                rpm("openssl")
+                apt("openssl")
+                cmd = "openssl", "dhparam", "-out", path, ("1024" if os.getenv("TRAVIS") else "2048")
+                subprocess.check_call(cmd)
+            arguments["dhparam_path"] = path
+            return func(**arguments)
+        return wrapped
+    return wrapper
 
 @click.command("request", help="Run processes for requesting certificates and configuring services")
 @click.option("-r", "--renew", default=False, is_flag=True, help="Renew now")
@@ -46,15 +96,12 @@ def certidude_request(fork, renew, no_wait):
         click.echo("No %s!" % const.CLIENT_CONFIG_PATH)
         return 1
 
-    if not os.path.exists(const.SERVICES_CONFIG_PATH):
-        click.echo("No %s!" % const.SERVICES_CONFIG_PATH)
-        return 1
-
     clients = ConfigParser()
     clients.readfp(open(const.CLIENT_CONFIG_PATH))
 
     service_config = ConfigParser()
-    service_config.readfp(open(const.SERVICES_CONFIG_PATH))
+    if os.path.exists(const.SERVICES_CONFIG_PATH):
+        service_config.readfp(open(const.SERVICES_CONFIG_PATH))
 
     # Process directories
     if not os.path.exists(const.RUN_DIR):
@@ -76,13 +123,9 @@ def certidude_request(fork, renew, no_wait):
 
     for authority in clients.sections():
         try:
-            endpoint_dhparam = clients.get(authority, "dhparam path")
-            if not os.path.exists(endpoint_dhparam):
-                cmd = "openssl", "dhparam", "-out", endpoint_dhparam, ("512" if os.getenv("TRAVIS") else "2048")
-                subprocess.check_call(cmd)
+            endpoint_renewal_overlap = clients.getint(authority, "renewal overlap")
         except NoOptionError:
-            pass
-
+            endpoint_renewal_overlap = None
         try:
             endpoint_insecure = clients.getboolean(authority, "insecure")
         except NoOptionError:
@@ -157,6 +200,7 @@ def certidude_request(fork, renew, no_wait):
                     endpoint_authority_path,
                     endpoint_revocations_path,
                     endpoint_common_name,
+                    endpoint_renewal_overlap,
                     insecure=endpoint_insecure,
                     autosign=True,
                     wait=not no_wait,
@@ -196,7 +240,6 @@ def certidude_request(fork, renew, no_wait):
 
             # IPSec set up with initscripts
             if service_config.get(endpoint, "service") == "init/strongswan":
-                remote = service_config.get(endpoint, "remote")
                 from ipsecparse import loads
                 config = loads(open("%s/ipsec.conf" % const.STRONGSWAN_PREFIX).read())
                 for section_type, section_name in config:
@@ -286,7 +329,8 @@ def certidude_request(fork, renew, no_wait):
                 with open(nm_config_path, "w") as fh:
                     nm_config.write(fh)
                     click.echo("Created %s" % nm_config_path)
-                os.system("nmcli con reload")
+                if os.path.exists("/run/NetworkManager"):
+                    os.system("nmcli con reload")
                 continue
 
 
@@ -323,7 +367,8 @@ def certidude_request(fork, renew, no_wait):
                 with open(os.path.join("/etc/NetworkManager/system-connections", endpoint), "w") as fh:
                     nm_config.write(fh)
                     click.echo("Created %s" % fh.name)
-                os.system("nmcli con reload")
+                if os.path.exists("/run/NetworkManager"):
+                    os.system("nmcli con reload")
                 continue
 
             # TODO: Puppet, OpenLDAP, <insert awesomeness here>
@@ -343,33 +388,12 @@ def certidude_request(fork, renew, no_wait):
     default="/etc/openvpn/site-to-client.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
-def certidude_setup_openvpn_server(authority, common_name, config, subnet, route, local, proto, port):
+@generate_dhparam("/etc/openvpn/dh.pem")
+@setup_client(prefix="server_")
+def certidude_setup_openvpn_server(authority, common_name, config, subnet, route, local, proto, port, **paths):
     # Install dependencies
     apt("openvpn")
     rpm("openvpn")
-
-    # Create corresponding section in Certidude client configuration file
-    client_config = ConfigParser()
-    if os.path.exists(const.CLIENT_CONFIG_PATH):
-        client_config.readfp(open(const.CLIENT_CONFIG_PATH))
-    if client_config.has_section(authority):
-        click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
-    else:
-        client_config.add_section(authority)
-        client_config.set(authority, "trigger", "interface up")
-        client_config.set(authority, "common name", common_name)
-        slug = common_name.replace(".", "-")
-        client_config.set(authority, "request path", "/etc/openvpn/keys/%s.csr" % slug)
-        client_config.set(authority, "key path", "/etc/openvpn/keys/%s.key" % slug)
-        client_config.set(authority, "certificate path", "/etc/openvpn/keys/%s.crt" % slug)
-        client_config.set(authority, "authority path",  "/etc/openvpn/keys/ca.crt")
-        client_config.set(authority, "revocations path",  "/etc/openvpn/keys/ca.crl")
-        client_config.set(authority, "dhparam path", "/etc/openvpn/keys/dhparam.pem")
-        with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
-            client_config.write(fh)
-        os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
-        click.echo("Section '%s' added to %s" % (authority, const.CLIENT_CONFIG_PATH))
-
 
     # Create corresponding section in /etc/certidude/services.conf
     endpoint = "OpenVPN server %s of %s" % (common_name, authority)
@@ -394,17 +418,18 @@ def certidude_setup_openvpn_server(authority, common_name, config, subnet, route
     config.write("proto %s\n" % proto)
     config.write("port %d\n" % port)
     config.write("local %s\n" % local)
-    config.write("key %s\n" % client_config.get(authority, "key path"))
-    config.write("cert %s\n" % client_config.get(authority, "certificate path"))
-    config.write("ca %s\n" % client_config.get(authority, "authority path"))
-    config.write("dh %s\n" % client_config.get(authority, "dhparam path"))
+    config.write("key %s\n" % paths.get("key_path"))
+    config.write("cert %s\n" % paths.get("certificate_path"))
+    config.write("ca %s\n" % paths.get("authority_path"))
+    config.write("crl-verify %s\n" % paths.get("revocations_path"))
+    config.write("dh %s\n" % paths.get("dhparam_path"))
     config.write("comp-lzo\n")
     config.write("user nobody\n")
     config.write("group nogroup\n")
     config.write("persist-tun\n")
     config.write("persist-key\n")
     config.write("#ifconfig-pool-persist /tmp/openvpn-leases.txt\n")
-    config.write("#crl-verify %s\n" % client_config.get(authority, "revocations path"))
+
 
     click.echo("Generated %s" % config.name)
     click.echo("Inspect generated files and issue following to request certificate:")
@@ -423,18 +448,14 @@ def certidude_setup_openvpn_server(authority, common_name, config, subnet, route
     default="/etc/nginx/sites-available/%s.conf" % const.HOSTNAME,
     type=click.File(mode="w", atomic=True, lazy=True),
     help="Site configuration file of nginx, /etc/nginx/sites-available/%s.conf by default" % const.HOSTNAME)
-@click.option("--directory", "-d", default="/etc/nginx/ssl", help="Directory for keys, /etc/nginx/ssl by default")
-@click.option("--key-path", "-key", default=const.HOSTNAME + ".key", help="Key path, %s.key relative to -d by default" % const.HOSTNAME)
-@click.option("--request-path", "-csr", default=const.HOSTNAME + ".csr", help="Request path, %s.csr relative to -d by default" % const.HOSTNAME)
-@click.option("--certificate-path", "-crt", default=const.HOSTNAME + ".crt", help="Certificate path, %s.crt relative to -d by default" % const.HOSTNAME)
-@click.option("--dhparam-path", "-dh", default="dhparam2048.pem", help="Diffie/Hellman parameters path, dhparam2048.pem relative to -d by default")
-@click.option("--authority-path", "-ca", default="ca.crt", help="Certificate authority certificate path, ca.crt relative to -d by default")
-@click.option("--revocations-path", "-crl", default="ca.crl", help="Certificate revocation list, ca.crl relative to -d by default")
 @click.option("--verify-client", "-vc", default="optional", type=click.Choice(['optional', 'on', 'off']))
-@expand_paths()
-def certidude_setup_nginx(authority, site_config, tls_config, common_name, directory, key_path, request_path, certificate_path, authority_path, revocations_path, dhparam_path, verify_client):
-    if not os.path.exists("/etc/nginx"):
-        raise ValueError("nginx not installed")
+@generate_dhparam("/etc/nginx/ssl/dh.pem")
+@setup_client(prefix="server_")
+def certidude_setup_nginx(authority, common_name, site_config, tls_config, verify_client, **paths):
+    apt("nginx")
+    rpm("nginx")
+    from jinja2 import Environment, PackageLoader
+    env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
     if "." not in common_name:
         raise ValueError("Fully qualified hostname not specified as common name, make sure hostname -f works")
     client_config = ConfigParser()
@@ -450,7 +471,6 @@ def certidude_setup_nginx(authority, site_config, tls_config, common_name, direc
         client_config.set(authority, "key path", key_path)
         client_config.set(authority, "certificate path", certificate_path)
         client_config.set(authority, "authority path",  authority_path)
-        client_config.set(authority, "dhparam path",  dhparam_path)
         client_config.set(authority, "revocations path",  revocations_path)
         with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
             client_config.write(fh)
@@ -459,6 +479,7 @@ def certidude_setup_nginx(authority, site_config, tls_config, common_name, direc
 
     context = globals() # Grab const.BLAH
     context.update(locals())
+    context.update(paths)
 
     if os.path.exists(site_config.name):
         click.echo("Configuration file %s already exists, not overwriting" % site_config.name)
@@ -492,30 +513,12 @@ def certidude_setup_nginx(authority, site_config, tls_config, common_name, direc
     default="/etc/openvpn/client-to-site.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
-def certidude_setup_openvpn_client(authority, remote, common_name, config, proto):
+@setup_client()
+def certidude_setup_openvpn_client(authority, remote, common_name, config, proto, **ctx):
     # Install dependencies
     apt("openvpn")
     rpm("openvpn")
 
-    # Create corresponding section in Certidude client configuration file
-    client_config = ConfigParser()
-    if os.path.exists(const.CLIENT_CONFIG_PATH):
-        client_config.readfp(open(const.CLIENT_CONFIG_PATH))
-    if client_config.has_section(authority):
-        click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
-    else:
-        client_config.add_section(authority)
-        client_config.set(authority, "trigger", "interface up")
-        client_config.set(authority, "common name", common_name)
-        client_config.set(authority, "request path", "/etc/openvpn/keys/%s.csr" % const.common_name)
-        client_config.set(authority, "key path", "/etc/openvpn/keys/%s.key" % common_name)
-        client_config.set(authority, "certificate path", "/etc/openvpn/keys/%s.crt" % common_name)
-        client_config.set(authority, "authority path",  "/etc/openvpn/keys/ca.crt")
-        client_config.set(authority, "revocations path",  "/etc/openvpn/keys/ca.crl")
-        with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
-            client_config.write(fh)
-        os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
-        click.echo("Section '%s' added to %s" % (authority, const.CLIENT_CONFIG_PATH))
 
     # Create corresponding section in /etc/certidude/services.conf
     endpoint = "OpenVPN to %s" % remote
@@ -538,7 +541,7 @@ def certidude_setup_openvpn_client(authority, remote, common_name, config, proto
     config.write("remote %s\n" % remote)
     config.write("remote-cert-tls server\n")
     config.write("proto %s\n" % proto)
-    config.write("dev tun\n")
+    config.write("dev tun-%s\n" % remote.split(".")[0])
     config.write("nobind\n")
     config.write("key %s\n" % client_config.get(authority, "key path"))
     config.write("cert %s\n" % client_config.get(authority, "certificate path"))
@@ -563,7 +566,8 @@ def certidude_setup_openvpn_client(authority, remote, common_name, config, proto
 @click.option("--common-name", "-cn", default=const.FQDN, help="Common name, %s by default" % const.FQDN)
 @click.option("--subnet", "-sn", default=u"192.168.33.0/24", type=ip_network, help="IPsec virtual subnet, 192.168.33.0/24 by default")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
-def certidude_setup_strongswan_server(authority, common_name, subnet, route):
+@setup_client(prefix="server_")
+def certidude_setup_strongswan_server(authority, common_name, subnet, route, **paths):
     if "." not in common_name:
         raise ValueError("Hostname has to be fully qualified!")
 
@@ -572,31 +576,27 @@ def certidude_setup_strongswan_server(authority, common_name, subnet, route):
     rpm("strongswan")
     pip("ipsecparse")
 
-    # Create corresponding section in Certidude client configuration file
-    client_config = ConfigParser()
-    if os.path.exists(const.CLIENT_CONFIG_PATH):
-        client_config.readfp(open(const.CLIENT_CONFIG_PATH))
-    if client_config.has_section(authority):
-        click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
+    # Create corresponding section in /etc/certidude/services.conf
+    endpoint = "IPsec gateway for %s" % authority
+    service_config = ConfigParser()
+    if os.path.exists(const.SERVICES_CONFIG_PATH):
+        service_config.readfp(open(const.SERVICES_CONFIG_PATH))
+    if service_config.has_section(endpoint):
+        click.echo("Section '%s' already exists in %s, not reconfiguring" % (endpoint, const.SERVICES_CONFIG_PATH))
     else:
-        client_config.add_section(authority)
-        client_config.set(authority, "trigger", "interface up")
-        client_config.set(authority, "common name", const.FQDN)
-        client_config.set(authority, "request path", "%s/ipsec.d/reqs/%s.pem" % (const.STRONGSWAN_PREFIX, const.HOSTNAME))
-        client_config.set(authority, "key path", "%s/ipsec.d/private/%s.pem" % (const.STRONGSWAN_PREFIX, const.HOSTNAME))
-        client_config.set(authority, "certificate path", "%s/ipsec.d/certs/%s.pem" % (const.STRONGSWAN_PREFIX, const.HOSTNAME))
-        client_config.set(authority, "authority path",  "%s/ipsec.d/cacerts/ca.pem" % const.STRONGSWAN_PREFIX)
-        client_config.set(authority, "revocations path",  "%s/ipsec.d/crls/ca.pem" % const.STRONGSWAN_PREFIX)
-        with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
-            client_config.write(fh)
-        os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
-        click.echo("Section '%s' added to %s" % (authority, const.CLIENT_CONFIG_PATH))
+        service_config.add_section(endpoint)
+        service_config.set(endpoint, "authority", authority)
+        service_config.set(endpoint, "service", "init/strongswan")
+        with open(const.SERVICES_CONFIG_PATH + ".part", 'wb') as fh:
+            service_config.write(fh)
+        os.rename(const.SERVICES_CONFIG_PATH + ".part", const.SERVICES_CONFIG_PATH)
+        click.echo("Section '%s' added to %s" % (endpoint, const.SERVICES_CONFIG_PATH))
 
     # Create corresponding section to /etc/ipsec.conf
     from ipsecparse import loads
     config = loads(open("%s/ipsec.conf" % const.STRONGSWAN_PREFIX).read())
     config["conn", authority] = dict(
-        leftcert=client_config.get(authority, "certificate path"),
+        leftcert=paths.get("certificate_path"),
         leftsubnet=",".join(route),
         right="%any",
         rightsourceip=str(subnet),
@@ -617,31 +617,12 @@ def certidude_setup_strongswan_server(authority, common_name, subnet, route):
 @click.argument("authority")
 @click.argument("remote")
 @click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
-def certidude_setup_strongswan_client(authority, remote, common_name):
+@setup_client()
+def certidude_setup_strongswan_client(authority, remote, common_name, **paths):
     # Install dependencies
     apt("strongswan")
     rpm("strongswan")
     pip("ipsecparse")
-
-    # Create corresponding section in /etc/certidude/client.conf
-    client_config = ConfigParser()
-    if os.path.exists(const.CLIENT_CONFIG_PATH):
-        client_config.readfp(open(const.CLIENT_CONFIG_PATH))
-    if client_config.has_section(authority):
-        click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
-    else:
-        client_config.add_section(authority)
-        client_config.set(authority, "trigger", "interface up")
-        client_config.set(authority, "common name", common_name)
-        client_config.set(authority, "request path", "%s/ipsec.d/reqs/%s.pem" % (const.STRONGSWAN_PREFIX, common_name))
-        client_config.set(authority, "key path", "%s/ipsec.d/private/%s.pem" % (const.STRONGSWAN_PREFIX, common_name))
-        client_config.set(authority, "certificate path", "%s/ipsec.d/certs/%s.pem" % (const.STRONGSWAN_PREFIX, common_name))
-        client_config.set(authority, "authority path", "%s/ipsec.d/cacerts/ca.pem" % const.STRONGSWAN_PREFIX)
-        client_config.set(authority, "revocations path", "%s/ipsec.d/crls/ca.pem" % const.STRONGSWAN_PREFIX)
-        with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
-            client_config.write(fh)
-        os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
-        click.echo("Section '%s' added to %s" % (authority, const.CLIENT_CONFIG_PATH))
 
     # Create corresponding section in /etc/certidude/services.conf
     endpoint = "IPsec connection to %s" % remote
@@ -666,7 +647,7 @@ def certidude_setup_strongswan_client(authority, remote, common_name):
     config["conn", remote] = dict(
         leftsourceip="%config",
         left="%defaultroute",
-        leftcert=client_config.get(authority, "certificate path"),
+        leftcert=paths.get("certificate_path"),
         rightid="%any",
         right=remote,
         #rightsubnet=route,
@@ -689,32 +670,13 @@ def certidude_setup_strongswan_client(authority, remote, common_name):
 @click.argument("authority") # Certidude server
 @click.argument("remote") # StrongSwan gateway
 @click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
-def certidude_setup_strongswan_networkmanager(authority, remote, common_name):
+@setup_client()
+def certidude_setup_strongswan_networkmanager(authority, remote, common_name, **paths):
     # Install dependencies
     apt("strongswan-nm")
     rpm("NetworkManager-strongswan-gnome")
 
     endpoint = "IPSec to %s" % remote
-
-    # Create corresponding section in /etc/certidude/client.conf
-    client_config = ConfigParser()
-    if os.path.exists(const.CLIENT_CONFIG_PATH):
-        client_config.readfp(open(const.CLIENT_CONFIG_PATH))
-    if client_config.has_section(authority):
-        click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
-    else:
-        client_config.add_section(authority)
-        client_config.set(authority, "trigger", "interface up")
-        client_config.set(authority, "common name", common_name)
-        client_config.set(authority, "request path", "/etc/ipsec.d/reqs/%s.pem" % common_name)
-        client_config.set(authority, "key path", "/etc/ipsec.d/private/%s.pem" % common_name)
-        client_config.set(authority, "certificate path", "/etc/ipsec.d/certs/%s.pem" % common_name)
-        client_config.set(authority, "authority path",  "/etc/ipsec.d/cacerts/ca.pem")
-        client_config.set(authority, "revocations path",  "/etc/ipsec.d/crls/ca.pem")
-        with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
-            client_config.write(fh)
-        os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
-        click.echo("Section '%s' added to %s" % (authority, const.CLIENT_CONFIG_PATH))
 
     # Create corresponding section in /etc/certidude/services.conf
     service_config = ConfigParser()
@@ -737,27 +699,9 @@ def certidude_setup_strongswan_networkmanager(authority, remote, common_name):
 @click.argument("authority")
 @click.argument("remote") # OpenVPN gateway
 @click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
-def certidude_setup_openvpn_networkmanager(authority, remote, common_name):
-    # Create corresponding section in /etc/certidude/client.conf
-    client_config = ConfigParser()
-    if os.path.exists(const.CLIENT_CONFIG_PATH):
-        client_config.readfp(open(const.CLIENT_CONFIG_PATH))
-    if client_config.has_section(authority):
-        click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
-    else:
-        client_config.add_section(authority)
-        client_config.set(authority, "trigger", "interface up")
-        client_config.set(authority, "common name", common_name)
-        client_config.set(authority, "request path", "/etc/ipsec.d/reqs/%s.pem" % common_name)
-        client_config.set(authority, "key path", "/etc/ipsec.d/private/%s.pem" % common_name)
-        client_config.set(authority, "certificate path", "/etc/ipsec.d/certs/%s.pem" % common_name)
-        client_config.set(authority, "authority path",  "/etc/ipsec.d/cacerts/ca.pem")
-        client_config.set(authority, "revocations path",  "/etc/ipsec.d/crls/ca.pem")
-        with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
-            client_config.write(fh)
-        os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
-        click.echo("Section '%s' added to %s" % (authority, const.CLIENT_CONFIG_PATH))
-
+@setup_client()
+def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **paths):
+    # Create corresponding section in /etc/certidude/services.conf
     endpoint = "OpenVPN to %s" % remote
 
     service_config = ConfigParser()
@@ -767,7 +711,7 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name):
         click.echo("Section '%s' already exists in %s, remove to regenerate" % (endpoint, const.SERVICES_CONFIG_PATH))
     else:
         service_config.add_section(endpoint)
-        service_config.set(authority, "authority", server)
+        service_config.set(endpoint, "authority", authority)
         service_config.set(endpoint, "remote", remote)
         service_config.set(endpoint, "service", "network-manager/openvpn")
         service_config.write(open("/etc/certidude/services.conf", "w"))

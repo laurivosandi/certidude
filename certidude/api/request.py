@@ -29,6 +29,7 @@ class RequestListResource(object):
         """
         Validate and parse certificate signing request
         """
+        reason = "No reason"
         body = req.stream.read(req.content_length)
         csr = x509.load_pem_x509_csr(body, default_backend())
         try:
@@ -87,14 +88,15 @@ class RequestListResource(object):
                         verifier.verify()
                     except InvalidSignature:
                         logger.error("Renewal failed, invalid signature supplied for %s", common_name.value)
+                        reason = "Renewal failed, invalid signature supplied"
                     else:
                         # At this point renewal signature was valid but we need to perform some extra checks
                         if datetime.utcnow() > cert.not_valid_after:
                             logger.error("Renewal failed, current certificate for %s has expired", common_name.value)
-                            # Put on hold
+                            reason = "Renewal failed, current certificate expired"
                         elif not config.CERTIFICATE_RENEWAL_ALLOWED:
                             logger.error("Renewal requested for %s, but not allowed by authority settings", common_name.value)
-                            # Put on hold
+                            reason = "Renewal requested, but not allowed by authority settings"
                         else:
                             resp.set_header("Content-Type", "application/x-x509-user-cert")
                             _, resp.body = authority._sign(csr, body, overwrite=True)
@@ -106,25 +108,30 @@ class RequestListResource(object):
         Process automatic signing if the IP address is whitelisted,
         autosigning was requested and certificate can be automatically signed
         """
-        if req.get_param_as_bool("autosign") and "." not in common_name.value:
-            for subnet in config.AUTOSIGN_SUBNETS:
-                if req.context.get("remote_addr") in subnet:
-                    try:
-                        resp.set_header("Content-Type", "application/x-pem-file")
-                        _, resp.body = authority._sign(csr, body)
-                        logger.info("Autosigned %s as %s is whitelisted", common_name.value, req.context.get("remote_addr"))
-                        return
-                    except EnvironmentError:
-                        logger.info("Autosign for %s failed, signed certificate already exists",
-                            common_name.value, req.context.get("remote_addr"))
-                    break
+        if req.get_param_as_bool("autosign"):
+            if "." not in common_name.value:
+                reason = "Autosign failed, IP address not whitelisted"
+                for subnet in config.AUTOSIGN_SUBNETS:
+                    if req.context.get("remote_addr") in subnet:
+                        try:
+                            resp.set_header("Content-Type", "application/x-pem-file")
+                            _, resp.body = authority._sign(csr, body)
+                            logger.info("Autosigned %s as %s is whitelisted", common_name.value, req.context.get("remote_addr"))
+                            return
+                        except EnvironmentError:
+                            logger.info("Autosign for %s failed, signed certificate already exists",
+                                common_name.value, req.context.get("remote_addr"))
+                            reason = "Autosign failed, signed certificate already exists"
+                        break
+            else:
+                reason = "Autosign failed, only client certificates allowed to be signed automatically"
 
         # Attempt to save the request otherwise
         try:
             csr = authority.store_request(body)
         except errors.RequestExists:
+            reason = "Same request already uploaded exists"
             # We should still redirect client to long poll URL below
-            pass
         except errors.DuplicateCommonNameError:
             # TODO: Certificate renewal
             logger.warning(u"Rejected signing request with overlapping common name from %s",
@@ -147,6 +154,7 @@ class RequestListResource(object):
         else:
             # Request was accepted, but not processed
             resp.status = falcon.HTTP_202
+            resp.body = reason
 
 
 class RequestDetailResource(object):
