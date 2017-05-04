@@ -21,6 +21,7 @@ script:
   - sudo useradd adminbot -G sudo -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
   - sudo useradd userbot -G users -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'
   - sudo chmod 777 . # Allow forked processes to write .coverage files
+  - sudo mkdir /etc/NetworkManager/system-connections/ # Allow config file creation without having NM installed
   - sudo coverage run --parallel-mode --source certidude -m py.test tests
   - sudo coverage combine
   - sudo coverage report
