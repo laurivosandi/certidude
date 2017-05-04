@@ -102,3 +102,7 @@ TOKEN_LIFETIME = cp.getint("token", "lifetime") * 60 # Convert minutes to second
 TOKEN_SECRET = cp.get("token", "secret")
 
 # TODO: Check if we don't have base or servers
+
+# The API call for looking up scripts uses following directory as root
+SCRIPT_DIR = os.path.join(os.path.dirname(__file__), "templates", "script")
+SCRIPT_DEFAULT = "openwrt.sh"

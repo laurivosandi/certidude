@@ -15,6 +15,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from certidude import config, push, mailer, const
 from certidude import errors
 from jinja2 import Template
+from xattr import getxattr, listxattr
 
 RE_HOSTNAME =  "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])(@(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9]))?$"
 
@@ -49,6 +50,25 @@ def get_revoked(serial):
     with open(path) as fh:
         buf = fh.read()
         return path, buf, x509.load_pem_x509_certificate(buf, default_backend())
+
+
+def get_attributes(cn):
+    path, buf, cert = get_signed(cn)
+    attribs = dict()
+    for key in listxattr(path):
+        if not key.startswith("user."):
+            continue
+        value = getxattr(path, key)
+        current = attribs
+        if "." in key:
+            namespace, key = key.rsplit(".", 1)
+            for component in namespace.split("."):
+                if component not in current:
+                    current[component] = dict()
+                current = current[component]
+        current[key] = value
+    return path, buf, cert, attribs
+
 
 def store_request(buf, overwrite=False):
     """

@@ -21,7 +21,7 @@ def certidude_request_certificate(server, system_keytab_required, key_path, requ
     Exchange CSR for certificate using Certidude HTTP API server
     """
     import requests
-    from certidude import errors, const, config
+    from certidude import errors, const
     from cryptography import x509
     from cryptography.hazmat.primitives.asymmetric import rsa, padding
     from cryptography.hazmat.backends import default_backend

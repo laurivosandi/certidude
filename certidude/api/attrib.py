@@ -4,7 +4,6 @@ from ipaddress import ip_address
 from datetime import datetime
 from certidude import config, authority
 from certidude.decorators import serialize
-from xattr import getxattr, listxattr
 
 logger = logging.getLogger(__name__)
 
@@ -18,24 +17,10 @@ class AttributeResource(object):
         Results made available only to lease IP address.
         """
         try:
-            path, buf, cert = authority.get_signed(cn)
+            path, buf, cert, attribs = authority.get_attributes(cn)
         except IOError:
             raise falcon.HTTPNotFound()
         else:
-            attribs = dict()
-            for key in listxattr(path):
-                if not key.startswith("user."):
-                    continue
-                value = getxattr(path, key)
-                current = attribs
-                if "." in key:
-                    namespace, key = key.rsplit(".", 1)
-                    for component in namespace.split("."):
-                        if component not in current:
-                            current[component] = dict()
-                        current = current[component]
-                current[key] = value
-
             try:
                 whitelist = ip_address(attribs.get("user").get("lease").get("address").decode("ascii"))
             except AttributeError: # TODO: probably race condition

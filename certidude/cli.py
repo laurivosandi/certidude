@@ -91,8 +91,10 @@ def setup_client(prefix="client_", dh=False):
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 @click.option("-nw", "--no-wait", default=False, is_flag=True, help="Return immideately if server doesn't autosign")
 def certidude_request(fork, renew, no_wait):
-    rpm("openssl")
-    apt("openssl")
+    # Here let's try to avoid compiling packages from scratch
+    rpm("openssl") # TODO
+    apt("openssl python-cryptography python-jinja2") # Native packages on Ubuntu 16.04
+    pip("cryptography jinja2") # Mac OS X, should be skipped on Ubuntu
     import requests
     from jinja2 import Environment, PackageLoader
     env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
@@ -529,10 +531,10 @@ def certidude_setup_openvpn_client(authority, remote, common_name, config, proto
     config.write("proto %s\n" % proto)
     config.write("dev tun-%s\n" % remote.split(".")[0])
     config.write("nobind\n")
-    config.write("key %s\n" % paths.get("key path"))
-    config.write("cert %s\n" % paths.get("certificate path"))
-    config.write("ca %s\n" % paths.get("authority path"))
-    config.write("crl-verify %s\n" % paths.get("revocations path"))
+    config.write("key %s\n" % paths.get("key_path"))
+    config.write("cert %s\n" % paths.get("certificate_path"))
+    config.write("ca %s\n" % paths.get("authority_path"))
+    config.write("crl-verify %s\n" % paths.get("revocations_path"))
     config.write("comp-lzo\n")
     config.write("user nobody\n")
     config.write("group nogroup\n")

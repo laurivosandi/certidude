@@ -172,7 +172,7 @@ def certidude_app(log_handlers=[]):
     from .signed import SignedCertificateDetailResource
     from .request import RequestListResource, RequestDetailResource
     from .lease import LeaseResource, LeaseDetailResource
-    from .cfg import ConfigResource, ScriptResource
+    from .script import ScriptResource
     from .tag import TagResource, TagDetailResource
     from .attrib import AttributeResource
     from .bootstrap import BootstrapResource
@@ -194,6 +194,7 @@ def certidude_app(log_handlers=[]):
 
     # Extended attributes for scripting etc.
     app.add_route("/api/signed/{cn}/attr/", AttributeResource())
+    app.add_route("/api/signed/{cn}/script/", ScriptResource())
 
     # API calls used by pushed events on the JS end
     app.add_route("/api/signed/{cn}/tag/", TagResource())

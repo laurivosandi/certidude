@@ -389,6 +389,10 @@ def test_cli_setup_authority():
         query_string = "client=test&address=127.0.0.1",
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text # lease update ok
+    r = client().simulate_get("/api/signed/test/script/")
+    assert r.status_code == 200, r.text # script render ok
+    assert "uci set " in r.text, r.text
+
     r = client().simulate_post("/api/lease/",
         query_string = "client=test&address=127.0.0.1&serial=0",
         headers={"Authorization":admintoken})
@@ -646,6 +650,7 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
     assert "Writing certificate to:" in result.output, result.output
 
+    # TODO: assert key, req, cert paths were included correctly in OpenVPN config
     # TODO: test client verification with curl
 
     ###############
