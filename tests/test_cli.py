@@ -168,6 +168,10 @@ def test_cli_setup_authority():
     assert r.headers.get('content-type') == "application/x-x509-ca-cert"
     assert r.text == buf
 
+    r = client().simulate_get("/api/certificate")
+    assert r.status_code == 200
+    assert r.headers.get('content-type') == "application/x-x509-ca-cert"
+    assert r.text == buf
 
     # Password is bot, users created by Travis
     usertoken = "Basic dXNlcmJvdDpib3Q="
@@ -191,6 +195,15 @@ def test_cli_setup_authority():
     assert r.status_code == 200, r.text # if this breaks certidude serve has no read access to static folder
     r = requests.get("http://ca.example.lan/nonexistant.html")
     assert r.status_code == 404, r.text
+    r = requests.get("http://ca.example.lan/../nonexistant.html")
+    assert r.status_code == 403, r.text
+
+    r = client().simulate_get("/index.html")
+    assert r.status_code == 200, r.text
+    r = client().simulate_get("/nonexistant.html")
+    assert r.status_code == 404, r.text
+    r = client().simulate_get("/../nonexistant.html")
+    assert r.status_code == 403, r.text
 
     # Test request submission
     buf = generate_csr(cn=u"test")
@@ -301,20 +314,6 @@ def test_cli_setup_authority():
     assert "Stored request " in inbox.pop(), inbox
     assert not inbox
 
-    # Test session API call
-    r = client().simulate_get("/api/", headers={"Authorization":usertoken})
-    assert r.status_code == 200
-
-    r = client().simulate_get("/api/", headers={"Authorization":admintoken})
-    assert r.status_code == 200
-
-    r = client().simulate_get("/api/", headers={"Accept":"text/plain", "Authorization":admintoken})
-    assert r.status_code == 415 # invalid media type
-
-    r = client().simulate_get("/api/")
-    assert r.status_code == 401
-
-
     # Test signed certificate API call
     r = client().simulate_get("/api/signed/nonexistant/")
     assert r.status_code == 404, r.text
@@ -357,9 +356,9 @@ def test_cli_setup_authority():
 
     # Insert lease as if VPN gateway had submitted it
     path, _, _ = authority.get_signed("test")
-    from xattr import setxattr
+    from xattr import setxattr, getxattr, listxattr
     setxattr(path, "user.lease.address", b"127.0.0.1")
-    setxattr(path, "user.lease.last_seen", b"random")
+    setxattr(path, "user.lease.last_seen", datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
     r = client().simulate_get("/api/signed/test/attr/")
     assert r.status_code == 200, r.text
 
@@ -393,12 +392,12 @@ def test_cli_setup_authority():
     assert r.status_code == 200, r.text
 
     # Tags can be overwritten only by admin
-    r = client().simulate_put("/api/signed/test/tag/other/")
+    r = client().simulate_put("/api/signed/test/tag/something/")
     assert r.status_code == 401, r.text
-    r = client().simulate_put("/api/signed/test/tag/other/",
+    r = client().simulate_put("/api/signed/test/tag/something/",
         headers={"Authorization":usertoken})
     assert r.status_code == 403, r.text
-    r = client().simulate_put("/api/signed/test/tag/other/",
+    r = client().simulate_put("/api/signed/test/tag/something/",
         body="value=else",
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
     assert r.status_code == 200, r.text
@@ -412,6 +411,7 @@ def test_cli_setup_authority():
     r = client().simulate_delete("/api/signed/test/tag/else/",
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
     assert r.status_code == 200, r.text
+    assert "user.xdg.tags" not in listxattr(path, "user.xdg.tags")
 
 
     # Test revocation
@@ -436,6 +436,21 @@ def test_cli_setup_authority():
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text
     assert r.headers.get('content-type') == "application/json; charset=UTF-8"
+
+
+    # Test session API call
+    r = client().simulate_get("/api/", headers={"Authorization":usertoken})
+    assert r.status_code == 200
+
+    r = client().simulate_get("/api/", headers={"Authorization":admintoken})
+    assert r.status_code == 200
+
+    r = client().simulate_get("/api/", headers={"Accept":"text/plain", "Authorization":admintoken})
+    assert r.status_code == 415 # invalid media type
+
+    r = client().simulate_get("/api/")
+    assert r.status_code == 401
+
 
     # Test token mech
     r = client().simulate_post("/api/token/")
@@ -663,11 +678,17 @@ def test_cli_setup_authority():
     # Test revocation on command-line
     child_pid = os.fork()
     if not child_pid:
-        result = runner.invoke(cli, ['revoke', 'www.example.lan'])
+        result = runner.invoke(cli, ['revoke', 'roadwarrior4'])
         assert not result.exception, result.output
         return
     else:
         os.waitpid(child_pid, 0)
+
+    # Test revocation check on client side
+    result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception, result.output
+    assert "Certificate has been revoked, wiping keys and certificates" in result.output, result.output
+    assert "Writing certificate to:" in result.output, result.output
 
     result = runner.invoke(cli, ['list', '-srv'])
     assert not result.exception, result.output
