@@ -56,7 +56,7 @@ def store_request(buf, overwrite=False):
     """
 
     if not buf:
-        raise ValueError("No certificate supplied") # No certificate supplied
+        raise ValueError("No signing request supplied")
 
     csr = x509.load_pem_x509_csr(buf, backend=default_backend())
     common_name, = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
@@ -259,24 +259,20 @@ def generate_pkcs12_bundle(common_name, owner=None):
     cert, cert_buf = _sign(csr, buf, overwrite=True)
 
     # Generate P12, currently supported only by PyOpenSSL
-    try:
-        from OpenSSL import crypto
-    except ImportError:
-        raise
-    else:
-        p12 = crypto.PKCS12()
-        p12.set_privatekey(
-            crypto.load_privatekey(
-                crypto.FILETYPE_PEM,
-                key.private_bytes(
-                        encoding=serialization.Encoding.PEM,
-                        format=serialization.PrivateFormat.TraditionalOpenSSL,
-                        encryption_algorithm=serialization.NoEncryption())))
-        p12.set_certificate(
-            crypto.load_certificate(crypto.FILETYPE_PEM, cert_buf))
-        p12.set_ca_certificates([
-            crypto.load_certificate(crypto.FILETYPE_PEM, ca_buf)])
-        return p12.export("1234"), cert
+    from OpenSSL import crypto
+    p12 = crypto.PKCS12()
+    p12.set_privatekey(
+        crypto.load_privatekey(
+            crypto.FILETYPE_PEM,
+            key.private_bytes(
+                    encoding=serialization.Encoding.PEM,
+                    format=serialization.PrivateFormat.TraditionalOpenSSL,
+                    encryption_algorithm=serialization.NoEncryption())))
+    p12.set_certificate(
+        crypto.load_certificate(crypto.FILETYPE_PEM, cert_buf))
+    p12.set_ca_certificates([
+        crypto.load_certificate(crypto.FILETYPE_PEM, ca_buf)])
+    return p12.export("1234"), cert
 
 
 def sign(common_name, overwrite=False):

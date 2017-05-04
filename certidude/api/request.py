@@ -67,12 +67,19 @@ class RequestListResource(object):
             pass
         else:
             if cert.public_key().public_numbers() == csr.public_key().public_numbers():
-                try:
-                    renewal_signature = b64decode(req.get_header("X-Renewal-Signature"))
-                except TypeError, ValueError: # No header supplied, redirect to signed API call
+                renewal_header = req.get_header("X-Renewal-Signature")
+
+                if not renewal_header:
+                    # No header supplied, redirect to signed API call
                     resp.status = falcon.HTTP_SEE_OTHER
                     resp.location = os.path.join(os.path.dirname(req.relative_uri), "signed", common_name.value)
                     return
+
+                try:
+                    renewal_signature = b64decode(renewal_header)
+                except TypeError, ValueError:
+                    logger.error("Renewal failed, bad signature supplied for %s", common_name.value)
+                    reason = "Renewal failed, bad signature supplied"
                 else:
                     try:
                         verifier = cert.public_key().verifier(

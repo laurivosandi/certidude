@@ -146,6 +146,20 @@ def test_cli_setup_authority():
     assert authority.ca_cert.serial_number <= 0xfffffffffffffffffffffffffffffffffffffff
     assert authority.ca_cert.not_valid_before < datetime.now()
     assert authority.ca_cert.not_valid_after > datetime.now() + timedelta(days=7000)
+    assert authority.server_flags("lauri@fedora-123") == False
+    assert authority.server_flags("fedora-123") == False
+    assert authority.server_flags("vpn.example.lan") == True
+    assert authority.server_flags("lauri@a.b.c") == False
+
+    # Generate garbage
+    with open("/var/lib/certidude/ca.example.lan/bla", "w") as fh:
+        pass
+    with open("/var/lib/certidude/ca.example.lan/requests/bla", "w") as fh:
+        pass
+    with open("/var/lib/certidude/ca.example.lan/signed/bla", "w") as fh:
+        pass
+    with open("/var/lib/certidude/ca.example.lan/revoked/bla", "w") as fh:
+        pass
 
     # Start server before any signing operations are performed
     config.CERTIFICATE_RENEWAL_ALLOWED = True
@@ -198,6 +212,8 @@ def test_cli_setup_authority():
     r = requests.get("http://ca.example.lan/../nonexistant.html")
     assert r.status_code == 403, r.text
 
+    r = client().simulate_get("/")
+    assert r.status_code == 200, r.text
     r = client().simulate_get("/index.html")
     assert r.status_code == 200, r.text
     r = client().simulate_get("/nonexistant.html")
@@ -314,6 +330,15 @@ def test_cli_setup_authority():
     assert "Stored request " in inbox.pop(), inbox
     assert not inbox
 
+    buf = generate_csr(cn=u"test2.example.lan")
+    r = client().simulate_post("/api/request/",
+        query_string="autosign=1",
+        body=buf,
+        headers={"content-type":"application/pkcs10"})
+    assert r.status_code == 202 # server CN, request stored
+    assert "Stored request " in inbox.pop(), inbox
+    assert not inbox
+
     # Test signed certificate API call
     r = client().simulate_get("/api/signed/nonexistant/")
     assert r.status_code == 404, r.text
@@ -390,6 +415,10 @@ def test_cli_setup_authority():
         body="key=other&value=something",
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
     assert r.status_code == 200, r.text
+    r = client().simulate_post("/api/signed/test/tag/",
+        body="key=location&value=Tallinn",
+        headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
+    assert r.status_code == 200, r.text
 
     # Tags can be overwritten only by admin
     r = client().simulate_put("/api/signed/test/tag/something/")
@@ -401,6 +430,11 @@ def test_cli_setup_authority():
         body="value=else",
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
     assert r.status_code == 200, r.text
+    r = client().simulate_put("/api/signed/test/tag/location=Tallinn/",
+        body="value=Tartu",
+        headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
+    assert r.status_code == 200, r.text
+    assert getxattr(path, "user.xdg.tags") == "location=Tartu,else"
 
     # Tags can be deleted only by admin
     r = client().simulate_delete("/api/signed/test/tag/else/")
@@ -409,6 +443,9 @@ def test_cli_setup_authority():
         headers={"Authorization":usertoken})
     assert r.status_code == 403, r.text
     r = client().simulate_delete("/api/signed/test/tag/else/",
+        headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
+    assert r.status_code == 200, r.text
+    r = client().simulate_delete("/api/signed/test/tag/location=Tartu/",
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
     assert r.status_code == 200, r.text
     assert "user.xdg.tags" not in listxattr(path, "user.xdg.tags")
@@ -502,7 +539,7 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
 
     result = runner.invoke(cli, ["setup", "nginx", "-cn", "www.example.lan", "ca.example.lan"])
-    assert not result.exception, result.output # blah already exists, remove to regenerate
+    assert not result.exception, result.output # client conf already exists, remove to regenerate
 
     import os
 
@@ -528,6 +565,8 @@ def test_cli_setup_authority():
     result = runner.invoke(cli, ["request", "--renew", "--no-wait"])
     assert not result.exception, result.output
     assert "Writing certificate to:" in result.output, result.output
+    assert "Attached renewal signature" in result.output, result.output
+    assert "refused to sign immideately" not in result.output, result.output
 
     # Test nginx setup
     assert os.system("nginx -t") == 0, "Generated nginx config was invalid"
@@ -549,7 +588,7 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
 
     result = runner.invoke(cli, ['setup', 'openvpn', 'server', "-cn", "vpn.example.lan", "ca.example.lan"])
-    assert not result.exception, result.output # blah already exists, remove to regenerate
+    assert not result.exception, result.output # client conf already exists, remove to regenerate
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")
@@ -578,7 +617,7 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
 
     result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "roadwarrior1", "ca.example.lan", "vpn.example.lan"])
-    assert not result.exception, result.output # blah already exists, remove to regenerate
+    assert not result.exception, result.output # client conf already exists, remove to regenerate
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")
@@ -602,7 +641,7 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
 
     result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
-    assert not result.exception, result.output # blah already exists, remove to regenerate
+    assert not result.exception, result.output # client conf already exists, remove to regenerate
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")
@@ -631,7 +670,7 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
 
     result = runner.invoke(cli, ['setup', 'strongswan', 'client', "-cn", "roadwarrior2", "ca.example.lan", "ipsec.example.lan"])
-    assert not result.exception, result.output # blah already exists, remove to regenerate
+    assert not result.exception, result.output # client conf already exists, remove to regenerate
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")

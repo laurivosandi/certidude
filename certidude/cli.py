@@ -1208,13 +1208,14 @@ def certidude_serve(port, listen, fork):
         logger.debug("Started Certidude at %s", const.FQDN)
 
         drop_privileges()
-
         def quit_handler(*args, **kwargs):
             click.echo("Shutting down HTTP server...")
-            import threading
-            threading.Thread(target=httpd.shutdown).start()
+            raise KeyboardInterrupt
         signal.signal(signal.SIGHUP, quit_handler)
-        httpd.serve_forever()
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            click.echo("Caught Ctrl-C, server stopped")
 
 
 @click.command("yubikey", help="Set up Yubikey as client authentication token")
