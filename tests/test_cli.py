@@ -101,6 +101,10 @@ def test_cli_setup_authority():
     if os.path.exists("/var/log/certidude.log"):
         os.unlink("/var/log/certidude.log")
 
+    # systemd
+    if os.path.exists("/etc/systemd/system/certidude.service"):
+        os.unlink("/etc/systemd/system/certidude.service")
+
     # Remove nginx stuff
     if os.path.exists("/etc/nginx/sites-available/ca.conf"):
         os.unlink("/etc/nginx/sites-available/ca.conf")
@@ -125,7 +129,11 @@ def test_cli_setup_authority():
     from certidude.cli import entry_point as cli
     from certidude import const
 
-    result = runner.invoke(cli, ['setup', 'authority'])
+    result = runner.invoke(cli, ['setup', 'authority', '-s'])
+    os.setgid(0) # Restore GID
+    os.umask(0022)
+
+    result = runner.invoke(cli, ['setup', 'authority']) # For if-else branches
     os.setgid(0) # Restore GID
     os.umask(0022)
 
@@ -472,8 +480,14 @@ def test_cli_setup_authority():
     #############
     clean_client()
 
+    result = runner.invoke(cli, ["setup", "nginx", "-cn", "www", "ca.example.lan"])
+    assert result.exception # FQDN required
+
     result = runner.invoke(cli, ["setup", "nginx", "-cn", "www.example.lan", "ca.example.lan"])
     assert not result.exception, result.output
+
+    result = runner.invoke(cli, ["setup", "nginx", "-cn", "www.example.lan", "ca.example.lan"])
+    assert not result.exception, result.output # blah already exists, remove to regenerate
 
     import os
 
@@ -482,6 +496,7 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
+    assert "refused to sign" in result.output, result.output
 
     child_pid = os.fork()
     if not child_pid:
@@ -512,8 +527,14 @@ def test_cli_setup_authority():
     if not os.path.exists("/etc/openvpn/keys"):
         os.makedirs("/etc/openvpn/keys")
 
+    result = runner.invoke(cli, ['setup', 'openvpn', 'server', "-cn", "vpn", "ca.example.lan"])
+    assert result.exception, result.output
+
     result = runner.invoke(cli, ['setup', 'openvpn', 'server', "-cn", "vpn.example.lan", "ca.example.lan"])
     assert not result.exception, result.output
+
+    result = runner.invoke(cli, ['setup', 'openvpn', 'server', "-cn", "vpn.example.lan", "ca.example.lan"])
+    assert not result.exception, result.output # blah already exists, remove to regenerate
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")
@@ -541,6 +562,9 @@ def test_cli_setup_authority():
     result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "roadwarrior1", "ca.example.lan", "vpn.example.lan"])
     assert not result.exception, result.output
 
+    result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "roadwarrior1", "ca.example.lan", "vpn.example.lan"])
+    assert not result.exception, result.output # blah already exists, remove to regenerate
+
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")
 
@@ -556,8 +580,14 @@ def test_cli_setup_authority():
 
     clean_client()
 
+    result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec", "ca.example.lan"])
+    assert result.exception, result.output # FQDN required
+
     result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
     assert not result.exception, result.output
+
+    result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
+    assert not result.exception, result.output # blah already exists, remove to regenerate
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")
@@ -585,6 +615,9 @@ def test_cli_setup_authority():
     result = runner.invoke(cli, ['setup', 'strongswan', 'client', "-cn", "roadwarrior2", "ca.example.lan", "ipsec.example.lan"])
     assert not result.exception, result.output
 
+    result = runner.invoke(cli, ['setup', 'strongswan', 'client', "-cn", "roadwarrior2", "ca.example.lan", "ipsec.example.lan"])
+    assert not result.exception, result.output # blah already exists, remove to regenerate
+
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")
 
@@ -597,11 +630,30 @@ def test_cli_setup_authority():
     ### NetworkManager ###
     ######################
 
+    clean_client()
+
     result = runner.invoke(cli, ['setup', 'openvpn', 'networkmanager', "-cn", "roadwarrior3", "ca.example.lan", "vpn.example.lan"])
     assert not result.exception, result.output
 
+    with open("/etc/certidude/client.conf", "a") as fh:
+        fh.write("insecure = true\n")
+
+    result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception, result.output
+    assert "Writing certificate to:" in result.output, result.output
+
+    clean_client()
+
     result = runner.invoke(cli, ['setup', 'strongswan', 'networkmanager', "-cn", "roadwarrior4", "ca.example.lan", "ipsec.example.lan"])
     assert not result.exception, result.output
+
+    with open("/etc/certidude/client.conf", "a") as fh:
+        fh.write("insecure = true\n")
+
+    result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception, result.output
+    assert "Writing certificate to:" in result.output, result.output
+
 
 
     ###################

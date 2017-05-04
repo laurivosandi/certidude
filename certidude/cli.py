@@ -31,6 +31,16 @@ logger = logging.getLogger(__name__)
 
 NOW = datetime.utcnow().replace(tzinfo=None)
 
+def fqdn_required(func):
+    def wrapped(**args):
+        common_name = args.get("common_name")
+        if "." in common_name:
+            logger.info("Using fully qualified hostname %s" % common_name)
+        else:
+            raise ValueError("Fully qualified hostname not specified as common name, make sure hostname -f works")
+        return func(**args)
+    return wrapped
+
 def setup_client(prefix="client_", dh=False):
     # Create section in /etc/certidude/client.conf
     def wrapper(func):
@@ -306,7 +316,7 @@ def certidude_request(fork, renew, no_wait):
                 nm_config.set("vpn", "tap-dev", "no")
                 nm_config.set("vpn", "remote-cert-tls", "server") # Assert TLS Server flag of X.509 certificate
                 nm_config.set("vpn", "remote", service_config.get(endpoint, "remote"))
-                nm_config.set("vpn", "port", endpoint_port)
+                nm_config.set("vpn", "port", str(endpoint_port))
                 nm_config.set("vpn", "proto", endpoint_proto)
                 nm_config.set("vpn", "key", endpoint_key_path)
                 nm_config.set("vpn", "cert", endpoint_certificate_path)
@@ -383,6 +393,7 @@ def certidude_request(fork, renew, no_wait):
     default="/etc/openvpn/site-to-client.conf",
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
+@fqdn_required
 @setup_client(prefix="server_", dh=True)
 def certidude_setup_openvpn_server(authority, common_name, config, subnet, route, local, proto, port, **paths):
     # Install dependencies
@@ -443,32 +454,14 @@ def certidude_setup_openvpn_server(authority, common_name, config, subnet, route
     type=click.File(mode="w", atomic=True, lazy=True),
     help="Site configuration file of nginx, /etc/nginx/sites-available/%s.conf by default" % const.HOSTNAME)
 @click.option("--verify-client", "-vc", default="optional", type=click.Choice(['optional', 'on', 'off']))
+@fqdn_required
 @setup_client(prefix="server_", dh=True)
 def certidude_setup_nginx(authority, common_name, site_config, tls_config, verify_client, **paths):
+
     apt("nginx")
     rpm("nginx")
     from jinja2 import Environment, PackageLoader
     env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
-    if "." not in common_name:
-        raise ValueError("Fully qualified hostname not specified as common name, make sure hostname -f works")
-    client_config = ConfigParser()
-    if os.path.exists(const.CLIENT_CONFIG_PATH):
-        client_config.readfp(open(const.CLIENT_CONFIG_PATH))
-    if client_config.has_section(authority):
-        click.echo("Section '%s' already exists in %s, remove to regenerate" % (authority, const.CLIENT_CONFIG_PATH))
-    else:
-        client_config.add_section(authority)
-        client_config.set(authority, "trigger", "interface up")
-        client_config.set(authority, "common name", common_name)
-        client_config.set(authority, "request path", request_path)
-        client_config.set(authority, "key path", key_path)
-        client_config.set(authority, "certificate path", certificate_path)
-        client_config.set(authority, "authority path",  authority_path)
-        client_config.set(authority, "revocations path",  revocations_path)
-        with open(const.CLIENT_CONFIG_PATH + ".part", 'wb') as fh:
-            client_config.write(fh)
-        os.rename(const.CLIENT_CONFIG_PATH + ".part", const.CLIENT_CONFIG_PATH)
-        click.echo("Section '%s' added to %s" % (authority, const.CLIENT_CONFIG_PATH))
 
     context = globals() # Grab const.BLAH
     context.update(locals())
@@ -507,7 +500,7 @@ def certidude_setup_nginx(authority, common_name, site_config, tls_config, verif
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
 @setup_client()
-def certidude_setup_openvpn_client(authority, remote, common_name, config, proto, **ctx):
+def certidude_setup_openvpn_client(authority, remote, common_name, config, proto, **paths):
     # Install dependencies
     apt("openvpn")
     rpm("openvpn")
@@ -536,10 +529,10 @@ def certidude_setup_openvpn_client(authority, remote, common_name, config, proto
     config.write("proto %s\n" % proto)
     config.write("dev tun-%s\n" % remote.split(".")[0])
     config.write("nobind\n")
-    config.write("key %s\n" % client_config.get(authority, "key path"))
-    config.write("cert %s\n" % client_config.get(authority, "certificate path"))
-    config.write("ca %s\n" % client_config.get(authority, "authority path"))
-    config.write("crl-verify %s\n" % client_config.get(authority, "revocations path"))
+    config.write("key %s\n" % paths.get("key path"))
+    config.write("cert %s\n" % paths.get("certificate path"))
+    config.write("ca %s\n" % paths.get("authority path"))
+    config.write("crl-verify %s\n" % paths.get("revocations path"))
     config.write("comp-lzo\n")
     config.write("user nobody\n")
     config.write("group nogroup\n")
@@ -559,11 +552,9 @@ def certidude_setup_openvpn_client(authority, remote, common_name, config, proto
 @click.option("--common-name", "-cn", default=const.FQDN, help="Common name, %s by default" % const.FQDN)
 @click.option("--subnet", "-sn", default=u"192.168.33.0/24", type=ip_network, help="IPsec virtual subnet, 192.168.33.0/24 by default")
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
+@fqdn_required
 @setup_client(prefix="server_")
 def certidude_setup_strongswan_server(authority, common_name, subnet, route, **paths):
-    if "." not in common_name:
-        raise ValueError("Hostname has to be fully qualified!")
-
     # Install dependencies
     apt("strongswan")
     rpm("strongswan")
@@ -729,11 +720,8 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
 @click.option("--directory", help="Directory for authority files")
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
+@fqdn_required
 def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags):
-    if "." not in common_name:
-	raise ValueError("No FQDN configured on this system!")
-    click.echo("Using fully qualified hostname: %s" % common_name)
-
     # Install only rarely changing stuff from OS package management
     apt("python-setproctitle cython python-dev libkrb5-dev libldap2-dev libffi-dev libssl-dev")
     apt("python-mimeparse python-markdown python-xattr python-jinja2 python-cffi python-openssl")
