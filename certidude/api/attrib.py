@@ -15,6 +15,7 @@ class AttributeResource(object):
         Return extended attributes stored on the server.
         This not only contains tags and lease information,
         but might also contain some other sensitive information.
+        Results made available only to lease IP address.
         """
         try:
             path, buf, cert = authority.get_signed(cn)

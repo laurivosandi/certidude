@@ -245,6 +245,9 @@ def test_cli_setup_authority():
     r = client().simulate_delete("/api/request/test/",
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text
+    r = client().simulate_delete("/api/request/nonexistant/",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 404, r.text
 
     # Test request submission corner cases
     r = client().simulate_post("/api/request/",
@@ -376,6 +379,8 @@ def test_cli_setup_authority():
     # Test attribute fetching API call
     r = client().simulate_get("/api/signed/test/attr/")
     assert r.status_code == 403, r.text
+    r = client().simulate_get("/api/signed/nonexistant/attr/")
+    assert r.status_code == 404, r.text
     r = client().simulate_get("/api/signed/test/lease/", headers={"Authorization":admintoken})
     assert r.status_code == 404, r.text
 
@@ -383,9 +388,20 @@ def test_cli_setup_authority():
     r = client().simulate_post("/api/lease/",
         query_string = "client=test&address=127.0.0.1",
         headers={"Authorization":admintoken})
-    assert r.status_code == 200, r.text
+    assert r.status_code == 200, r.text # lease update ok
+    r = client().simulate_post("/api/lease/",
+        query_string = "client=test&address=127.0.0.1&serial=0",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 403, r.text # invalid serial number supplied
     r = client().simulate_get("/api/signed/test/attr/")
-    assert r.status_code == 200, r.text
+    assert r.status_code == 200, r.text # read okay from own address
+    r = client().simulate_post("/api/lease/",
+        query_string = "client=test&address=1.2.3.4",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 200, r.text # lease update ok
+    r = client().simulate_get("/api/signed/test/attr/")
+    assert r.status_code == 403, r.text # read failed from other address
+
 
     # Test lease retrieval
     r = client().simulate_get("/api/signed/test/lease/")
