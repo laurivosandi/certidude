@@ -379,11 +379,11 @@ def test_cli_setup_authority():
     r = client().simulate_get("/api/signed/test/lease/", headers={"Authorization":admintoken})
     assert r.status_code == 404, r.text
 
-    # Insert lease as if VPN gateway had submitted it
-    path, _, _ = authority.get_signed("test")
-    from xattr import setxattr, getxattr, listxattr
-    setxattr(path, "user.lease.address", b"127.0.0.1")
-    setxattr(path, "user.lease.last_seen", datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
+    # Insert lease
+    r = client().simulate_post("/api/lease/",
+        query_string = "client=test&address=127.0.0.1",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 200, r.text
     r = client().simulate_get("/api/signed/test/attr/")
     assert r.status_code == 200, r.text
 
@@ -434,7 +434,9 @@ def test_cli_setup_authority():
         body="value=Tartu",
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
     assert r.status_code == 200, r.text
-    assert getxattr(path, "user.xdg.tags") == "location=Tartu,else"
+    r = client().simulate_get("/api/signed/test/tag/", headers={"Authorization":admintoken})
+    assert r.status_code == 200, r.text
+    assert r.text == '[{"value": "Tartu", "key": "location", "id": "location=Tartu"}, {"value": "else", "key": "other", "id": "else"}]', r.text
 
     # Tags can be deleted only by admin
     r = client().simulate_delete("/api/signed/test/tag/else/")
@@ -448,7 +450,9 @@ def test_cli_setup_authority():
     r = client().simulate_delete("/api/signed/test/tag/location=Tartu/",
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
     assert r.status_code == 200, r.text
-    assert "user.xdg.tags" not in listxattr(path, "user.xdg.tags")
+    r = client().simulate_get("/api/signed/test/tag/", headers={"Authorization":admintoken})
+    assert r.status_code == 200, r.text
+    assert r.text == "[]", r.text
 
 
     # Test revocation
