@@ -657,12 +657,11 @@ def certidude_setup_strongswan_client(authority, remote, common_name, **paths):
 @setup_client()
 def certidude_setup_strongswan_networkmanager(authority, remote, common_name, **paths):
     # Install dependencies
-    apt("strongswan-nm")
-    rpm("NetworkManager-strongswan-gnome")
-
-    endpoint = "IPSec to %s" % remote
+    apt("network-manager strongswan-nm")
+    rpm("NetworkManager NetworkManager-tui NetworkManager-strongswan-gnome")
 
     # Create corresponding section in /etc/certidude/services.conf
+    endpoint = "IPSec to %s" % remote
     service_config = ConfigParser()
     if os.path.exists(const.SERVICES_CONFIG_PATH):
         service_config.readfp(open(const.SERVICES_CONFIG_PATH))
@@ -685,6 +684,9 @@ def certidude_setup_strongswan_networkmanager(authority, remote, common_name, **
 @click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
 @setup_client()
 def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **paths):
+    apt("network-manager network-manager-openvpn-gnome")
+    rpm("NetworkManager NetworkManager-tui NetworkManager-openvpn-gnome")
+
     # Create corresponding section in /etc/certidude/services.conf
     endpoint = "OpenVPN to %s" % remote
 
