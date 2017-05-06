@@ -40,6 +40,8 @@ def apt(packages):
         cmd = ["/usr/bin/apt-get", "install", "-yqq"] + packages.split(" ")
         click.echo("Running: %s" % " ".join(cmd))
         subprocess.call(cmd)
+        return True
+    return False
 
 
 def rpm(packages):
@@ -50,10 +52,13 @@ def rpm(packages):
         cmd = ["/usr/bin/dnf", "install", "-y"] + packages.split(" ")
         click.echo("Running: %s" % " ".join(cmd))
         subprocess.call(cmd)
+        return True
+    return False
 
 
 def pip(packages):
     click.echo("Running: pip install %s" % packages)
     import pip
     pip.main(['install'] + packages.split(" "))
+    return True
 

@@ -33,9 +33,12 @@ def get_request(common_name):
     if not re.match(RE_HOSTNAME, common_name):
         raise ValueError("Invalid common name %s" % repr(common_name))
     path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
-    with open(path) as fh:
-        buf = fh.read()
-        return path, buf, x509.load_pem_x509_csr(buf, default_backend())
+    try:
+        with open(path) as fh:
+            buf = fh.read()
+            return path, buf, x509.load_pem_x509_csr(buf, default_backend())
+    except EnvironmentError:
+        raise errors.RequestDoesNotExist("Certificate signing request file %s does not exist" % path)
 
 def get_signed(common_name):
     if not re.match(RE_HOSTNAME, common_name):
@@ -210,8 +213,7 @@ def delete_request(common_name):
     if not re.match(RE_HOSTNAME, common_name):
         raise ValueError("Invalid common name")
 
-    path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
-    _, buf, csr = get_request(common_name)
+    path, buf, csr = get_request(common_name)
     os.unlink(path)
 
     # Publish event at CA channel

@@ -137,7 +137,7 @@ class StaticResource(object):
     def __call__(self, req, resp):
         path = os.path.realpath(os.path.join(self.root, req.path[1:]))
         if not path.startswith(self.root):
-            raise falcon.HTTPForbidden
+            raise falcon.HTTPBadRequest()
 
         if os.path.isdir(path):
             path = os.path.join(path, "index.html")

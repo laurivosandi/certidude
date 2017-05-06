@@ -71,11 +71,6 @@ EVENT_SOURCE_SUBSCRIBE = cp.get("push", "event source subscribe")
 LONG_POLL_PUBLISH = cp.get("push", "long poll publish")
 LONG_POLL_SUBSCRIBE = cp.get("push", "long poll subscribe")
 
-if const.DOMAIN == "example.lan": # TODO: include nginx setup in Travis
-    EVENT_SOURCE_PUBLISH = ""
-    LONG_POLL_PUBLISH = ""
-    LONG_POLL_SUBSCRIBE = "//nonexistant/lp/sub/%s"
-
 LOGGING_BACKEND = cp.get("logging", "backend")
 
 if "whitelist" == AUTHORIZATION_BACKEND:

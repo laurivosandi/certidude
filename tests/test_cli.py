@@ -72,6 +72,12 @@ def clean_client():
             if filename.endswith(".pem"):
                 os.unlink(os.path.join("/tmp/ca.example.lan", filename))
 
+    # Reset IPsec stuff
+    with open("/etc/ipsec.conf", "w") as fh: # TODO: make compatible with Fedora
+        pass
+    with open("/etc/ipsec.secrets", "w") as fh: # TODO: make compatible with Fedora
+        pass
+
 
 def test_cli_setup_authority():
     import os
@@ -110,11 +116,12 @@ def test_cli_setup_authority():
         os.unlink("/etc/nginx/sites-available/ca.conf")
     if os.path.exists("/etc/nginx/sites-enabled/ca.conf"):
         os.unlink("/etc/nginx/sites-enabled/ca.conf")
+    if os.path.exists("/etc/nginx/sites-available/certidude.conf"):
+        os.unlink("/etc/nginx/sites-available/certidude.conf")
+    if os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
+        os.unlink("/etc/nginx/sites-enabled/certidude.conf")
     if os.path.exists("/etc/nginx/conf.d/tls.conf"):
         os.unlink("/etc/nginx/conf.d/tls.conf")
-
-    with open("/etc/ipsec.conf", "w") as fh: # TODO: make compatible with Fedora
-        pass
 
     # Remove OpenVPN stuff
     if os.path.exists("/etc/openvpn"):
@@ -167,7 +174,7 @@ def test_cli_setup_authority():
     server_pid = os.fork()
     if not server_pid:
         # Fork to prevent umask, setuid, setgid side effects
-        result = runner.invoke(cli, ['serve', '-p', '80', '-l', '127.0.1.1'])
+        result = runner.invoke(cli, ['serve', '-p', '8080', '-l', '127.0.1.1'])
         assert not result.exception, result.output
         return
 
@@ -210,7 +217,7 @@ def test_cli_setup_authority():
     r = requests.get("http://ca.example.lan/nonexistant.html")
     assert r.status_code == 404, r.text
     r = requests.get("http://ca.example.lan/../nonexistant.html")
-    assert r.status_code == 403, r.text
+    assert r.status_code == 400, r.text
 
     r = client().simulate_get("/")
     assert r.status_code == 200, r.text
@@ -219,7 +226,7 @@ def test_cli_setup_authority():
     r = client().simulate_get("/nonexistant.html")
     assert r.status_code == 404, r.text
     r = client().simulate_get("/../nonexistant.html")
-    assert r.status_code == 403, r.text
+    assert r.status_code == 400, r.text
 
     # Test request submission
     buf = generate_csr(cn=u"test")
@@ -232,6 +239,7 @@ def test_cli_setup_authority():
         headers={"content-type":"application/pkcs10"})
     assert r.status_code == 202 # success
     assert "Stored request " in inbox.pop(), inbox
+    assert os.path.exists("/var/lib/certidude/ca.example.lan/requests/test.pem")
 
     # Test request deletion
     r = client().simulate_delete("/api/request/test/")
@@ -242,6 +250,7 @@ def test_cli_setup_authority():
     r = client().simulate_delete("/api/request/test/",
         headers={"User-Agent":UA_FEDORA_FIREFOX, "Authorization":admintoken})
     assert r.status_code == 403, r.text # CSRF prevented
+    assert os.path.exists("/var/lib/certidude/ca.example.lan/requests/test.pem")
     r = client().simulate_delete("/api/request/test/",
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text
@@ -632,6 +641,7 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
     assert "Writing certificate to:" in result.output, result.output
     assert os.path.exists("/tmp/ca.example.lan/server_cert.pem")
+    assert os.path.exists("/etc/openvpn/site-to-client.conf")
 
     # Reset config
     os.unlink("/etc/certidude/client.conf")
@@ -649,6 +659,7 @@ def test_cli_setup_authority():
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
     assert "Writing certificate to:" in result.output, result.output
+    assert os.path.exists("/etc/openvpn/client-to-site.conf")
 
     # TODO: assert key, req, cert paths were included correctly in OpenVPN config
     # TODO: test client verification with curl
@@ -664,6 +675,7 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
     assert not result.exception, result.output
+    assert open("/etc/ipsec.secrets").read() == ": RSA /tmp/ca.example.lan/server_key.pem\n"
 
     result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
     assert not result.exception, result.output # client conf already exists, remove to regenerate
@@ -766,6 +778,13 @@ def test_cli_setup_authority():
     with open("/run/certidude/server.pid") as fh:
         os.kill(int(fh.read()), 1)
 
+    # Note: STORAGE_PATH was mangled above, hence it's /tmp not /var/lib/certidude
+    assert open("/etc/apparmor.d/local/usr.lib.ipsec.charon").read() == "/tmp/** r,\n"
+
     assert len(inbox) == 0, inbox # Make sure all messages were checked
 
     os.waitpid(server_pid, 0)
+
+    os.system("service nginx stop")
+    os.system("service openvpn stop")
+    os.system("ipsec stop")

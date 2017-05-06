@@ -172,7 +172,7 @@ class RequestDetailResource(object):
 
         try:
             _, buf, _ = authority.get_request(cn)
-        except EnvironmentError:
+        except errors.RequestDoesNotExist:
             logger.warning(u"Failed to serve non-existant request %s to %s",
                 cn, req.context.get("remote_addr"))
             raise falcon.HTTPNotFound()
@@ -227,8 +227,8 @@ class RequestDetailResource(object):
         try:
             authority.delete_request(cn)
             # Logging implemented in the function above
-        except EnvironmentError as e:
-            resp.body = "No certificate CN=%s found" % cn
+        except errors.RequestDoesNotExist as e:
+            resp.body = "No certificate signing request for %s found" % cn
             logger.warning(u"User %s failed to delete signing request %s from %s, reason: %s",
                 req.context["user"], cn, req.context.get("remote_addr"), e)
             raise falcon.HTTPNotFound()

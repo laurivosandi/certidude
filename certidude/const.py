@@ -15,7 +15,7 @@ SERVER_LOG_PATH = "/var/log/certidude-server.log"
 SIGNER_SOCKET_PATH = "/run/certidude/signer.sock"
 SIGNER_PID_PATH = os.path.join(RUN_DIR, "signer.pid")
 SIGNER_LOG_PATH = "/var/log/certidude-signer.log"
-STORAGE_PATH = "/var/lib/certidude"
+STORAGE_PATH = "/var/lib/certidude/"
 
 try:
     FQDN = socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, 0, 0, socket.AI_CANONNAME)[0][3]

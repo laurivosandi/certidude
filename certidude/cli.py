@@ -92,9 +92,10 @@ def setup_client(prefix="client_", dh=False):
 @click.option("-nw", "--no-wait", default=False, is_flag=True, help="Return immideately if server doesn't autosign")
 def certidude_request(fork, renew, no_wait):
     # Here let's try to avoid compiling packages from scratch
-    rpm("openssl") # TODO
-    apt("openssl python-cryptography python-jinja2") # Native packages on Ubuntu 16.04
-    pip("cryptography jinja2") # Mac OS X, should be skipped on Ubuntu
+    rpm("openssl") or \
+    apt("openssl python-cryptography python-jinja2") or \
+    pip("cryptography jinja2")
+
     import requests
     from jinja2 import Environment, PackageLoader
     env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
@@ -270,16 +271,6 @@ def certidude_request(fork, renew, no_wait):
                         "%s/ipsec.conf" % const.STRONGSWAN_PREFIX)
                     break
 
-                # Regenerate /etc/ipsec.secrets
-                with open("%s/ipsec.secrets.part" % const.STRONGSWAN_PREFIX, "w") as fh:
-                    for filename in os.listdir("%s/ipsec.d/private" % const.STRONGSWAN_PREFIX):
-                        if not filename.endswith(".pem"):
-                            continue
-                        fh.write(": RSA %s/ipsec.d/private/%s\n" % (const.STRONGSWAN_PREFIX, filename))
-                os.rename(
-                    "%s/ipsec.secrets.part" % const.STRONGSWAN_PREFIX,
-                    "%s/ipsec.secrets" % const.STRONGSWAN_PREFIX)
-
                 # Attempt to reload config or start if it's not running
                 if os.path.exists("/usr/sbin/strongswan"): # wtf fedora
                     if os.system("strongswan update"):
@@ -319,7 +310,8 @@ def certidude_request(fork, renew, no_wait):
                 nm_config.set("vpn", "remote-cert-tls", "server") # Assert TLS Server flag of X.509 certificate
                 nm_config.set("vpn", "remote", service_config.get(endpoint, "remote"))
                 nm_config.set("vpn", "port", str(endpoint_port))
-                nm_config.set("vpn", "proto", endpoint_proto)
+                if endpoint_proto == "tcp":
+                    nm_config.set("vpn", "proto-tcp", "yes")
                 nm_config.set("vpn", "key", endpoint_key_path)
                 nm_config.set("vpn", "cert", endpoint_certificate_path)
                 nm_config.set("vpn", "ca", endpoint_authority_path)
@@ -498,7 +490,7 @@ def certidude_setup_nginx(authority, common_name, site_config, tls_config, verif
 @click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
 @click.option('--proto', "-t", default="udp", type=click.Choice(['udp', 'tcp']), help="OpenVPN transport protocol, UDP by default")
 @click.option("--config", "-o",
-    default="/etc/openvpn/client-to-site.conf",
+    default="/etc/openvpn/client-to-site.conf", # TODO: created initially disabled conf
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
 @setup_client()
@@ -580,19 +572,24 @@ def certidude_setup_strongswan_server(authority, common_name, subnet, route, **p
 
     # Create corresponding section to /etc/ipsec.conf
     from ipsecparse import loads
-    config = loads(open("%s/ipsec.conf" % const.STRONGSWAN_PREFIX).read())
-    config["conn", authority] = dict(
+    ipsec_conf = loads(open("%s/ipsec.conf" % const.STRONGSWAN_PREFIX).read())
+    ipsec_conf["ca", authority] = dict(
+        auto="add",
+        cacert=paths.get("authority_path"))
+    ipsec_conf["conn", authority] = dict(
         leftcert=paths.get("certificate_path"),
         leftsubnet=",".join(route),
         right="%any",
         rightsourceip=str(subnet),
         closeaction="restart",
         auto="ignore")
-    with open("%s/ipsec.conf.part" % const.STRONGSWAN_PREFIX, "w") as fh:
-        fh.write(config.dumps())
-    os.rename(
-        "%s/ipsec.conf.part" % const.STRONGSWAN_PREFIX,
-        "%s/ipsec.conf" % const.STRONGSWAN_PREFIX)
+    with open("%s/ipsec.conf" % const.STRONGSWAN_PREFIX, "w") as fh:
+        fh.write(ipsec_conf.dumps())
+    with open("%s/ipsec.secrets" % const.STRONGSWAN_PREFIX, "a") as fh:
+        fh.write(": RSA %s\n" % paths.get("key_path"))
+    if os.path.exists("/etc/apparmor.d/local"):
+        with open("/etc/apparmor.d/local/usr.lib.ipsec.charon", "w") as fh:
+            fh.write(os.path.join(const.STORAGE_PATH, "**") + " r,\n") # TODO: dedup!
 
     click.echo()
     click.echo("If you're running Ubuntu make sure you're not affected by #1505222")
@@ -606,8 +603,7 @@ def certidude_setup_strongswan_server(authority, common_name, subnet, route, **p
 @setup_client()
 def certidude_setup_strongswan_client(authority, remote, common_name, **paths):
     # Install dependencies
-    apt("strongswan")
-    rpm("strongswan")
+    apt("strongswan") or rpm("strongswan")
     pip("ipsecparse")
 
     # Create corresponding section in /etc/certidude/services.conf
@@ -629,24 +625,29 @@ def certidude_setup_strongswan_client(authority, remote, common_name, **paths):
 
     # Create corresponding section in /etc/ipsec.conf
     from ipsecparse import loads
-    config = loads(open('%s/ipsec.conf' % const.STRONGSWAN_PREFIX).read())
-    config["conn", remote] = dict(
+    ipsec_conf = loads(open('%s/ipsec.conf' % const.STRONGSWAN_PREFIX).read())
+    ipsec_conf["ca", authority] = dict(
+        auto="add",
+        cacert=paths.get("authority_path"))
+    ipsec_conf["conn", remote] = dict(
         leftsourceip="%config",
         left="%defaultroute",
         leftcert=paths.get("certificate_path"),
         rightid="%any",
         right=remote,
-        #rightsubnet=route,
+        rightsubnet="0.0.0.0/0", # To allow anything suggested by gateway
         keyexchange="ikev2",
         keyingtries="300",
         dpdaction="restart",
         closeaction="restart",
         auto="ignore")
-    with open("%s/ipsec.conf.part" % const.STRONGSWAN_PREFIX, "w") as fh:
-        fh.write(config.dumps())
-    os.rename(
-        "%s/ipsec.conf.part" % const.STRONGSWAN_PREFIX,
-        "%s/ipsec.conf" % const.STRONGSWAN_PREFIX)
+    with open("%s/ipsec.conf" % const.STRONGSWAN_PREFIX, "w") as fh:
+        fh.write(ipsec_conf.dumps())
+    with open("%s/ipsec.secrets" % const.STRONGSWAN_PREFIX, "a") as fh:
+        fh.write(": RSA %s\n" % paths.get("key_path"))
+    if os.path.exists("/etc/apparmor.d/local"):
+        with open("/etc/apparmor.d/local/usr.lib.ipsec.charon", "w") as fh:
+            fh.write(os.path.join(const.STORAGE_PATH, "**") + " r,\n")
 
     click.echo("Generated section %s in %s" % (authority, const.CLIENT_CONFIG_PATH))
     click.echo("Run 'certidude request' to request certificates and to enable services")
@@ -800,21 +801,23 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     certidude_path = sys.argv[0]
 
     # Push server config generation
-    if not os.path.exists("/etc/nginx") or os.getenv("TRAVIS"):
-        click.echo("Directory /etc/nginx does not exist, hence not creating nginx configuration")
-        listen = "0.0.0.0"
-        port = "80"
-    else:
+    if os.path.exists("/etc/nginx"):
+        listen = "127.0.1.1"
         port = "8080"
         click.echo("Generating: %s" % nginx_config.name)
         nginx_config.write(env.get_template("server/nginx.conf").render(vars()))
+        nginx_config.close()
         if not os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
             os.symlink("../sites-available/certidude.conf", "/etc/nginx/sites-enabled/certidude.conf")
             click.echo("Symlinked %s -> /etc/nginx/sites-enabled/" % nginx_config.name)
         if os.path.exists("/etc/nginx/sites-enabled/default"):
             os.unlink("/etc/nginx/sites-enabled/default")
-        if not push_server:
-            click.echo("Remember to install nchan capable nginx instead of regular nginx!")
+        os.system("service nginx restart")
+    else:
+        click.echo("Directory /etc/nginx does not exist, hence not creating nginx configuration")
+        click.echo("Remember to install/configure nchan capable nginx instead of regular nginx!")
+        listen = "0.0.0.0"
+        port = "80"
 
     if os.path.exists("/etc/systemd"):
         if os.path.exists("/etc/systemd/system/certidude.service"):
