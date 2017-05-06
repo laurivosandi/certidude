@@ -79,12 +79,7 @@ def clean_client():
         pass
 
 
-def test_cli_setup_authority():
-    import os
-    import sys
-
-    assert os.getuid() == 0, "Run tests as root in a clean VM or container"
-
+def clean_server():
     if os.path.exists("/run/certidude/signer.pid"):
         with open("/run/certidude/signer.pid") as fh:
             try:
@@ -131,6 +126,18 @@ def test_cli_setup_authority():
         if os.path.exists("/etc/openvpn/keys"):
             shutil.rmtree("/etc/openvpn/keys")
 
+    # System packages
+    os.system("apt purge -y nginx libnginx-mod-nchan openvpn strongswan")
+    os.system("apt-get -y autoremove")
+
+
+def test_cli_setup_authority():
+    import os
+    import sys
+
+    assert os.getuid() == 0, "Run tests as root in a clean VM or container"
+
+    clean_server()
     clean_client()
 
     from certidude.cli import entry_point as cli
@@ -146,7 +153,8 @@ def test_cli_setup_authority():
 
     assert not result.exception, result.output
     assert os.getuid() == 0 and os.getgid() == 0, "Serve dropped permissions incorrectly!"
-
+    assert os.system("nginx -t") == 0, "invalid nginx configuration"
+    assert os.path.exists("/run/nginx.pid"), "nginx wasn't started up properly"
 
     from certidude import config, authority
     assert authority.ca_cert.serial_number >= 0x100000000000000000000000000000000000000
@@ -788,3 +796,5 @@ def test_cli_setup_authority():
     os.system("service nginx stop")
     os.system("service openvpn stop")
     os.system("ipsec stop")
+
+    clean_server()

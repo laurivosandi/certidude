@@ -8,9 +8,6 @@ after_success:
 virtualenv:
   system_site_packages: true
 install:
-  - sudo add-apt-repository ppa:nginx/stable  -y
-  - sudo apt update
-  - sudo apt install libnginx-mod-nchan
   - echo "127.0.0.1 localhost" | sudo tee /etc/hosts
   - echo "127.0.1.1 ca.example.lan ca" | sudo tee -a /etc/hosts
   - echo "127.0.0.1 vpn.example.lan vpn" | sudo tee -a /etc/hosts

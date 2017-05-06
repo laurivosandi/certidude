@@ -729,9 +729,18 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
 def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags):
     # Install only rarely changing stuff from OS package management
     apt("python-setproctitle cython python-dev libkrb5-dev libldap2-dev libffi-dev libssl-dev")
-    apt("python-mimeparse python-markdown python-xattr python-jinja2 python-cffi python-openssl")
+    apt("python-mimeparse python-markdown python-xattr python-jinja2 python-cffi python-openssl software-properties-common")
     pip("gssapi falcon cryptography humanize ipaddress simplepam humanize requests")
     click.echo("Software dependencies installed")
+
+    if not os.path.exists("/etc/apt/sources.list.d/nginx-stable-trusty.list"):
+        os.system("add-apt-repository -y ppa:nginx/stable")
+        os.system("apt update")
+    if not os.path.exists("/usr/lib/nginx/modules/ngx_nchan_module.so"):
+        os.system("apt install -y libnginx-mod-nchan")
+    if not os.path.exists("/usr/sbin/nginx"):
+        os.system("apt install -y nginx")
+
     from cryptography import x509
     from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
     from cryptography.hazmat.backends import default_backend
