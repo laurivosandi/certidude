@@ -24,7 +24,7 @@ script:
   - sudo coverage run --parallel-mode --source certidude -m py.test tests
   - sudo coverage combine
   - sudo coverage report
-  - sudo coverage xml
+  - sudo coverage xml -i
 cache:
   directories:
     - $HOME/.cache/pip
