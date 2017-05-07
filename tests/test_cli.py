@@ -134,8 +134,6 @@ def clean_server():
                 os.kill(int(fh.read()), 15)
             except OSError:
                 pass
-    if os.path.exists("/etc/krb5.conf"):
-        os.unlink("/etc/krb5.conf")
     if os.path.exists("/etc/krb5.keytab"):
         os.unlink("/etc/krb5.keytab")
     if os.path.exists("/etc/certidude/server.keytab"):
@@ -171,6 +169,8 @@ def test_cli_setup_authority():
     os.system("samba-tool user setpassword administrator --newpassword=S4l4k4l4")
     os.symlink("/var/lib/samba/private/secrets.keytab", "/etc/krb5.keytab")
     os.chmod("/var/lib/samba/private/secrets.keytab", 0644) # To allow access to certidude server
+    if os.path.exists("/etc/krb5.conf"): # Remove the one from krb5-user package
+        os.unlink("/etc/krb5.conf")
     os.symlink("/var/lib/samba/private/krb5.conf", "/etc/krb5.conf")
     with open("/etc/resolv.conf", "w") as fh:
         fh.write("nameserver 127.0.0.1\nsearch example.lan\n")

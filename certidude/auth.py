@@ -143,18 +143,18 @@ def authenticate(optional=False):
             req.context["user"] = User.objects.get(user)
             return func(resource, req, resp, *args, **kwargs)
 
-        def wrapped(*args, **kwargs):
+        def wrapped(resource, req, resp, *args, **kwargs):
             # If LDAP enabled and device is not Kerberos capable fall
             # back to LDAP bind authentication
             if "ldap" in config.AUTHENTICATION_BACKENDS:
                 if "Android" in req.user_agent or "iPhone" in req.user_agent:
                     return ldap_authenticate(resource, req, resp, *args, **kwargs)
             if "kerberos" in config.AUTHENTICATION_BACKENDS:
-                return kerberos_authenticate(*args, **kwargs)
+                return kerberos_authenticate(resource, req, resp, *args, **kwargs)
             elif config.AUTHENTICATION_BACKENDS == {"pam"}:
-                return pam_authenticate(*args, **kwargs)
+                return pam_authenticate(resource, req, resp, *args, **kwargs)
             elif config.AUTHENTICATION_BACKENDS == {"ldap"}:
-                return ldap_authenticate(*args, **kwargs)
+                return ldap_authenticate(resource, req, resp, *args, **kwargs)
             else:
                 raise NotImplementedError("Authentication backend %s not supported" % config.AUTHENTICATION_BACKENDS)
         return wrapped
