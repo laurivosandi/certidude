@@ -23,11 +23,7 @@ except socket.gaierror:
     click.echo("Failed to resolve fully qualified hostname of this machine, make sure hostname -f works")
     sys.exit(254)
 
-if "." in FQDN:
-    HOSTNAME, DOMAIN = FQDN.split(".", 1)
-else:
-    HOSTNAME, DOMAIN = FQDN, "local"
-    click.echo("Unable to determine domain of this computer, falling back to local")
+HOSTNAME, DOMAIN = FQDN.split(".", 1)
 
 # TODO: lazier, otherwise gets evaluated before installing package
 if os.path.exists("/etc/strongswan/ipsec.conf"): # fedora dafuq?!

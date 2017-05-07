@@ -86,17 +86,3 @@ class RelationalMixin(object):
             cursor.close()
             conn.close()
         return tuple(g())
-
-
-    def sql_fetchone(self, query, *args):
-        conn = self.sql_connect()
-        cursor = conn.cursor()
-        cursor.execute(query, args)
-        cols = [j[0] for j in cursor.description]
-
-        for row in cursor:
-            r = dict(zip(cols, row))
-            cursor.close()
-            conn.close()
-            return r
-        return None

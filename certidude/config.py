@@ -73,8 +73,6 @@ LONG_POLL_SUBSCRIBE = cp.get("push", "long poll subscribe")
 
 LOGGING_BACKEND = cp.get("logging", "backend")
 
-USERS_WHITELIST = set([j for j in  cp.get("authorization", "user whitelist").split(" ") if j])
-ADMINS_WHITELIST = set([j for j in  cp.get("authorization", "admin whitelist").split(" ") if j])
 USERS_GROUP = cp.get("authorization", "posix user group")
 ADMIN_GROUP = cp.get("authorization", "posix admin group")
 LDAP_USER_FILTER = cp.get("authorization", "ldap user filter")

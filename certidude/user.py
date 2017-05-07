@@ -7,8 +7,6 @@ from certidude import const, config
 
 class User(object):
     def __init__(self, username, mail, given_name="", surname=""):
-        if "@" not in mail:
-            raise ValueError("Invalid e-mail %s" % repr(mail))
         self.name = username
         self.mail = mail
         self.given_name = given_name

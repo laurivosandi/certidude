@@ -168,6 +168,7 @@ def test_cli_setup_authority():
     os.system("samba-tool domain provision --server-role=dc --domain=EXAMPLE --realm=EXAMPLE.LAN --host-name=ca")
     os.system("samba-tool user add userbot S4l4k4l4 --given-name='User' --surname='Bot'")
     os.system("samba-tool user add adminbot S4l4k4l4 --given-name='Admin' --surname='Bot'")
+    os.system("samba-tool group addmembers 'Domain Admins' adminbot")
     os.system("samba-tool user setpassword administrator --newpassword=S4l4k4l4")
     os.symlink("/var/lib/samba/private/secrets.keytab", "/etc/krb5.keytab")
     os.chmod("/var/lib/samba/private/secrets.keytab", 0644) # To allow access to certidude server
@@ -245,8 +246,12 @@ def test_cli_setup_authority():
     usertoken = "Basic dXNlcmJvdDpib3Q="
     admintoken = "Basic YWRtaW5ib3Q6Ym90"
 
+
     result = runner.invoke(cli, ['users'])
     assert not result.exception, result.output
+    assert "user;userbot;User;Bot;userbot@example.lan" in result.output
+    assert "admin;adminbot;;;adminbot@example.lan" in result.output
+    # TODO: assert nothing else is in the list
 
     # Check that we can retrieve empty CRL
     assert authority.export_crl(), "Failed to export CRL"
@@ -445,6 +450,8 @@ def test_cli_setup_authority():
         query_string = "client=test&address=127.0.0.1",
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text # lease update ok
+    r = client().simulate_get("/api/signed/nonexistant/script/")
+    assert r.status_code == 404, r.text # cert not found
     r = client().simulate_get("/api/signed/test/script/")
     assert r.status_code == 200, r.text # script render ok
     assert "uci set " in r.text, r.text
@@ -835,7 +842,7 @@ def test_cli_setup_authority():
     # Certidude would auth against domain controller
     os.system("sed -e 's/ldap uri = ldaps:.*/ldap uri = ldaps:\\/\\/ca.example.lan/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/ldap uri = ldap:.*/ldap uri = ldap:\\/\\/ca.example.lan/g' -i /etc/certidude/server.conf")
-    os.system("sed -e 's/backends = pam/backends = kerberos/g' -i /etc/certidude/server.conf")
+    os.system("sed -e 's/backends = pam/backends = kerberos ldap/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/backend = posix/backend = ldap/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/dc1/ca/g' -i /etc/cron.hourly/certidude")
 
@@ -845,35 +852,59 @@ def test_cli_setup_authority():
         assert "ldap/ca.example.lan" in cronjob, cronjob
     os.system("/etc/cron.hourly/certidude")
 
-    result = runner.invoke(cli, ['users'])
-    assert not result.exception, result.output
-    # TODO: assert "Administrator@example.lan" in result.output
-
     server_pid = os.fork() # Fork to prevent environment contamination
     if not server_pid:
         # Apply /etc/certidude/server.conf changes
         reload(config)
         reload(user)
         reload(auth)
-
         assert isinstance(user.User.objects, user.ActiveDirectoryUserManager), user.User.objects
+
+        result = runner.invoke(cli, ['users'])
+        assert not result.exception, result.output
+        assert "user;userbot;User;Bot;userbot@example.lan" in result.output
+        assert "admin;adminbot;Admin;Bot;adminbot@example.lan" in result.output
+        assert "admin;Administrator;Administrator;;Administrator@example.lan" in result.output
+
         result = runner.invoke(cli, ['serve', '-p', '8080', '-l', '127.0.1.1', '-e'])
         assert not result.exception, result.output
         return
 
     sleep(1) # Wait for serve to start up
 
+
+    #####################
+    ### Kerberos auth ###
+    #####################
+
     # TODO: pip install requests-kerberos
     from requests_kerberos import HTTPKerberosAuth, OPTIONAL
     auth = HTTPKerberosAuth(mutual_authentication=OPTIONAL, force_preemptive=True)
 
-    # Test session API call
+    # Test Kerberos auth
     r = requests.get("http://ca.example.lan/api/")
     assert r.status_code == 401, r.text
     assert "No Kerberos ticket offered" in r.text, r.text
     r = requests.get("http://ca.example.lan/api/", headers={"Authorization": "Negotiate blerrgh"})
     assert r.status_code == 400, r.text
     r = requests.get("http://ca.example.lan/api/", auth=auth)
+    assert r.status_code == 200, r.text
+
+
+    #################
+    ### LDAP auth ###
+    #################
+
+    # Test LDAP bind auth fallback
+    usertoken = "Basic dXNlcmJvdDpTNGw0azRsNA=="
+    admintoken = "Basic YWRtaW5ib3Q6UzRsNGs0bDQ="
+
+    with open("/etc/ldap/ldap.conf", "w") as fh:
+        fh.write("TLS_REQCERT allow") # TODO: Correct way
+
+    # curl http://ca.example.lan/api/ -u adminbot:S4l4k4l4 -H "User-agent: Android" -H "Referer: http://ca.example.lan"
+    r = requests.get("http://ca.example.lan/api/",
+        headers={"Authorization":usertoken, "User-Agent": "Android", "Referer":"http://ca.example.lan/"})
     assert r.status_code == 200, r.text
 
 

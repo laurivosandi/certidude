@@ -89,12 +89,13 @@ def authenticate(optional=False):
             basic, token = req.auth.split(" ", 1)
             user, passwd = b64decode(token).split(":", 1)
 
-            click.echo("Connecting to %s as %s" % (config.LDAP_AUTHENTICATION_URI, user))
+            upn = "%s@%s" % (user, const.DOMAIN)
+            click.echo("Connecting to %s as %s" % (config.LDAP_AUTHENTICATION_URI, upn))
             conn = ldap.initialize(config.LDAP_AUTHENTICATION_URI)
             conn.set_option(ldap.OPT_REFERRALS, 0)
 
             try:
-                conn.simple_bind_s("%s@%s" % (user, const.DOMAIN), passwd)
+                conn.simple_bind_s(upn, passwd)
             except ldap.STRONG_AUTH_REQUIRED:
                 logger.critical("LDAP server demands encryption, use ldaps:// instead of ldaps://")
                 raise
@@ -168,21 +169,10 @@ def login_optional(func):
     return authenticate(optional=True)(func)
 
 def authorize_admin(func):
-    def whitelist_authorize_admin(resource, req, resp, *args, **kwargs):
-        # Check for username whitelist
-        if not req.context.get("user") or req.context.get("user") not in config.ADMIN_WHITELIST:
-            logger.info(u"Rejected access to administrative call %s by %s from %s, user not whitelisted",
-                req.env["PATH_INFO"], req.context.get("user"), req.context.get("remote_addr"))
-            raise falcon.HTTPForbidden("Forbidden", "User %s not whitelisted" % req.context.get("user"))
-        return func(resource, req, resp, *args, **kwargs)
-
-    def authorize_admin(resource, req, resp, *args, **kwargs):
+    def wrapped(resource, req, resp, *args, **kwargs):
         if req.context.get("user").is_admin():
             req.context["admin_authorized"] = True
             return func(resource, req, resp, *args, **kwargs)
         logger.info(u"User '%s' not authorized to access administrative API", req.context.get("user").name)
         raise falcon.HTTPForbidden("Forbidden", "User not authorized to perform administrative operations")
-
-    if config.AUTHORIZATION_BACKEND == "whitelist":
-        return whitelist_authorize_admin
-    return authorize_admin
+    return wrapped
