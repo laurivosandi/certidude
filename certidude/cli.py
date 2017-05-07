@@ -728,8 +728,9 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
 @fqdn_required
 def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags):
     # Install only rarely changing stuff from OS package management
-    apt("python-setproctitle cython python-dev libkrb5-dev libldap2-dev libffi-dev libssl-dev")
-    apt("python-mimeparse python-markdown python-xattr python-jinja2 python-cffi python-openssl software-properties-common")
+    apt("python-setproctitle cython python-dev libkrb5-dev libffi-dev libssl-dev")
+    apt("python-mimeparse python-markdown python-xattr python-jinja2 python-cffi")
+    apt("python-ldap python-openssl software-properties-common libsasl2-modules-gssapi-mit")
     pip("gssapi falcon cryptography humanize ipaddress simplepam humanize requests")
     click.echo("Software dependencies installed")
 
@@ -1086,10 +1087,11 @@ def certidude_cron():
 
 
 @click.command("serve", help="Run server")
+@click.option("-e", "--exit-handler", default=False, is_flag=True, help="Install /api/exit/ handler")
 @click.option("-p", "--port", default=80, help="Listen port")
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
-def certidude_serve(port, listen, fork):
+def certidude_serve(port, listen, fork, exit_handler):
     from setproctitle import setproctitle
     from certidude.signer import SignServer
     from certidude import authority, const
@@ -1177,16 +1179,13 @@ def certidude_serve(port, listen, fork):
 
     click.echo("Serving API at %s:%d" % (listen, port))
     from wsgiref.simple_server import make_server, WSGIServer
-    from SocketServer import ForkingMixIn
     from certidude.api import certidude_app
 
-    class ThreadingWSGIServer(ForkingMixIn, WSGIServer):
-        pass
 
     click.echo("Listening on %s:%d" % (listen, port))
 
     app = certidude_app(log_handlers)
-    httpd = make_server(listen, port, app, ThreadingWSGIServer)
+    httpd = make_server(listen, port, app, WSGIServer)
 
 
     """
@@ -1198,9 +1197,8 @@ def certidude_serve(port, listen, fork):
     if os.path.exists("/etc/cron.hourly/certidude"):
         os.system("/etc/cron.hourly/certidude")
 
-    if config.EVENT_SOURCE_PUBLISH:
-        from certidude.push import EventSourceLogHandler
-        log_handlers.append(EventSourceLogHandler())
+    from certidude.push import EventSourceLogHandler
+    log_handlers.append(EventSourceLogHandler())
 
     for j in logging.Logger.manager.loggerDict.values():
         if isinstance(j, logging.Logger): # PlaceHolder is what?
@@ -1222,14 +1220,18 @@ def certidude_serve(port, listen, fork):
         logger.debug("Started Certidude at %s", const.FQDN)
 
         drop_privileges()
-        def quit_handler(*args, **kwargs):
-            click.echo("Shutting down HTTP server...")
-            raise KeyboardInterrupt
-        signal.signal(signal.SIGHUP, quit_handler)
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            click.echo("Caught Ctrl-C, server stopped")
+
+        class ExitResource():
+            """
+            Provide way to gracefully shutdown server
+            """
+            def on_get(self, req, resp):
+                assert httpd._BaseServer__shutdown_request == False
+                httpd._BaseServer__shutdown_request = True
+
+        if exit_handler:
+            app.add_route("/api/exit/", ExitResource())
+        httpd.serve_forever()
 
 
 @click.command("yubikey", help="Set up Yubikey as client authentication token")

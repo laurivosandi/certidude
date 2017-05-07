@@ -212,6 +212,12 @@ def certidude_app(log_handlers=[]):
     # Add sink for serving static files
     app.add_sink(StaticResource(os.path.join(__file__, "..", "..", "static")))
 
+    def log_exceptions(ex, req, resp, params):
+        logger.debug("Caught exception: %s" % ex)
+        raise ex
+
+    app.add_error_handler(Exception, log_exceptions)
+
     # Set up log handlers
     if config.LOGGING_BACKEND == "sql":
         from certidude.mysqllog import LogHandler

@@ -134,11 +134,10 @@ def revoke(common_name):
     push.publish("certificate-revoked", common_name)
 
     # Publish CRL for long polls
-    if config.LONG_POLL_PUBLISH:
-        url = config.LONG_POLL_PUBLISH % "crl"
-        click.echo("Publishing CRL at %s ..." % url)
-        requests.post(url, data=export_crl(),
-            headers={"User-Agent": "Certidude API", "Content-Type": "application/x-pem-file"})
+    url = config.LONG_POLL_PUBLISH % "crl"
+    click.echo("Publishing CRL at %s ..." % url)
+    requests.post(url, data=export_crl(),
+        headers={"User-Agent": "Certidude API", "Content-Type": "application/x-pem-file"})
 
     attach_cert = buf, "application/x-pem-file", common_name + ".crt"
     mailer.send("certificate-revoked.md",
@@ -220,10 +219,9 @@ def delete_request(common_name):
     push.publish("request-deleted", common_name)
 
     # Write empty certificate to long-polling URL
-    if config.LONG_POLL_PUBLISH:
-        requests.delete(
-            config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest(),
-            headers={"User-Agent": "Certidude API"})
+    requests.delete(
+        config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest(),
+        headers={"User-Agent": "Certidude API"})
 
 def generate_ovpn_bundle(common_name, owner=None):
     # Construct private key
@@ -370,13 +368,10 @@ def _sign(csr, buf, overwrite=False):
     else: # New keypair
         mailer.send("certificate-signed.md", **locals())
 
-    if config.LONG_POLL_PUBLISH:
-        url = config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest()
-        click.echo("Publishing certificate at %s ..." % url)
-        requests.post(url, data=cert_buf,
-            headers={"User-Agent": "Certidude API", "Content-Type": "application/x-x509-user-cert"})
+    url = config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest()
+    click.echo("Publishing certificate at %s ..." % url)
+    requests.post(url, data=cert_buf,
+        headers={"User-Agent": "Certidude API", "Content-Type": "application/x-x509-user-cert"})
 
-    if config.EVENT_SOURCE_PUBLISH: # TODO: handle renewal
-        push.publish("request-signed", common_name.value)
-
+    push.publish("request-signed", common_name.value)
     return cert, cert_buf

@@ -13,9 +13,6 @@ def publish(event_type, event_data):
     """
     assert event_type, "No event type specified"
     assert event_data, "No event data specified"
-    if not config.EVENT_SOURCE_PUBLISH:
-        # Push server disabled
-        return
 
     if not isinstance(event_data, basestring):
         from certidude.decorators import MyEncoder

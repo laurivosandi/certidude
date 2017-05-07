@@ -29,7 +29,7 @@ class RequestListResource(object):
         """
         Validate and parse certificate signing request
         """
-        reason = "No reason"
+        reasons = []
         body = req.stream.read(req.content_length)
         csr = x509.load_pem_x509_csr(body, default_backend())
         try:
@@ -79,7 +79,7 @@ class RequestListResource(object):
                     renewal_signature = b64decode(renewal_header)
                 except TypeError, ValueError:
                     logger.error("Renewal failed, bad signature supplied for %s", common_name.value)
-                    reason = "Renewal failed, bad signature supplied"
+                    reasons.append("Renewal failed, bad signature supplied")
                 else:
                     try:
                         verifier = cert.public_key().verifier(
@@ -95,15 +95,15 @@ class RequestListResource(object):
                         verifier.verify()
                     except InvalidSignature:
                         logger.error("Renewal failed, invalid signature supplied for %s", common_name.value)
-                        reason = "Renewal failed, invalid signature supplied"
+                        reasons.append("Renewal failed, invalid signature supplied")
                     else:
                         # At this point renewal signature was valid but we need to perform some extra checks
                         if datetime.utcnow() > cert.not_valid_after:
                             logger.error("Renewal failed, current certificate for %s has expired", common_name.value)
-                            reason = "Renewal failed, current certificate expired"
+                            reasons.append("Renewal failed, current certificate expired")
                         elif not config.CERTIFICATE_RENEWAL_ALLOWED:
                             logger.error("Renewal requested for %s, but not allowed by authority settings", common_name.value)
-                            reason = "Renewal requested, but not allowed by authority settings"
+                            reasons.append("Renewal requested, but not allowed by authority settings")
                         else:
                             resp.set_header("Content-Type", "application/x-x509-user-cert")
                             _, resp.body = authority._sign(csr, body, overwrite=True)
@@ -117,7 +117,6 @@ class RequestListResource(object):
         """
         if req.get_param_as_bool("autosign"):
             if "." not in common_name.value:
-                reason = "Autosign failed, IP address not whitelisted"
                 for subnet in config.AUTOSIGN_SUBNETS:
                     if req.context.get("remote_addr") in subnet:
                         try:
@@ -128,16 +127,18 @@ class RequestListResource(object):
                         except EnvironmentError:
                             logger.info("Autosign for %s from %s failed, signed certificate already exists",
                                 common_name.value, req.context.get("remote_addr"))
-                            reason = "Autosign failed, signed certificate already exists"
+                            reasons.append("Autosign failed, signed certificate already exists")
                         break
+                else:
+                    reasons.append("Autosign failed, IP address not whitelisted")
             else:
-                reason = "Autosign failed, only client certificates allowed to be signed automatically"
+                reasons.append("Autosign failed, only client certificates allowed to be signed automatically")
 
         # Attempt to save the request otherwise
         try:
             csr = authority.store_request(body)
         except errors.RequestExists:
-            reason = "Same request already uploaded exists"
+            reasons.append("Same request already uploaded exists")
             # We should still redirect client to long poll URL below
         except errors.DuplicateCommonNameError:
             # TODO: Certificate renewal
@@ -161,7 +162,7 @@ class RequestListResource(object):
         else:
             # Request was accepted, but not processed
             resp.status = falcon.HTTP_202
-            resp.body = reason
+            resp.body = ". ".join(reasons)
 
 
 class RequestDetailResource(object):

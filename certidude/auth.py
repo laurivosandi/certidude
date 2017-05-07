@@ -1,5 +1,6 @@
 
 import click
+import gssapi
 import falcon
 import logging
 import os
@@ -12,25 +13,12 @@ from certidude import config, const
 
 logger = logging.getLogger("api")
 
-if "kerberos" in config.AUTHENTICATION_BACKENDS:
-    import gssapi
-    os.environ["KRB5_KTNAME"] = config.KERBEROS_KEYTAB
-    server_creds = gssapi.creds.Credentials(
-        usage='accept',
-        name=gssapi.names.Name('HTTP/%s'% (socket.gethostname())))
-    click.echo("Accepting requests only for realm: %s" % const.DOMAIN)
-
+os.environ["KRB5_KTNAME"] = config.KERBEROS_KEYTAB
 
 def authenticate(optional=False):
     import falcon
     def wrapper(func):
         def kerberos_authenticate(resource, req, resp, *args, **kwargs):
-            # If LDAP enabled and device is not Kerberos capable fall
-            # back to LDAP bind authentication
-            if "ldap" in config.AUTHENTICATION_BACKENDS:
-                if "Android" in req.user_agent or "iPhone" in req.user_agent:
-                    return ldap_authenticate(resource, req, resp, *args, **kwargs)
-
             # Try pre-emptive authentication
             if not req.auth:
                 if optional:
@@ -43,9 +31,22 @@ def authenticate(optional=False):
                     "No Kerberos ticket offered, are you sure you've logged in with domain user account?",
                     ["Negotiate"])
 
+            server_creds = gssapi.creds.Credentials(
+                usage='accept',
+                name=gssapi.names.Name('HTTP/%s'% const.FQDN))
+
             context = gssapi.sec_contexts.SecurityContext(creds=server_creds)
+
+            if not req.auth.startswith("Negotiate "):
+                raise falcon.HTTPBadRequest("Bad request", "Bad header: %s" % req.auth)
+
             token = ''.join(req.auth.split()[1:])
-            context.step(b64decode(token))
+
+            try:
+                context.step(b64decode(token))
+            except TypeError: # base64 errors
+                raise falcon.HTTPBadRequest("Bad request", "Malformed token")
+
             username, domain = str(context.initiator_name).split("@")
 
             if domain.lower() != const.DOMAIN.lower():
@@ -82,7 +83,7 @@ def authenticate(optional=False):
                     ("Basic",))
 
             if not req.auth.startswith("Basic "):
-                raise falcon.HTTPForbidden("Forbidden", "Bad header: %s" % req.auth)
+                raise falcon.HTTPBadRequest("Bad request", "Bad header: %s" % req.auth)
 
             from base64 import b64decode
             basic, token = req.auth.split(" ", 1)
@@ -127,7 +128,7 @@ def authenticate(optional=False):
                 raise falcon.HTTPUnauthorized("Forbidden", "Please authenticate", ("Basic",))
 
             if not req.auth.startswith("Basic "):
-                raise falcon.HTTPForbidden("Forbidden", "Bad header: %s" % req.auth)
+                raise falcon.HTTPBadRequest("Bad request", "Bad header: %s" % req.auth)
 
             basic, token = req.auth.split(" ", 1)
             user, passwd = b64decode(token).split(":", 1)
@@ -142,14 +143,21 @@ def authenticate(optional=False):
             req.context["user"] = User.objects.get(user)
             return func(resource, req, resp, *args, **kwargs)
 
-        if "kerberos" in config.AUTHENTICATION_BACKENDS:
-            return kerberos_authenticate
-        elif config.AUTHENTICATION_BACKENDS == {"pam"}:
-            return pam_authenticate
-        elif config.AUTHENTICATION_BACKENDS == {"ldap"}:
-            return ldap_authenticate
-        else:
-            raise NotImplementedError("Authentication backend %s not supported" % config.AUTHENTICATION_BACKENDS)
+        def wrapped(*args, **kwargs):
+            # If LDAP enabled and device is not Kerberos capable fall
+            # back to LDAP bind authentication
+            if "ldap" in config.AUTHENTICATION_BACKENDS:
+                if "Android" in req.user_agent or "iPhone" in req.user_agent:
+                    return ldap_authenticate(resource, req, resp, *args, **kwargs)
+            if "kerberos" in config.AUTHENTICATION_BACKENDS:
+                return kerberos_authenticate(*args, **kwargs)
+            elif config.AUTHENTICATION_BACKENDS == {"pam"}:
+                return pam_authenticate(*args, **kwargs)
+            elif config.AUTHENTICATION_BACKENDS == {"ldap"}:
+                return ldap_authenticate(*args, **kwargs)
+            else:
+                raise NotImplementedError("Authentication backend %s not supported" % config.AUTHENTICATION_BACKENDS)
+        return wrapped
     return wrapper
 
 
