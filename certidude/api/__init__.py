@@ -149,7 +149,7 @@ class StaticResource(object):
             if content_encoding:
                 resp.append_header("Content-Encoding", content_encoding)
             resp.stream = open(path, "rb")
-            logger.info("Serving '%s' from '%s'", req.path, path)
+            logger.debug("Serving '%s' from '%s'", req.path, path)
         else:
             resp.status = falcon.HTTP_404
             resp.body = "File '%s' not found" % req.path

@@ -102,6 +102,8 @@ def clean_server():
         shutil.rmtree("/run/certidude")
     if os.path.exists("/var/log/certidude.log"):
         os.unlink("/var/log/certidude.log")
+    if os.path.exists("/etc/cron.hourly/certidude"):
+        os.unlink("/etc/cron.hourly/certidude")
 
     # systemd
     if os.path.exists("/etc/systemd/system/certidude.service"):
@@ -810,18 +812,16 @@ def test_cli_setup_authority():
     requests.get("http://ca.example.lan/api/")
     os.waitpid(server_pid, 0)
 
-    # Hacks, note that CA is domain controller
+    # (re)auth against DC
     assert os.system("kdestroy") == 0
     assert not os.path.exists("/tmp/krb5cc_0")
-
     assert os.system("echo S4l4k4l4 | kinit administrator") == 0
     assert os.path.exists("/tmp/krb5cc_0")
-    os.system("sed -e 's/CA/CA\\nkerberos method = system keytab/' -i /etc/samba/smb.conf ")
 
-    # Create service principals
+    # Fork to not contaminate environment while creating service principal
     spn_pid = os.fork()
     if not spn_pid:
-        assert os.getuid() == 0 and os.getgid() == 0
+        os.system("sed -e 's/CA/CA\\nkerberos method = system keytab/' -i /etc/samba/smb.conf ")
         os.environ["KRB5_KTNAME"] = "FILE:/etc/certidude/server.keytab"
         assert os.system("net ads keytab add HTTP -k") == 0
         assert os.path.exists("/etc/certidude/server.keytab")
@@ -831,11 +831,19 @@ def test_cli_setup_authority():
     else:
         os.waitpid(spn_pid, 0)
 
+    # Make modifications to /etc/certidude/server.conf so
+    # Certidude would auth against domain controller
     os.system("sed -e 's/ldap uri = ldaps:.*/ldap uri = ldaps:\\/\\/ca.example.lan/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/ldap uri = ldap:.*/ldap uri = ldap:\\/\\/ca.example.lan/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/backends = pam/backends = kerberos/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/backend = posix/backend = ldap/g' -i /etc/certidude/server.conf")
-    os.system("/etc/cron.hourly/certidude") # Update server credential cache
+    os.system("sed -e 's/dc1/ca/g' -i /etc/cron.hourly/certidude")
+
+    # Update server credential cache
+    with open("/etc/cron.hourly/certidude") as fh:
+        cronjob = fh.read()
+        assert "ldap/ca.example.lan" in cronjob, cronjob
+    os.system("/etc/cron.hourly/certidude")
 
     result = runner.invoke(cli, ['users'])
     assert not result.exception, result.output
