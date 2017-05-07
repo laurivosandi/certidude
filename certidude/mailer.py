@@ -14,9 +14,6 @@ env = Environment(loader=PackageLoader("certidude", "templates/mail"))
 
 def send(template, to=None, include_admins=True, attachments=(), **context):
     from certidude import authority, config
-    if not config.MAILER_ADDRESS:
-        # Mailbox disabled, don't send e-mail
-        return
 
     recipients = ()
     if include_admins:
