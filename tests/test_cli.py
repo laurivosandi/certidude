@@ -904,7 +904,7 @@ def test_cli_setup_authority():
     admintoken = "Basic YWRtaW5ib3Q6UzRsNGs0bDQ="
 
     with open("/etc/ldap/ldap.conf", "w") as fh:
-        fh.write("TLS_REQCERT allow") # TODO: Correct way
+        fh.write("TLS_REQCERT never\n") # TODO: Correct way
 
     # curl http://ca.example.lan/api/ -u adminbot:S4l4k4l4 -H "User-agent: Android" -H "Referer: http://ca.example.lan"
     r = requests.get("http://ca.example.lan/api/",
