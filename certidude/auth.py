@@ -46,6 +46,8 @@ def authenticate(optional=False):
                 context.step(b64decode(token))
             except TypeError: # base64 errors
                 raise falcon.HTTPBadRequest("Bad request", "Malformed token")
+            except gssapi.raw.exceptions.BadMechanismError:
+                raise falcon.HTTPBadRequest("Bad request", "Unsupported authentication mechanism (NTLM?) was offered. Please make sure you've logged into the computer with domain user account. The web interface should not prompt for username or password.")
 
             username, domain = str(context.initiator_name).split("@")
 

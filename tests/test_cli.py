@@ -887,6 +887,10 @@ def test_cli_setup_authority():
     assert "No Kerberos ticket offered" in r.text, r.text
     r = requests.get("http://ca.example.lan/api/", headers={"Authorization": "Negotiate blerrgh"})
     assert r.status_code == 400, r.text
+    assert "Malformed token" in r.text
+    r = requests.get("http://ca.example.lan/api/", headers={"Authorization": "Negotiate TlRMTVNTUAABAAAAl4II4gAAAAAAAAAAAAAAAAAAAAAKADk4AAAADw=="})
+    assert r.status_code == 400, r.text
+    assert "Unsupported authentication mechanism (NTLM" in r.text
     r = requests.get("http://ca.example.lan/api/", auth=auth)
     assert r.status_code == 200, r.text
 
