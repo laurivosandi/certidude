@@ -1,6 +1,8 @@
 sudo: required
 language: python
-dist: trusty
+dist:
+  - trusty
+  - xenial
 python:
   - "2.7"
 after_success:

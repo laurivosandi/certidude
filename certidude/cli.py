@@ -730,8 +730,8 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     # Install only rarely changing stuff from OS package management
     apt("python-setproctitle cython python-dev libkrb5-dev libffi-dev libssl-dev")
     apt("python-mimeparse python-markdown python-xattr python-jinja2 python-cffi")
-    apt("python-ldap python-openssl software-properties-common libsasl2-modules-gssapi-mit")
-    pip("gssapi falcon cryptography humanize ipaddress simplepam humanize requests")
+    apt("python-ldap software-properties-common libsasl2-modules-gssapi-mit")
+    pip("gssapi falcon cryptography humanize ipaddress simplepam humanize requests pyopenssl")
     click.echo("Software dependencies installed")
 
     if not os.path.exists("/etc/apt/sources.list.d/nginx-stable-trusty.list"):
