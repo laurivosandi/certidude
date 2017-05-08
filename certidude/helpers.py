@@ -191,19 +191,22 @@ def certidude_request_certificate(server, system_keytab_required, key_path, requ
     # If machine is joined to domain attempt to present machine credentials for authentication
     if system_keytab_required:
         os.environ["KRB5CCNAME"]="/tmp/ca.ticket"
-        # If Samba configuration exists assume NetBIOS name was used in keytab
-        if os.path.exists("/etc/samba/smb.conf"):
-            from configparser import ConfigParser
-            cp = ConfigParser(delimiters=("="))
-            cp.readfp(open("/etc/samba/smb.conf"))
-            name = cp.get("global", "netbios name")
-            os.system("kinit -S HTTP/%s -k %s$" % (server, name))
-        else:
-            os.system("kinit -S HTTP/%s -k %s$" % (server, const.HOSTNAME.lower())) # Mac OS X
-            os.system("kinit -S HTTP/%s -k %s$" % (server, const.HOSTNAME.upper())) # Fedora /w SSSD
+
+        # Mac OS X has keytab with lowercase hostname
+        cmd = "kinit -S HTTP/%s -k %s$" % (server, const.HOSTNAME.lower())
+        click.echo("Executing: %s" % cmd)
+        if os.system(cmd):
+            # Fedora /w SSSD has keytab with uppercase hostname
+            cmd = "kinit -S HTTP/%s -k %s$" % (server, const.HOSTNAME.upper())
+            if os.system(cmd):
+                # Failed, probably /etc/krb5.keytab contains spaghetti
+                raise ValueError("Failed to initialize TGT using machine keytab")
+        assert os.path.exists("/tmp/ca.ticket"), "Ticket not created!"
+        click.echo("Initialized Kerberos TGT using machine keytab")
         from requests_kerberos import HTTPKerberosAuth, OPTIONAL
         auth = HTTPKerberosAuth(mutual_authentication=OPTIONAL, force_preemptive=True)
     else:
+        click.echo("Not using machine keytab")
         auth = None
 
     click.echo("Submitting to %s, waiting for response..." % request_url)

@@ -45,18 +45,21 @@ class RequestListResource(object):
         Handle domain computer automatic enrollment
         """
         machine = req.context.get("machine")
-        if config.MACHINE_ENROLLMENT_ALLOWED and machine:
-            if common_name.value != machine:
-                raise falcon.HTTPBadRequest(
-                    "Bad request",
-                    "Common name %s differs from Kerberos credential %s!" % (common_name.value, machine))
+        if machine:
+            if config.MACHINE_ENROLLMENT_ALLOWED:
+                if common_name.value != machine:
+                    raise falcon.HTTPBadRequest(
+                        "Bad request",
+                        "Common name %s differs from Kerberos credential %s!" % (common_name.value, machine))
 
-            # Automatic enroll with Kerberos machine cerdentials
-            resp.set_header("Content-Type", "application/x-pem-file")
-            cert, resp.body = authority._sign(csr, body, overwrite=True)
-            logger.info(u"Automatically enrolled Kerberos authenticated machine %s from %s",
-                machine, req.context.get("remote_addr"))
-            return
+                # Automatic enroll with Kerberos machine cerdentials
+                resp.set_header("Content-Type", "application/x-pem-file")
+                cert, resp.body = authority._sign(csr, body, overwrite=True)
+                logger.info(u"Automatically enrolled Kerberos authenticated machine %s from %s",
+                    machine, req.context.get("remote_addr"))
+                return
+            else:
+                reasons.append("Machine enrollment not allowed")
 
         """
         Attempt to renew certificate using currently valid key pair

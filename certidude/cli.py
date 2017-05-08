@@ -87,10 +87,11 @@ def setup_client(prefix="client_", dh=False):
 
 
 @click.command("request", help="Run processes for requesting certificates and configuring services")
+@click.option("-k", "--system-keytab-required", default=False, is_flag=True, help="Offer system keytab for auth")
 @click.option("-r", "--renew", default=False, is_flag=True, help="Renew now")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 @click.option("-nw", "--no-wait", default=False, is_flag=True, help="Return immideately if server doesn't autosign")
-def certidude_request(fork, renew, no_wait):
+def certidude_request(fork, renew, no_wait, system_keytab_required):
     # Here let's try to avoid compiling packages from scratch
     rpm("openssl") or \
     apt("openssl python-cryptography python-jinja2") or \
@@ -164,13 +165,15 @@ def certidude_request(fork, renew, no_wait):
             endpoint_revocations_path = "/var/lib/certidude/%s/ca_crl.pem" % authority
         # TODO: Create directories automatically
 
-        system_keytab_required = False
         if clients.get(authority, "trigger") == "domain joined":
             system_keytab_required = True
-            if not os.path.exists("/etc/krb5.keytab"):
-                continue
         elif clients.get(authority, "trigger") != "interface up":
             continue
+
+        if system_keytab_required:
+            # Stop further processing if command line argument said so or trigger expects domain membership
+            if not os.path.exists("/etc/krb5.keytab"):
+                continue
 
         pid_path = os.path.join(const.RUN_DIR, authority + ".pid")
 
@@ -736,11 +739,11 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
 
     if not os.path.exists("/etc/apt/sources.list.d/nginx-stable-trusty.list"):
         os.system("add-apt-repository -y ppa:nginx/stable")
-        os.system("apt update")
+        os.system("apt-get update")
     if not os.path.exists("/usr/lib/nginx/modules/ngx_nchan_module.so"):
-        os.system("apt install -y libnginx-mod-nchan")
+        os.system("apt-get install -y libnginx-mod-nchan")
     if not os.path.exists("/usr/sbin/nginx"):
-        os.system("apt install -y nginx")
+        os.system("apt-get install -y nginx")
 
     from cryptography import x509
     from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID

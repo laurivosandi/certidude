@@ -136,8 +136,6 @@ def clean_server():
                 os.kill(int(fh.read()), 15)
             except OSError:
                 pass
-    if os.path.exists("/etc/krb5.keytab"):
-        os.unlink("/etc/krb5.keytab")
     if os.path.exists("/etc/certidude/server.keytab"):
         os.unlink("/etc/certidude/server.keytab")
     if os.path.exists("/var/lib/samba/"):
@@ -148,10 +146,15 @@ def clean_server():
     shutil.copyfile("/etc/resolv.conf.orig", "/etc/resolv.conf")
 
 def test_cli_setup_authority():
+    # apt install nano git build-essential python-dev libkrb5-dev
     import os
     import sys
 
     assert os.getuid() == 0, "Run tests as root in a clean VM or container"
+
+    assert not os.environ.get("KRB5CCNAME"), "Environment contaminated"
+    assert not os.environ.get("KRB5_KTNAME"), "Environment contaminated"
+
 
     if not os.path.exists("/etc/resolv.conf.orig"):
         shutil.copyfile("/etc/resolv.conf", "/etc/resolv.conf.orig")
@@ -159,10 +162,23 @@ def test_cli_setup_authority():
     clean_server()
     clean_client()
 
+    # TODO: set hostname to 'ca'
+    with open("/etc/hosts", "w") as fh:
+        fh.write("127.0.0.1 localhost\n")
+        fh.write("127.0.1.1 ca.example.lan ca\n")
+        fh.write("127.0.0.1 vpn.example.lan vpn\n")
+        fh.write("127.0.0.1 www.example.lan www\n")
+
+    with open("/etc/passwd") as fh: # TODO: Better
+        buf = fh.read()
+        if "adminbot" not in buf:
+            os.system("useradd adminbot -G sudo -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'")
+        if "userbot" not in buf:
+            os.system("useradd userbot -G users -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1' -c 'User Bot,,,'")
 
     # Bootstrap domain controller here,
     # Samba startup takes some time
-    os.system("apt install -y samba krb5-user winbind")
+    os.system("apt-get install -y samba krb5-user winbind")
     if os.path.exists("/etc/samba/smb.conf"):
         os.unlink("/etc/samba/smb.conf")
     os.system("samba-tool domain provision --server-role=dc --domain=EXAMPLE --realm=EXAMPLE.LAN --host-name=ca")
@@ -170,6 +186,8 @@ def test_cli_setup_authority():
     os.system("samba-tool user add adminbot S4l4k4l4 --given-name='Admin' --surname='Bot'")
     os.system("samba-tool group addmembers 'Domain Admins' adminbot")
     os.system("samba-tool user setpassword administrator --newpassword=S4l4k4l4")
+    if os.path.exists("/etc/krb5.keytab"):
+        os.unlink("/etc/krb5.keytab")
     os.symlink("/var/lib/samba/private/secrets.keytab", "/etc/krb5.keytab")
     os.chmod("/var/lib/samba/private/secrets.keytab", 0644) # To allow access to certidude server
     if os.path.exists("/etc/krb5.conf"): # Remove the one from krb5-user package
@@ -179,6 +197,18 @@ def test_cli_setup_authority():
         fh.write("nameserver 127.0.0.1\nsearch example.lan\n")
     # TODO: dig -t srv perhaps?
     os.system("samba")
+
+    # Samba bind 636 late (probably generating keypair)
+    # so LDAPS connections below will fail
+    timeout = 0
+    while timeout < 30:
+        if os.path.exists("/var/lib/samba/private/tls/cert.pem"):
+            break
+        sleep(1)
+        timeout += 1
+    else:
+        assert False, "Samba startup timed out"
+
 
     from certidude.cli import entry_point as cli
     from certidude import const
@@ -809,6 +839,25 @@ def test_cli_setup_authority():
     assert "Writing certificate to:" in result.output, result.output
 
 
+    ######################################
+    ### Test revocation on client side ###
+    ######################################
+
+    # First revoke on server side
+    child_pid = os.fork()
+    if not child_pid:
+        result = runner.invoke(cli, ['revoke', 'roadwarrior4'])
+        assert not result.exception, result.output
+        return
+    else:
+        os.waitpid(child_pid, 0)
+
+    # Make sure check is ran on the client side
+    result = runner.invoke(cli, ["request", "--no-wait"])
+    assert not result.exception, result.output
+    assert "Certificate has been revoked, wiping keys and certificates" in result.output, result.output
+    assert "Writing certificate to:" in result.output, result.output
+
 
     ####################################
     ### Switch to Kerberos/LDAP auth ###
@@ -845,6 +894,8 @@ def test_cli_setup_authority():
     os.system("sed -e 's/backends = pam/backends = kerberos ldap/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/backend = posix/backend = ldap/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/dc1/ca/g' -i /etc/cron.hourly/certidude")
+    os.system("sed -e 's/autosign subnets =.*/autosign subnets =/g' -i /etc/certidude/server.conf")
+    os.system("sed -e 's/machine enrollment =.*/machine enrollment = allowed/g' -i /etc/certidude/server.conf")
 
     # Update server credential cache
     with open("/etc/cron.hourly/certidude") as fh:
@@ -912,24 +963,46 @@ def test_cli_setup_authority():
     assert r.status_code == 200, r.text
 
 
+    ###########################
+    ### Machine keytab auth ###
+    ###########################
+
+    assert not os.environ.get("KRB5_KTNAME"), "Environment contaminated"
+
+    mach_pid = os.fork() # Otherwise results in Terminated, needs investigation why
+    if not mach_pid:
+        clean_client()
+
+        # Test non-matching CN
+        result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "somethingelse", "ca.example.lan", "vpn.example.lan"])
+        assert not result.exception, result.output
+
+        with open("/etc/certidude/client.conf", "a") as fh:
+            fh.write("insecure = true\n")
+
+        result = runner.invoke(cli, ["request", "--no-wait", "--system-keytab-required"])
+        assert result.exception, result.output # Bad request 400
+
+        # With matching CN it should work
+        clean_client()
+
+        result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "ca", "ca.example.lan", "vpn.example.lan"])
+        assert not result.exception, result.output
+
+        with open("/etc/certidude/client.conf", "a") as fh:
+            fh.write("insecure = true\n")
+
+        result = runner.invoke(cli, ["request", "--no-wait", "--system-keytab-required"])
+        assert not result.exception, result.output
+        assert "Writing certificate to:" in result.output, result.output
+    else:
+        os.waitpid(mach_pid, 0)
+
+
     ###################
     ### Final tests ###
     ###################
 
-    # Test revocation on command-line
-    child_pid = os.fork()
-    if not child_pid:
-        result = runner.invoke(cli, ['revoke', 'roadwarrior4'])
-        assert not result.exception, result.output
-        return
-    else:
-        os.waitpid(child_pid, 0)
-
-    # Test revocation check on client side
-    result = runner.invoke(cli, ["request", "--no-wait"])
-    assert not result.exception, result.output
-    assert "Certificate has been revoked, wiping keys and certificates" in result.output, result.output
-    assert "Writing certificate to:" in result.output, result.output
 
     result = runner.invoke(cli, ['list', '-srv'])
     assert not result.exception, result.output

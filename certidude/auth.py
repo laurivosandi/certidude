@@ -13,8 +13,6 @@ from certidude import config, const
 
 logger = logging.getLogger("api")
 
-os.environ["KRB5_KTNAME"] = config.KERBEROS_KEYTAB
-
 def authenticate(optional=False):
     import falcon
     def wrapper(func):
@@ -30,6 +28,8 @@ def authenticate(optional=False):
                 raise falcon.HTTPUnauthorized("Unauthorized",
                     "No Kerberos ticket offered, are you sure you've logged in with domain user account?",
                     ["Negotiate"])
+
+            os.environ["KRB5_KTNAME"] = config.KERBEROS_KEYTAB
 
             server_creds = gssapi.creds.Credentials(
                 usage='accept',
