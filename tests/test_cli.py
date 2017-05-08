@@ -258,6 +258,8 @@ def test_cli_setup_authority():
 
     sleep(1) # Wait for serve to start up
 
+    # TODO: check that port 8080 is listening, otherwise app probably crashed
+
     import requests
 
     # Test CA certificate fetch
@@ -477,7 +479,7 @@ def test_cli_setup_authority():
 
     # Insert lease
     r = client().simulate_post("/api/lease/",
-        query_string = "client=test&address=127.0.0.1",
+        query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8",
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text # lease update ok
     r = client().simulate_get("/api/signed/nonexistant/script/")
@@ -487,13 +489,13 @@ def test_cli_setup_authority():
     assert "uci set " in r.text, r.text
 
     r = client().simulate_post("/api/lease/",
-        query_string = "client=test&address=127.0.0.1&serial=0",
+        query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8&serial=0",
         headers={"Authorization":admintoken})
     assert r.status_code == 403, r.text # invalid serial number supplied
     r = client().simulate_get("/api/signed/test/attr/")
     assert r.status_code == 200, r.text # read okay from own address
     r = client().simulate_post("/api/lease/",
-        query_string = "client=test&address=1.2.3.4",
+        query_string = "client=test&inner_address=1.2.3.4&outer_address=8.8.8.8",
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text # lease update ok
     r = client().simulate_get("/api/signed/test/attr/")

@@ -22,7 +22,7 @@ class AttributeResource(object):
             raise falcon.HTTPNotFound()
         else:
             try:
-                whitelist = ip_address(attribs.get("user").get("lease").get("address").decode("ascii"))
+                whitelist = ip_address(attribs.get("user").get("lease").get("inner_address").decode("ascii"))
             except AttributeError: # TODO: probably race condition
                 raise falcon.HTTPForbidden("Forbidden",
                     "Attributes only accessible to the machine")

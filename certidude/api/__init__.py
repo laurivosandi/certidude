@@ -63,7 +63,8 @@ class SessionResource(object):
                 try:
                     last_seen = datetime.strptime(xattr.getxattr(path, "user.lease.last_seen"), "%Y-%m-%dT%H:%M:%S.%fZ")
                     lease = dict(
-                        address = xattr.getxattr(path, "user.lease.address"),
+                        inner_address = xattr.getxattr(path, "user.lease.inner_address"),
+                        outer_address = xattr.getxattr(path, "user.lease.outer_address"),
                         last_seen = last_seen,
                         age = datetime.utcnow() - last_seen
                     )

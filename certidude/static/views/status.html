@@ -5,10 +5,13 @@
     </svg>
     {% if certificate.lease.age > session.authority.lease.offline %}
       Last seen <time class="timeago" datetime="{{ certificate.lease.last_seen }}">{{ certificate.lease.last_seen }}</time>
-      at {{ certificate.lease.address }}
+      at {{ certificate.lease.inner_address }}
     {% else %}
       Online since <time class="timeago" datetime="{{ certificate.lease.last_seen }}">{{ certificate.lease.last_seen }}</time> at
-      <a target="{{ certificate.lease.address }}" href="http://{{ certificate.lease.address }}">{{ certificate.lease.address }}</a>
+      <a target="{{ certificate.lease.inner_address }}" href="http://{{ certificate.lease.inner_address }}">{{ certificate.lease.inner_address }}</a>
     {% endif %}
+    via
+    <a target="{{ certificate.lease.outer_address }}"
+        href="http://geoiplookup.net/ip/{{ certificate.lease.outer_address }}">{{ certificate.lease.outer_address }}</a>
   {% endif %}
 </span>
