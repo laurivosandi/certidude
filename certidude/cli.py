@@ -1236,6 +1236,10 @@ def certidude_serve(port, listen, fork, exit_handler):
             app.add_route("/api/exit/", ExitResource())
         httpd.serve_forever()
 
+        # Shut down signer as well
+        assert authority.signer_exec("exit") == "ok"
+
+
 
 @click.command("yubikey", help="Set up Yubikey as client authentication token")
 @click.argument("authority")
