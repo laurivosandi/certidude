@@ -16,7 +16,7 @@ def selinux_fixup(path):
     cmd = "chcon", "--type=home_cert_t", path
     subprocess.call(cmd)
 
-def certidude_request_certificate(server, system_keytab_required, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, renewal_overlap, autosign=False, wait=False, bundle=False, renew=False, insecure=False):
+def certidude_request_certificate(authority, system_keytab_required, key_path, request_path, certificate_path, authority_path, revocations_path, common_name, renewal_overlap, autosign=False, wait=False, bundle=False, renew=False, insecure=False):
     """
     Exchange CSR for certificate using Certidude HTTP API server
     """
@@ -44,9 +44,9 @@ def certidude_request_certificate(server, system_keytab_required, key_path, requ
 
     # Expand ca.example.com
     scheme = "http" if insecure else "https" # TODO: Expose in CLI
-    authority_url = "%s://%s/api/certificate/" % (scheme, server)
-    request_url = "%s://%s/api/request/" % (scheme, server)
-    revoked_url = "%s://%s/api/revoked/" % (scheme, server)
+    authority_url = "%s://%s/api/certificate/" % (scheme, authority)
+    request_url = "%s://%s/api/request/" % (scheme, authority)
+    revoked_url = "%s://%s/api/revoked/" % (scheme, authority)
 
     if request_params:
         request_url = request_url + "?" + "&".join(request_params)
@@ -103,8 +103,8 @@ def certidude_request_certificate(server, system_keytab_required, key_path, requ
                 if extension.value.reason == x509.ReasonFlags.cessation_of_operation:
                     if os.path.exists("/etc/certidude/client.conf"):
                         clients.readfp(open("/etc/certidude/client.conf"))
-                        if clients.has_section(server):
-                            clients.set(server, "trigger", "operation ceased")
+                        if clients.has_section(authority):
+                            clients.set(authority, "trigger", "operation ceased")
                             clients.write(open("/etc/certidude/client.conf", "w"))
                             click.echo("Authority operation ceased, disabling in /etc/certidude/client.conf")
                     # TODO: Disable related services
@@ -193,11 +193,11 @@ def certidude_request_certificate(server, system_keytab_required, key_path, requ
         os.environ["KRB5CCNAME"]="/tmp/ca.ticket"
 
         # Mac OS X has keytab with lowercase hostname
-        cmd = "kinit -S HTTP/%s -k %s$" % (server, const.HOSTNAME.lower())
+        cmd = "kinit -S HTTP/%s -k %s$" % (authority, const.HOSTNAME.lower())
         click.echo("Executing: %s" % cmd)
         if os.system(cmd):
             # Fedora /w SSSD has keytab with uppercase hostname
-            cmd = "kinit -S HTTP/%s -k %s$" % (server, const.HOSTNAME.upper())
+            cmd = "kinit -S HTTP/%s -k %s$" % (authority, const.HOSTNAME.upper())
             if os.system(cmd):
                 # Failed, probably /etc/krb5.keytab contains spaghetti
                 raise ValueError("Failed to initialize TGT using machine keytab")
