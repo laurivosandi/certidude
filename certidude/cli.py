@@ -5,7 +5,6 @@ import click
 import hashlib
 import logging
 import os
-import pwd
 import random
 import re
 import signal
@@ -745,6 +744,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     if not os.path.exists("/usr/sbin/nginx"):
         os.system("apt-get install -y nginx")
 
+    import pwd
     from cryptography import x509
     from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
     from cryptography.hazmat.backends import default_backend
@@ -1095,6 +1095,7 @@ def certidude_cron():
 @click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 def certidude_serve(port, listen, fork, exit_handler):
+    import pwd
     from setproctitle import setproctitle
     from certidude.signer import SignServer
     from certidude import authority, const
