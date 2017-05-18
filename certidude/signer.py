@@ -5,11 +5,13 @@ import socket
 import os
 import asyncore
 import asynchat
+from base64 import b64decode, b64encode
 from certidude import const, config
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives import hashes, padding, serialization
 from cryptography.hazmat.primitives.serialization import Encoding
+from cryptography.hazmat.primitives.asymmetric import padding
 from datetime import datetime, timedelta
 from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID, AuthorityInformationAccessOID
 import random
@@ -63,6 +65,18 @@ class SignHandler(asynchat.async_chat):
             self.send("ok")
             self.close()
             raise asyncore.ExitNow()
+
+        elif cmd == "sign-pkcs7":
+            signer = self.server.private_key.signer(
+                padding.PKCS1v15(),
+                hashes.SHA1()
+            )
+            signer.update(b64decode(body))
+            self.send(b64encode(signer.finalize()))
+
+        elif cmd == "decrypt-pkcs7":
+            self.send(b64encode(self.server.private_key.decrypt(b64decode(body), padding.PKCS1v15())))
+            self.close()
 
         elif cmd == "sign-request":
             # Only common name and public key are used from request

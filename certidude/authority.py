@@ -12,6 +12,7 @@ from cryptography import x509
 from cryptography.x509.oid import NameOID, ExtensionOID, ExtendedKeyUsageOID
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.serialization import Encoding
 from certidude import config, push, mailer, const
 from certidude import errors
 from jinja2 import Template
@@ -81,7 +82,13 @@ def store_request(buf, overwrite=False):
     if not buf:
         raise ValueError("No signing request supplied")
 
-    csr = x509.load_pem_x509_csr(buf, backend=default_backend())
+    if isinstance(buf, unicode):
+        csr = x509.load_pem_x509_csr(buf, backend=default_backend())
+    elif isinstance(buf, str):
+        csr = x509.load_der_x509_csr(buf, backend=default_backend())
+        buf = csr.public_bytes(Encoding.PEM)
+    else:
+        raise ValueError("Invalid type, expected str for PEM and bytes for DER")
     common_name, = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
     # TODO: validate common name again
 
@@ -92,7 +99,7 @@ def store_request(buf, overwrite=False):
 
 
     # If there is cert, check if it's the same
-    if os.path.exists(request_path):
+    if os.path.exists(request_path) and not overwrite:
         if open(request_path).read() == buf:
             raise errors.RequestExists("Request already exists")
         else:
@@ -106,7 +113,7 @@ def store_request(buf, overwrite=False):
     mailer.send("request-stored.md",
         attachments=(attach_csr,),
         common_name=common_name.value)
-    return csr
+    return csr, common_name.value
 
 
 def signer_exec(cmd, *bits):

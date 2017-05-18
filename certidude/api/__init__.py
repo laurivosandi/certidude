@@ -210,6 +210,11 @@ def certidude_app(log_handlers=[]):
     # Bootstrap resource
     app.add_route("/api/bootstrap/", BootstrapResource())
 
+    # Add SCEP handler if we have any whitelisted subnets
+    if config.SCEP_SUBNETS:
+        from .scep import SCEPResource
+        app.add_route("/api/scep/", SCEPResource())
+
     # Add sink for serving static files
     app.add_sink(StaticResource(os.path.join(__file__, "..", "..", "static")))
 
