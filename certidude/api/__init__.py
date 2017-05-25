@@ -215,6 +215,10 @@ def certidude_app(log_handlers=[]):
         from .scep import SCEPResource
         app.add_route("/api/scep/", SCEPResource())
 
+    if config.OCSP_SUBNETS:
+        from .ocsp import OCSPResource
+        app.add_route("/api/ocsp/", OCSPResource())
+
     # Add sink for serving static files
     app.add_sink(StaticResource(os.path.join(__file__, "..", "..", "static")))
 

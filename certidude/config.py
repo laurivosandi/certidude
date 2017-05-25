@@ -34,12 +34,15 @@ REQUEST_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "request subnets").split(" ") if j]).union(AUTOSIGN_SUBNETS)
 SCEP_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "scep subnets").split(" ") if j])
+OCSP_SUBNETS = set([ipaddress.ip_network(j) for j in
+    cp.get("authorization", "ocsp subnets").split(" ") if j])
 
 AUTHORITY_DIR = "/var/lib/certidude"
 AUTHORITY_PRIVATE_KEY_PATH = cp.get("authority", "private key path")
 AUTHORITY_CERTIFICATE_PATH = cp.get("authority", "certificate path")
 REQUESTS_DIR = cp.get("authority", "requests dir")
 SIGNED_DIR = cp.get("authority", "signed dir")
+SIGNED_BY_SERIAL_DIR = os.path.join(SIGNED_DIR, "by-serial")
 REVOKED_DIR = cp.get("authority", "revoked dir")
 EXPIRED_DIR = cp.get("authority", "expired dir")
 

@@ -69,6 +69,7 @@ Common:
 
 * Standard request, sign, revoke workflow via web interface.
 * Kerberos and basic auth based web interface authentication.
+* Preliminary `OCSP <https://tools.ietf.org/html/rfc4557>`_ and `SCEP <https://tools.ietf.org/html/draft-nourse-scep-23>`_ support.
 * PAM and Active Directory compliant authentication backends: Kerberos single sign-on, LDAP simple bind.
 * POSIX groups and Active Directory (LDAP) group membership based authorization.
 * Server-side command-line interface, check out ``certidude list``, ``certidude sign`` and ``certidude revoke``.
@@ -94,8 +95,6 @@ HTTPS:
 TODO
 ----
 
-* `OCSP <https://tools.ietf.org/html/rfc4557>`_ support, needs a bit hacking since OpenSSL wrappers are not exposing the functionality.
-* `SCEP <https://tools.ietf.org/html/draft-nourse-scep-23>`_ support, a client implementation available `here <https://github.com/certnanny/sscep>`_. Not sure if we can implement server-side events within current standard.
 * WebCrypto support, meanwhile check out `hwcrypto.js <https://github.com/open-eid/hwcrypto.js>`_.
 * Use `pki.js <https://pkijs.org/>`_ for generating keypair in the browser when claiming a token.
 * Signer process logging.

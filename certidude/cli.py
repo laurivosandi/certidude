@@ -736,9 +736,8 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     pip("gssapi falcon cryptography humanize ipaddress simplepam humanize requests pyopenssl")
     click.echo("Software dependencies installed")
 
-    if not os.path.exists("/etc/apt/sources.list.d/nginx-stable-trusty.list"):
-        os.system("add-apt-repository -y ppa:nginx/stable")
-        os.system("apt-get update")
+    os.system("add-apt-repository -y ppa:nginx/stable")
+    os.system("apt-get update")
     if not os.path.exists("/usr/lib/nginx/modules/ngx_nchan_module.so"):
         os.system("apt-get install -y libnginx-mod-nchan")
     if not os.path.exists("/usr/sbin/nginx"):
@@ -773,6 +772,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     # Expand variables
     ca_key = os.path.join(directory, "ca_key.pem")
     ca_crt = os.path.join(directory, "ca_crt.pem")
+    sqlite_path = os.path.join(directory, "meta", "db.sqlite")
 
     try:
         pwd.getpwnam("certidude")
@@ -858,11 +858,29 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
             fh.write(env.get_template("server/server.conf").render(vars()))
         click.echo("Generated %s" % const.CONFIG_PATH)
 
-    if os.path.lexists(directory):
-        click.echo("CA directory %s already exists, remove to regenerate" % directory)
-    else:
-        click.echo("CA configuration files are saved to: {}".format(directory))
+    # Create directories with 770 permissions
+    os.umask(0o027)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
 
+    # Create subdirectories with 770 permissions
+    os.umask(0o007)
+    for subdir in ("signed", "signed/by-serial", "requests", "revoked", "expired", "meta"):
+        path = os.path.join(directory, subdir)
+        if not os.path.exists(path):
+            click.echo("Creating directory %s" % path)
+            os.mkdir(path)
+        else:
+            click.echo("Directory already exists %s" % path)
+
+    # Create SQLite database file with correct permissions
+    if not os.path.exists(sqlite_path):
+        os.umask(0o117)
+        with open(sqlite_path, "wb") as fh:
+            pass
+
+    # Generate and sign CA key
+    if not os.path.exists(ca_key):
         click.echo("Generating %d-bit RSA key..." % const.KEY_SIZE)
 
         key = rsa.generate_private_key(
@@ -919,22 +937,6 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         cert = builder.sign(key, hashes.SHA512(), default_backend())
 
         click.echo("Signing %s..." % cert.subject)
-
-        # Create directories with 770 permissions
-        os.umask(0o027)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
-
-        # Create subdirectories with 770 permissions
-        os.umask(0o007)
-        for subdir in ("signed", "requests", "revoked", "expired", "meta"):
-            if not os.path.exists(os.path.join(directory, subdir)):
-                os.mkdir(os.path.join(directory, subdir))
-
-        # Create SQLite database file with correct permissions
-        os.umask(0o117)
-        with open(os.path.join(directory, "meta", "db.sqlite"), "wb") as fh:
-            pass
 
         # Set permission bits to 640
         os.umask(0o137)
@@ -1105,6 +1107,13 @@ def certidude_serve(port, listen, fork, exit_handler):
     log_handlers = []
 
     from certidude import config
+
+    # Rebuild reverse mapping
+    for cn, path, buf, cert, server in authority.list_signed():
+        by_serial = os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % cert.serial)
+        if not os.path.exists(by_serial):
+            click.echo("Linking %s to ../%s.pem" % (by_serial, cn))
+            os.symlink("../%s.pem" % cn, by_serial)
 
     # Process directories
     if not os.path.exists(const.RUN_DIR):

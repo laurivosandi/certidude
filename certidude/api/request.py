@@ -139,7 +139,7 @@ class RequestListResource(object):
 
         # Attempt to save the request otherwise
         try:
-            csr = authority.store_request(body)
+            csr = authority.store_request(body.decode("ascii"))
         except errors.RequestExists:
             reasons.append("Same request already uploaded exists")
             # We should still redirect client to long poll URL below

@@ -50,10 +50,11 @@ def get_signed(common_name):
         return path, buf, x509.load_pem_x509_certificate(buf, default_backend())
 
 def get_revoked(serial):
-    path = os.path.join(config.REVOKED_DIR, serial + ".pem")
+    path = os.path.join(config.REVOKED_DIR, "%x.pem" % serial)
     with open(path) as fh:
         buf = fh.read()
-        return path, buf, x509.load_pem_x509_certificate(buf, default_backend())
+        return path, buf, x509.load_pem_x509_certificate(buf, default_backend()), \
+            datetime.utcfromtimestamp(os.stat(path).st_ctime)
 
 
 def get_attributes(cn):
@@ -83,7 +84,7 @@ def store_request(buf, overwrite=False):
         raise ValueError("No signing request supplied")
 
     if isinstance(buf, unicode):
-        csr = x509.load_pem_x509_csr(buf, backend=default_backend())
+        csr = x509.load_pem_x509_csr(buf.encode("ascii"), backend=default_backend())
     elif isinstance(buf, str):
         csr = x509.load_der_x509_csr(buf, backend=default_backend())
         buf = csr.public_bytes(Encoding.PEM)
@@ -134,10 +135,11 @@ def revoke(common_name):
     """
     Revoke valid certificate
     """
-    path, buf, cert = get_signed(common_name)
+    signed_path, buf, cert = get_signed(common_name)
     revoked_path = os.path.join(config.REVOKED_DIR, "%x.pem" % cert.serial)
-    signed_path = os.path.join(config.SIGNED_DIR, "%s.pem" % common_name)
     os.rename(signed_path, revoked_path)
+    os.unlink(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % cert.serial))
+
     push.publish("certificate-revoked", common_name)
 
     # Publish CRL for long polls
@@ -361,6 +363,11 @@ def _sign(csr, buf, overwrite=False):
     os.rename(cert_path + ".part", cert_path)
     attachments.append((cert_buf, "application/x-pem-file", common_name.value + ".crt"))
     cert_serial_hex = "%x" % cert.serial
+
+    # Create symlink
+    os.symlink(
+        "../%s.pem" % common_name.value,
+        os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % cert.serial))
 
     # Copy filesystem attributes to newly signed certificate
     if revoked_path:
