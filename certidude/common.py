@@ -3,6 +3,15 @@ import os
 import click
 import subprocess
 
+def selinux_fixup(path):
+    """
+    Fix OpenVPN credential store security context on Fedora
+    """
+    if not os.path.exists("/sys/fs/selinux"):
+        return
+    cmd = "chcon", "--type=home_cert_t", path
+    subprocess.call(cmd)
+
 def drop_privileges():
     from certidude import config
     import pwd

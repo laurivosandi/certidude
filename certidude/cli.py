@@ -12,9 +12,9 @@ import socket
 import string
 import subprocess
 import sys
+from base64 import b64encode
 from configparser import ConfigParser, NoOptionError, NoSectionError
-from certidude.helpers import certidude_request_certificate
-from certidude.common import ip_address, ip_network, apt, rpm, pip, drop_privileges
+from certidude.common import ip_address, ip_network, apt, rpm, pip, drop_privileges, selinux_fixup
 from datetime import datetime, timedelta
 from time import sleep
 import const
@@ -93,11 +93,15 @@ def setup_client(prefix="client_", dh=False):
 def certidude_request(fork, renew, no_wait, system_keytab_required):
     # Here let's try to avoid compiling packages from scratch
     rpm("openssl") or \
-    apt("openssl python-cryptography python-jinja2") or \
-    pip("cryptography jinja2")
+    apt("openssl python-jinja2") or \
+    pip("jinja2 oscrypto csrbuilder asn1crypto")
 
     import requests
     from jinja2 import Environment, PackageLoader
+    from oscrypto import asymmetric
+    from asn1crypto import crl, pem
+    from csrbuilder import CSRBuilder, pem_armor_csr
+
     env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
 
     if not os.path.exists(const.CLIENT_CONFIG_PATH):
@@ -129,52 +133,30 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
             fh.write(env.get_template("client/certidude.service").render(context))
 
 
-    for authority in clients.sections():
-        try:
-            endpoint_renewal_overlap = clients.getint(authority, "renewal overlap")
-        except NoOptionError:
-            endpoint_renewal_overlap = None
-        try:
-            endpoint_insecure = clients.getboolean(authority, "insecure")
-        except NoOptionError:
-            endpoint_insecure = False
-        try:
-            endpoint_common_name = clients.get(authority, "common name")
-        except NoOptionError:
-            endpoint_common_name = const.HOSTNAME
-        try:
-            endpoint_key_path = clients.get(authority, "key path")
-        except NoOptionError:
-            endpoint_key_path = "/var/lib/certidude/%s/keys/%s.pem" % (authority, const.HOSTNAME)
-        try:
-            endpoint_request_path = clients.get(authority, "request path")
-        except NoOptionError:
-            endpoint_request_path = "/var/lib/certidude/%s/requests/%s.pem" % (authority, const.HOSTNAME)
-        try:
-            endpoint_certificate_path = clients.get(authority, "certificate path")
-        except NoOptionError:
-            endpoint_certificate_path = "/var/lib/certidude/%s/signed/%s.pem" % (authority, const.HOSTNAME)
-        try:
-            endpoint_authority_path = clients.get(authority, "authority path")
-        except NoOptionError:
-            endpoint_authority_path = "/var/lib/certidude/%s/ca_crt.pem" % authority
-        try:
-            endpoint_revocations_path = clients.get(authority, "revocations path")
-        except NoOptionError:
-            endpoint_revocations_path = "/var/lib/certidude/%s/ca_crl.pem" % authority
+    for authority_name in clients.sections():
         # TODO: Create directories automatically
 
-        if clients.get(authority, "trigger") == "domain joined":
-            system_keytab_required = True
-        elif clients.get(authority, "trigger") != "interface up":
-            continue
+        try:
+            trigger = clients.get(authority_name, "trigger")
+        except NoOptionError:
+            trigger = "interface up"
 
-        if system_keytab_required:
+        if trigger == "domain joined":
             # Stop further processing if command line argument said so or trigger expects domain membership
             if not os.path.exists("/etc/krb5.keytab"):
                 continue
+            use_keytab = True
+        elif trigger == "interface up":
+            pass
+        else:
+            raise
 
-        pid_path = os.path.join(const.RUN_DIR, authority + ".pid")
+
+        #########################
+        ### Fork if requested ###
+        #########################
+
+        pid_path = os.path.join(const.RUN_DIR, authority_name + ".pid")
 
         try:
             with open(pid_path) as fh:
@@ -194,34 +176,239 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
             click.echo("Spawned certificate request process with PID %d" % (child_pid))
             continue
 
-
         with open(pid_path, "w") as fh:
             fh.write("%d\n" % os.getpid())
-        retries = 30
 
-        while retries > 0:
+        try:
+            scheme = "http" if clients.getboolean(authority_name, "insecure") else "https"
+        except NoOptionError:
+            scheme = "https"
+
+        # Expand ca.example.com
+        authority_url = "%s://%s/api/certificate/" % (scheme, authority_name)
+        request_url = "%s://%s/api/request/" % (scheme, authority_name)
+        revoked_url = "%s://%s/api/revoked/" % (scheme, authority_name)
+
+
+        try:
+            authority_path = clients.get(authority_name, "authority path")
+        except NoOptionError:
+            authority_path = "/var/lib/certidude/%s/ca_crt.pem" % authority_name
+        finally:
+            if os.path.exists(authority_path):
+                click.echo("Found authority certificate in: %s" % authority_path)
+            else:
+                if not os.path.exists(os.path.dirname(authority_path)):
+                    os.makedirs(os.path.dirname(authority_path))
+                click.echo("Attempting to fetch authority certificate from %s" % authority_url)
+                try:
+                    r = requests.get(authority_url,
+                        headers={"Accept": "application/x-x509-ca-cert,application/x-pem-file"})
+                    asymmetric.load_certificate(r.content)
+                except:
+                    raise
+                #    raise ValueError("Failed to parse PEM: %s" % r.text)
+                authority_partial = authority_path + ".part"
+                with open(authority_partial, "w") as oh:
+                    oh.write(r.content)
+                click.echo("Writing authority certificate to: %s" % authority_path)
+                selinux_fixup(authority_partial)
+                os.rename(authority_partial, authority_path)
+
+
+        # Attempt to install CA certificates system wide
+        try:
+            authority_system_wide = clients.getboolean(authority_name, "system wide")
+        except NoOptionError:
+            authority_system_wide = False
+        finally:
+            if authority_system_wide:
+                # Firefox, Chromium, wget, curl on Fedora
+                # Note that if ~/.pki/nssdb has been customized before, curl breaks
+                if os.path.exists("/usr/bin/update-ca-trust"):
+                    link_path = "/etc/pki/ca-trust/source/anchors/%s" % authority_name
+                    if not os.path.lexists(link_path):
+                        os.symlink(authority_path, link_path)
+                    os.system("update-ca-trust")
+
+                # curl on Fedora ?
+                # pip
+
+
+        ###############
+        ### Get CRL ###
+        ###############
+
+        try:
+            revocations_path = clients.get(authority_name, "revocations path")
+        except NoOptionError:
+            revocations_path = None
+        else:
+            # Fetch certificate revocation list
+            click.echo("Fetching CRL from %s to %s" % (revoked_url, revocations_path))
+            r = requests.get(revoked_url, headers={'accept': 'application/x-pem-file'})
+            assert r.status_code == 200, "Failed to fetch CRL from %s, got %s" % (revoked_url, r.text)
+
+            #revocations = crl.CertificateList.load(pem.unarmor(r.content))
+            # TODO: check signature, parse reasons, remove keys if revoked
+            revocations_partial = revocations_path + ".part"
+            with open(revocations_partial, 'wb') as f:
+                f.write(r.content)
+
+        try:
+            common_name = clients.get(authority_name, "common name")
+        except NoOptionError:
+            click.echo("No common name specified for %s, not requesting a certificate" % authority_name)
+            continue
+
+        ################################
+        ### Generate keypair and CSR ###
+        ################################
+
+        try:
+            key_path = clients.get(authority_name, "key path")
+            request_path = clients.get(authority_name, "request path")
+        except NoOptionError:
+            key_path = "/var/lib/certidude/%s/client_key.pem" % authority_name
+            request_path = "/var/lib/certidude/%s/client_csr.pem" % authority_name
+
+        if not os.path.exists(request_path):
+            key_partial = key_path + ".part"
+            request_partial = request_path + ".part"
+            public_key, private_key = asymmetric.generate_pair('rsa', bit_size=2048)
+            builder = CSRBuilder({u"common_name": common_name}, public_key)
+            request = builder.build(private_key)
+            with open(key_partial, 'wb') as f:
+                f.write(asymmetric.dump_private_key(private_key, None))
+            with open(request_partial, 'wb') as f:
+                f.write(pem_armor_csr(request))
+            selinux_fixup(key_partial)
+            selinux_fixup(request_partial)
+            os.rename(key_partial, key_path)
+            os.rename(request_partial, request_path)
+
+        ##############################################
+        ### Submit CSR and save signed certificate ###
+        ##############################################
+
+        try:
+            certificate_path = clients.get(authority_name, "certificate path")
+        except NoOptionError:
+            certificate_path = "/var/lib/certidude/%s/client_cert.pem" % authority_name
+
+        headers={
+            "Content-Type": "application/pkcs10",
+            "Accept": "application/x-x509-user-cert,application/x-pem-file"
+        }
+
+
+        try:
+            # Attach renewal signature if renewal requested and cert exists
+            renewal_overlap = clients.getint(authority_name, "renewal overlap")
+            with open(certificate_path) as ch, open(request_path) as rh, open(key_path) as kh:
+                cert_buf = ch.read()
+                cert = asymmetric.load_certificate(cert_buf)
+                expires = cert.asn1["tbs_certificate"]["validity"]["not_after"].native
+                if renewal_overlap and datetime.now() > expires - timedelta(days=renewal_overlap):
+                    click.echo("Certificate will expire %s, will attempt to renew" % expires)
+                    renew = True
+                headers["X-Renewal-Signature"] = b64encode(
+                    asymmetric.rsa_pss_sign(
+                        asymmetric.load_private_key(kh.read()),
+                        cert_buf + rh.read(),
+                        "sha512"))
+        except NoOptionError: # Renewal not specified in config
+            pass
+        except EnvironmentError: # Certificate missing
+            pass
+        else:
+            click.echo("Attached renewal signature %s" % headers["X-Renewal-Signature"])
+
+        if not os.path.exists(certificate_path) or renew:
+            # Set up URL-s
+            request_params = set()
+            request_params.add("autosign=true")
+            if not no_wait:
+                request_params.add("wait=forever")
+            if request_params:
+                request_url = request_url + "?" + "&".join(request_params)
+
+            # If machine is joined to domain attempt to present machine credentials for authentication
+            if use_keytab:
+                os.environ["KRB5CCNAME"]="/tmp/ca.ticket"
+
+                # Mac OS X has keytab with lowercase hostname
+                cmd = "kinit -S HTTP/%s -k %s$" % (authority_name, const.HOSTNAME.lower())
+                click.echo("Executing: %s" % cmd)
+                if os.system(cmd):
+                    # Fedora /w SSSD has keytab with uppercase hostname
+                    cmd = "kinit -S HTTP/%s -k %s$" % (authority_name, const.HOSTNAME.upper())
+                    if os.system(cmd):
+                        # Failed, probably /etc/krb5.keytab contains spaghetti
+                        raise ValueError("Failed to initialize TGT using machine keytab")
+                assert os.path.exists("/tmp/ca.ticket"), "Ticket not created!"
+                click.echo("Initialized Kerberos TGT using machine keytab")
+                from requests_kerberos import HTTPKerberosAuth, OPTIONAL
+                auth = HTTPKerberosAuth(mutual_authentication=OPTIONAL, force_preemptive=True)
+            else:
+                click.echo("Not using machine keytab")
+                auth = None
+
+            submission = requests.post(request_url, auth=auth, data=open(request_path), headers=headers)
+
+            # Destroy service ticket
+            if os.path.exists("/tmp/ca.ticket"):
+                os.system("kdestroy")
+
+            if submission.status_code == requests.codes.ok:
+                pass
+            if submission.status_code == requests.codes.accepted:
+                click.echo("Server accepted the request, but refused to sign immideately (%s). Waiting was not requested, hence quitting for now" % submission.text)
+                return
+            if submission.status_code == requests.codes.conflict:
+                raise errors.DuplicateCommonNameError("Different signing request with same CN is already present on server, server refuses to overwrite")
+            elif submission.status_code == requests.codes.gone:
+                # Should the client retry or disable request submission?
+                raise ValueError("Server refused to sign the request") # TODO: Raise proper exception
+            else:
+                submission.raise_for_status()
+
             try:
-                certidude_request_certificate(
-                    authority,
-                    system_keytab_required,
-                    endpoint_key_path,
-                    endpoint_request_path,
-                    endpoint_certificate_path,
-                    endpoint_authority_path,
-                    endpoint_revocations_path,
-                    endpoint_common_name,
-                    endpoint_renewal_overlap,
-                    insecure=endpoint_insecure,
-                    autosign=True,
-                    wait=not no_wait,
-                    renew=renew)
-                break
-            except requests.exceptions.Timeout:
-                retries -= 1
-                continue
+                cert = asymmetric.load_certificate(submission.content)
+            except: # TODO: catch correct exceptions
+                raise ValueError("Failed to parse PEM: %s" % submission.text)
+
+            os.umask(0o022)
+            certificate_partial = certificate_path + ".part"
+            with open(certificate_partial, "w") as fh:
+                # Dump certificate
+                fh.write(submission.text)
+
+            click.echo("Writing certificate to: %s" % certificate_path)
+            selinux_fixup(certificate_partial)
+            os.rename(certificate_partial, certificate_path)
+
+            # Nginx requires bundle
+            try:
+                bundle_path = clients.get(authority_name, "bundle path")
+            except NoOptionError:
+                pass
+            else:
+                bundle_partial = bundle_path + ".part"
+                with open(bundle_partial, "w") as fh:
+                    fh.write(submission.text)
+                    with open(authority_path) as ch:
+                        fh.write(ch.read())
+                click.echo("Writing bundle to: %s" % bundle_path)
+                os.rename(bundle_partial, bundle_path)
+
+
+        ##################################
+        ### Configure related services ###
+        ##################################
 
         for endpoint in service_config.sections():
-            if service_config.get(endpoint, "authority") != authority:
+            if service_config.get(endpoint, "authority") != authority_name:
                 continue
 
             click.echo("Configuring '%s'" % endpoint)
@@ -256,7 +443,7 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
                     # Identify correct ipsec.conf section by leftcert
                     if section_type != "conn":
                         continue
-                    if config[section_type,section_name]["leftcert"] != endpoint_certificate_path:
+                    if config[section_type,section_name]["leftcert"] != certificate_path:
                         continue
 
                     if config[section_type,section_name].get("left", "") == "%defaultroute":
@@ -285,14 +472,6 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
 
             # OpenVPN set up with NetworkManager
             if service_config.get(endpoint, "service") == "network-manager/openvpn":
-                try:
-                    endpoint_port = service_config.getint(endpoint, "port")
-                except NoOptionError:
-                    endpoint_port = 1194
-                try:
-                    endpoint_proto = service_config.get(endpoint, "proto")
-                except NoOptionError:
-                    endpoint_proto = "udp"
                 # NetworkManager-strongswan-gnome
                 nm_config_path = os.path.join("/etc/NetworkManager/system-connections", endpoint)
                 if os.path.exists(nm_config_path):
@@ -300,6 +479,7 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
                     continue
                 nm_config = ConfigParser()
                 nm_config.add_section("connection")
+                nm_config.set("connection", "certidude managed", "true")
                 nm_config.set("connection", "id", endpoint)
                 nm_config.set("connection", "uuid", uuid)
                 nm_config.set("connection", "type", "vpn")
@@ -311,17 +491,25 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
                 nm_config.set("vpn", "tap-dev", "no")
                 nm_config.set("vpn", "remote-cert-tls", "server") # Assert TLS Server flag of X.509 certificate
                 nm_config.set("vpn", "remote", service_config.get(endpoint, "remote"))
-                nm_config.set("vpn", "port", str(endpoint_port))
-                if endpoint_proto == "tcp":
-                    nm_config.set("vpn", "proto-tcp", "yes")
-                nm_config.set("vpn", "key", endpoint_key_path)
-                nm_config.set("vpn", "cert", endpoint_certificate_path)
-                nm_config.set("vpn", "ca", endpoint_authority_path)
+                nm_config.set("vpn", "key", key_path)
+                nm_config.set("vpn", "cert", certificate_path)
+                nm_config.set("vpn", "ca", authority_path)
                 nm_config.add_section("ipv4")
                 nm_config.set("ipv4", "method", "auto")
                 nm_config.set("ipv4", "never-default", "true")
                 nm_config.add_section("ipv6")
                 nm_config.set("ipv6", "method", "auto")
+
+                try:
+                    nm_config.set("vpn", "port", str(service_config.getint(endpoint, "port")))
+                except NoOptionError:
+                    nm_config.set("vpn", "port", "1194")
+
+                try:
+                    if service_config.get(endpoint, "proto") == "tcp":
+                        nm_config.set("vpn", "proto-tcp", "yes")
+                except NoOptionError:
+                    pass
 
                 # Prevent creation of files with liberal permissions
                 os.umask(0o177)
@@ -336,10 +524,11 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
 
 
             # IPSec set up with NetworkManager
-            elif service_config.get(endpoint, "service") == "network-manager/strongswan":
+            if service_config.get(endpoint, "service") == "network-manager/strongswan":
                 client_config = ConfigParser()
                 nm_config = ConfigParser()
                 nm_config.add_section("connection")
+                nm_config.set("connection", "certidude managed", "true")
                 nm_config.set("connection", "id", endpoint)
                 nm_config.set("connection", "uuid", uuid)
                 nm_config.set("connection", "type", "vpn")
@@ -350,9 +539,9 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
                 nm_config.set("vpn", "method", "key")
                 nm_config.set("vpn", "ipcomp", "no")
                 nm_config.set("vpn", "address", service_config.get(endpoint, "remote"))
-                nm_config.set("vpn", "userkey", endpoint_key_path)
-                nm_config.set("vpn", "usercert", endpoint_certificate_path)
-                nm_config.set("vpn", "certificate", endpoint_authority_path)
+                nm_config.set("vpn", "userkey", key_path)
+                nm_config.set("vpn", "usercert", certificate_path)
+                nm_config.set("vpn", "certificate", authority_path)
                 nm_config.add_section("ipv4")
                 nm_config.set("ipv4", "method", "auto")
 
