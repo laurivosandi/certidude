@@ -153,12 +153,25 @@ def test_cli_setup_authority():
     assert not os.environ.get("KRB5CCNAME"), "Environment contaminated"
     assert not os.environ.get("KRB5_KTNAME"), "Environment contaminated"
 
+    # Mock SELinux
+    with open("/usr/bin/chcon", "w") as fh:
+        fh.write("#!/bin/bash\n")
+        fh.write("exit 0\n")
+    os.chmod("/usr/bin/chcon", 0755)
 
     if not os.path.exists("/etc/resolv.conf.orig"):
         shutil.copyfile("/etc/resolv.conf", "/etc/resolv.conf.orig")
 
     clean_server()
     clean_client()
+
+    with open("/etc/hosts", "w") as fh:
+        fh.write("127.0.0.1 localhost\n")
+
+    from certidude import const
+    assert const.FQDN == "ca"
+    assert const.HOSTNAME == "ca"
+    assert not const.DOMAIN
 
     # TODO: set hostname to 'ca'
     with open("/etc/hosts", "w") as fh:
@@ -207,9 +220,12 @@ def test_cli_setup_authority():
     else:
         assert False, "Samba startup timed out"
 
-
+    reload(const)
     from certidude.cli import entry_point as cli
-    from certidude import const
+
+    assert const.FQDN == "ca.example.lan"
+    assert const.HOSTNAME == "ca"
+    assert const.DOMAIN == "example.lan"
 
     result = runner.invoke(cli, ['setup', 'authority', '-s'])
     os.setgid(0) # Restore GID
@@ -704,6 +720,7 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
+    assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "refused to sign" in result.output, result.output
 
     child_pid = os.fork()
@@ -716,13 +733,15 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
+    assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "Writing certificate to:" in result.output, result.output
 
     result = runner.invoke(cli, ["request", "--renew", "--no-wait"])
     assert not result.exception, result.output
-    assert "Writing certificate to:" in result.output, result.output
+    assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
+    #assert "Writing certificate to:" in result.output, result.output
     assert "Attached renewal signature" in result.output, result.output
-    assert "refused to sign immideately" not in result.output, result.output
+    #assert "refused to sign immideately" not in result.output, result.output
 
     # Test nginx setup
     assert os.system("nginx -t") == 0, "Generated nginx config was invalid"
@@ -755,6 +774,8 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
+    assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
+
 
     child_pid = os.fork()
     if not child_pid:
@@ -766,6 +787,7 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
+    assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "Writing certificate to:" in result.output, result.output
     assert os.path.exists("/tmp/ca.example.lan/server_cert.pem")
     assert os.path.exists("/etc/openvpn/site-to-client.conf")
@@ -786,6 +808,7 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
+    assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "Writing certificate to:" in result.output, result.output
     assert os.path.exists("/etc/openvpn/client-to-site.conf")
 
@@ -814,6 +837,7 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
+    assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
 
     child_pid = os.fork()
     if not child_pid:
@@ -825,6 +849,8 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
+    assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
+
     assert "Writing certificate to:" in result.output, result.output
     assert os.path.exists("/tmp/ca.example.lan/server_cert.pem")
 
@@ -843,6 +869,8 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
+    assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
+
     assert "Writing certificate to:" in result.output, result.output
 
 
@@ -860,6 +888,7 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
+    assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "Writing certificate to:" in result.output, result.output
 
     clean_client()
@@ -872,6 +901,7 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
+    assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "Writing certificate to:" in result.output, result.output
 
 
@@ -891,8 +921,22 @@ def test_cli_setup_authority():
     # Make sure check is ran on the client side
     result = runner.invoke(cli, ["request", "--no-wait"])
     assert not result.exception, result.output
-    assert "Certificate has been revoked, wiping keys and certificates" in result.output, result.output
-    assert "Writing certificate to:" in result.output, result.output
+    assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
+    #assert "Certificate has been revoked, wiping keys and certificates" in result.output, result.output
+    #assert "Writing certificate to:" in result.output, result.output
+
+    #########################################################
+    ### Test that legacy features are disabled by default ###
+    #########################################################
+
+    r = client().simulate_get("/api/scep/")
+    assert r.status_code == 404
+    r = client().simulate_get("/api/ocsp/")
+    assert r.status_code == 404
+    r = client().simulate_post("/api/scep/")
+    assert r.status_code == 404
+    r = client().simulate_post("/api/ocsp/")
+    assert r.status_code == 404
 
 
     ####################################
@@ -932,6 +976,10 @@ def test_cli_setup_authority():
     os.system("sed -e 's/dc1/ca/g' -i /etc/cron.hourly/certidude")
     os.system("sed -e 's/autosign subnets =.*/autosign subnets =/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/machine enrollment =.*/machine enrollment = allowed/g' -i /etc/certidude/server.conf")
+    os.system("sed -e 's/scep subnets =.*/scep subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf")
+    os.system("sed -e 's/ocsp subnets =.*/ocsp subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf")
+    from certidude.common import pip
+    pip("asn1crypto certbuilder")
 
     # Update server credential cache
     with open("/etc/cron.hourly/certidude") as fh:
@@ -958,6 +1006,25 @@ def test_cli_setup_authority():
         return
 
     sleep(1) # Wait for serve to start up
+
+    assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_crt.pem -cert /var/lib/certidude/ca.example.lan/signed/roadwarrior2.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp1.log") == 0
+    assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_crt.pem -cert /var/lib/certidude/ca.example.lan/ca_crt.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp2.log") == 0
+
+    for filename in os.listdir("/var/lib/certidude/ca.example.lan/revoked"):
+        if not filename.endswith(".pem"):
+            continue
+        assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_crt.pem -cert /var/lib/certidude/ca.example.lan/revoked/%s -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp3.log" % filename) == 0
+        break
+
+    with open("/tmp/ocsp1.log") as fh:
+        buf = fh.read()
+        assert ": good" in buf, buf
+    with open("/tmp/ocsp2.log") as fh:
+        buf = fh.read()
+        assert ": unknown" in buf, buf
+    with open("/tmp/ocsp3.log") as fh:
+        buf = fh.read()
+        assert ": revoked" in buf, buf
 
 
     #####################
@@ -1016,7 +1083,7 @@ def test_cli_setup_authority():
         with open("/etc/certidude/client.conf", "a") as fh:
             fh.write("insecure = true\n")
 
-        result = runner.invoke(cli, ["request", "--no-wait", "--system-keytab-required"])
+        result = runner.invoke(cli, ["request", "--no-wait", "--kerberos"])
         assert result.exception, result.output # Bad request 400
 
         # With matching CN it should work
@@ -1028,9 +1095,10 @@ def test_cli_setup_authority():
         with open("/etc/certidude/client.conf", "a") as fh:
             fh.write("insecure = true\n")
 
-        result = runner.invoke(cli, ["request", "--no-wait", "--system-keytab-required"])
+        result = runner.invoke(cli, ["request", "--no-wait", "--kerberos"])
         assert not result.exception, result.output
         assert "Writing certificate to:" in result.output, result.output
+        return
     else:
         os.waitpid(mach_pid, 0)
 
@@ -1046,6 +1114,7 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
 
     # Shut down server
+    assert os.path.exists("/proc/%d" % server_pid)
     requests.get("http://ca.example.lan/api/exit")
     os.waitpid(server_pid, 0)
 

@@ -13,8 +13,6 @@ from certidude.firewall import whitelist_subnets
 from oscrypto import keys, asymmetric, symmetric
 from oscrypto.errors import SignatureError
 
-# openssl ocsp -issuer /var/lib/certidude/ca2.koodur.lan/ca_crt.pem -cert /var/lib/certidude/ca2.koodur.lan/signed/lauri-c720p.pem -text -url http://ca2.koodur.lan/api/ocsp/
-
 class OCSPResource(object):
     def on_post(self, req, resp):
         fh = open(config.AUTHORITY_CERTIFICATE_PATH)

@@ -1,4 +1,4 @@
-
+from __future__ import unicode_literals, division, absolute_import, print_function
 import click
 import os
 import random
@@ -234,7 +234,7 @@ def delete_request(common_name):
 
 def generate_ovpn_bundle(common_name, owner=None):
     # Construct private key
-    click.echo("Generating %d-bit RSA key..." % const.KEY_SIZE)
+    click.echo("Generating %d-bit RSA key for OpenVPN profile..." % const.KEY_SIZE)
 
     key = rsa.generate_private_key(
         public_exponent=65537,
@@ -270,7 +270,7 @@ def generate_pkcs12_bundle(common_name, owner=None):
     """
 
     # Construct private key
-    click.echo("Generating %d-bit RSA key..." % const.KEY_SIZE)
+    click.echo("Generating %d-bit RSA key for PKCS#12 bundle..." % const.KEY_SIZE)
 
     key = rsa.generate_private_key(
         public_exponent=65537,

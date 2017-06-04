@@ -86,11 +86,11 @@ def setup_client(prefix="client_", dh=False):
 
 
 @click.command("request", help="Run processes for requesting certificates and configuring services")
-@click.option("-k", "--system-keytab-required", default=False, is_flag=True, help="Offer system keytab for auth")
+@click.option("-k", "--kerberos", default=False, is_flag=True, help="Offer system keytab for auth")
 @click.option("-r", "--renew", default=False, is_flag=True, help="Renew now")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 @click.option("-nw", "--no-wait", default=False, is_flag=True, help="Return immideately if server doesn't autosign")
-def certidude_request(fork, renew, no_wait, system_keytab_required):
+def certidude_request(fork, renew, no_wait, kerberos):
     # Here let's try to avoid compiling packages from scratch
     rpm("openssl") or \
     apt("openssl python-jinja2") or \
@@ -145,7 +145,7 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
             # Stop further processing if command line argument said so or trigger expects domain membership
             if not os.path.exists("/etc/krb5.keytab"):
                 continue
-            use_keytab = True
+            kerberos = True
         elif trigger == "interface up":
             pass
         else:
@@ -305,7 +305,11 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
         try:
             # Attach renewal signature if renewal requested and cert exists
             renewal_overlap = clients.getint(authority_name, "renewal overlap")
-            with open(certificate_path) as ch, open(request_path) as rh, open(key_path) as kh:
+        except NoOptionError: # Renewal not specified in config
+            renewal_overlap = None
+
+        try:
+            with open(certificate_path, "rb") as ch, open(request_path, "rb") as rh, open(key_path, "rb") as kh:
                 cert_buf = ch.read()
                 cert = asymmetric.load_certificate(cert_buf)
                 expires = cert.asn1["tbs_certificate"]["validity"]["not_after"].native
@@ -317,9 +321,7 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
                         asymmetric.load_private_key(kh.read()),
                         cert_buf + rh.read(),
                         "sha512"))
-        except NoOptionError: # Renewal not specified in config
-            pass
-        except EnvironmentError: # Certificate missing
+        except EnvironmentError: # Certificate missing, can't renew
             pass
         else:
             click.echo("Attached renewal signature %s" % headers["X-Renewal-Signature"])
@@ -334,7 +336,7 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
                 request_url = request_url + "?" + "&".join(request_params)
 
             # If machine is joined to domain attempt to present machine credentials for authentication
-            if use_keytab:
+            if kerberos:
                 os.environ["KRB5CCNAME"]="/tmp/ca.ticket"
 
                 # Mac OS X has keytab with lowercase hostname
@@ -364,7 +366,8 @@ def certidude_request(fork, renew, no_wait, system_keytab_required):
                 pass
             if submission.status_code == requests.codes.accepted:
                 click.echo("Server accepted the request, but refused to sign immideately (%s). Waiting was not requested, hence quitting for now" % submission.text)
-                return
+                os.unlink(pid_path)
+                continue
             if submission.status_code == requests.codes.conflict:
                 raise errors.DuplicateCommonNameError("Different signing request with same CN is already present on server, server refuses to overwrite")
             elif submission.status_code == requests.codes.gone:
@@ -1070,7 +1073,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
 
     # Generate and sign CA key
     if not os.path.exists(ca_key):
-        click.echo("Generating %d-bit RSA key..." % const.KEY_SIZE)
+        click.echo("Generating %d-bit RSA key for CA ..." % const.KEY_SIZE)
 
         key = rsa.generate_private_key(
             public_exponent=65537,
