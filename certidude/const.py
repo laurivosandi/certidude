@@ -20,8 +20,7 @@ STORAGE_PATH = "/var/lib/certidude/"
 try:
     FQDN = socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, 0, 0, socket.AI_CANONNAME)[0][3]
 except socket.gaierror:
-    click.echo("Failed to resolve fully qualified hostname of this machine, make sure hostname -f works")
-    sys.exit(254)
+    FQDN = socket.gethostname()
 
 try:
     HOSTNAME, DOMAIN = FQDN.split(".", 1)
