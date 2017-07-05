@@ -181,6 +181,24 @@ function onTagUpdated(e) {
     })
 }
 
+function onAttributeUpdated(e) {
+    var cn = e.data;
+    console.log("Attributes updated", cn);
+    $.ajax({
+        method: "GET",
+        url: "/api/signed/" + cn + "/attr/",
+        dataType: "json",
+        success:function(attributes, status, xhr) {
+            console.info("Updated", cn, "attributes", attributes);
+            $(".attributes[data-cn='" + cn + "']").html(
+                nunjucks.render('views/attributes.html', {
+                    certificate: {
+                        common_name: cn,
+                        attributes:attributes }}));
+        }
+    })
+}
+
 $(document).ready(function() {
     console.info("Loading CA, to debug: curl " + window.location.href + " --negotiate -u : -H 'Accept: application/json'");
     $.ajax({
@@ -228,6 +246,7 @@ $(document).ready(function() {
                 source.addEventListener("request-signed", onRequestSigned);
                 source.addEventListener("certificate-revoked", onCertificateRevoked);
                 source.addEventListener("tag-update", onTagUpdated);
+                source.addEventListener("attribute-update", onAttributeUpdated);
 
                 console.info("Swtiching to requests section");
                 $("section").hide();

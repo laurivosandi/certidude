@@ -1,4 +1,5 @@
 
+import falcon
 import logging
 
 logger = logging.getLogger("api")
@@ -20,7 +21,7 @@ def whitelist_subnets(subnets):
                     req.env["PATH_INFO"],
                     req.context.get("user", "unauthenticated user"),
                     req.context.get("remote_addr"))
-                raise falcon.HTTPForbidden("Forbidden", "Remote address %s not whitelisted" % remote_addr)
+                raise falcon.HTTPForbidden("Forbidden", "Remote address %s not whitelisted" % req.context.get("remote_addr"))
 
             return func(self, req, resp, *args, **kwargs)
         return wrapped
@@ -38,4 +39,20 @@ def whitelist_content_types(*content_types):
                 "This API call accepts only %s content type" % ", ".join(content_types))
         return wrapped
     return wrapper
+
+def whitelist_subject(func):
+    def wrapped(self, req, resp, cn, *args, **kwargs):
+        from ipaddress import ip_address
+        from certidude import authority
+        from xattr import getxattr
+        try:
+            path, buf, cert = authority.get_signed(cn)
+        except IOError:
+            raise falcon.HTTPNotFound()
+        else:
+            inner_address = getxattr(path, "user.lease.inner_address").decode("ascii")
+            if req.context.get("remote_addr") != ip_address(inner_address):
+                raise falcon.HTTPForbidden("Forbidden", "Remote address %s not whitelisted" % req.context.get("remote_addr"))
+            return func(self, req, resp, cn, *args, **kwargs)
+    return wrapped
 

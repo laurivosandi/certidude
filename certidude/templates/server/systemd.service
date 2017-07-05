@@ -7,8 +7,7 @@ Environment=PYTHON_EGG_CACHE=/tmp/.cache
 PIDFile=/run/certidude/server.pid
 ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s TERM $MAINPID
-ExecStart={{ certidude_path }} serve {% if listen %} -l {{listen}}{% endif %}{% if port %} -p {{port}}{% endif %}
-
+ExecStart={{ certidude_path }} serve
 
 [Install]
 WantedBy=multi-user.target

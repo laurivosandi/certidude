@@ -98,4 +98,4 @@ TOKEN_SECRET = cp.get("token", "secret")
 
 # The API call for looking up scripts uses following directory as root
 SCRIPT_DIR = os.path.join(os.path.dirname(__file__), "templates", "script")
-SCRIPT_DEFAULT = "openwrt.sh"
+SCRIPT_DEFAULT = "default.sh"

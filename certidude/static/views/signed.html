@@ -61,4 +61,8 @@
     <div class="status">
     {% include 'views/status.html' %}
     </div>
+
+    <div class="attributes" data-cn="{{ certificate.common_name }}">
+        {% include 'views/attributes.html' %}
+    </div>
 </li>

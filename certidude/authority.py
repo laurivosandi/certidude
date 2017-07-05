@@ -1,4 +1,4 @@
-from __future__ import unicode_literals, division, absolute_import, print_function
+from __future__ import division, absolute_import, print_function
 import click
 import os
 import random
@@ -57,17 +57,19 @@ def get_revoked(serial):
             datetime.utcfromtimestamp(os.stat(path).st_ctime)
 
 
-def get_attributes(cn):
+def get_attributes(cn, namespace=None):
     path, buf, cert = get_signed(cn)
     attribs = dict()
     for key in listxattr(path):
         if not key.startswith("user."):
             continue
+        if namespace and not key.startswith("user.%s." % namespace):
+            continue
         value = getxattr(path, key)
         current = attribs
         if "." in key:
-            namespace, key = key.rsplit(".", 1)
-            for component in namespace.split("."):
+            prefix, key = key.rsplit(".", 1)
+            for component in prefix.split("."):
                 if component not in current:
                     current[component] = dict()
                 current = current[component]
@@ -324,7 +326,6 @@ def sign(common_name, overwrite=False):
 def _sign(csr, buf, overwrite=False):
     assert buf.startswith("-----BEGIN CERTIFICATE REQUEST-----\n")
     assert isinstance(csr, x509.CertificateSigningRequest)
-    from xattr import getxattr, listxattr, setxattr
 
     common_name, = csr.subject.get_attributes_for_oid(NameOID.COMMON_NAME)
     cert_path = os.path.join(config.SIGNED_DIR, "%s.pem" % common_name.value)

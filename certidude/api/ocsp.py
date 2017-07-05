@@ -1,4 +1,3 @@
-from __future__ import unicode_literals, division, absolute_import, print_function
 import click
 import hashlib
 import os
@@ -14,26 +13,35 @@ from oscrypto import keys, asymmetric, symmetric
 from oscrypto.errors import SignatureError
 
 class OCSPResource(object):
-    def on_post(self, req, resp):
+    def __call__(self, req, resp):
+        if req.method == "GET":
+            _, _, _, tail = req.path.split("/", 3)
+            body = b64decode(tail)
+        elif req.method == "POST":
+            body = req.stream.read(req.content_length or 0)
+        else:
+            raise falcon.HTTPMethodNotAllowed()
+
         fh = open(config.AUTHORITY_CERTIFICATE_PATH)
         server_certificate = asymmetric.load_certificate(fh.read())
         fh.close()
 
-        ocsp_req = ocsp.OCSPRequest.load(req.stream.read())
-        print(ocsp_req["tbs_request"].native)
-
+        ocsp_req = ocsp.OCSPRequest.load(body)
         now = datetime.now(timezone.utc)
         response_extensions = []
 
-        for ext in ocsp_req["tbs_request"]["request_extensions"]:
-            if ext["extn_id"] == "nonce":
-                response_extensions.append(
-                    ocsp.ResponseDataExtension({
-                        'extn_id': "nonce",
-                        'critical': False,
-                        'extn_value': ext["extn_value"]
-                    })
-                )
+        try:
+            for ext in ocsp_req["tbs_request"]["request_extensions"]:
+                if ext["extn_id"].native == "nonce":
+                    response_extensions.append(
+                        ocsp.ResponseDataExtension({
+                            'extn_id': "nonce",
+                            'critical': False,
+                            'extn_value': ext["extn_value"]
+                        })
+                    )
+        except ValueError: # https://github.com/wbond/asn1crypto/issues/56
+            pass
 
         responses = []
         for item in ocsp_req["tbs_request"]["request_list"]:

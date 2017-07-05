@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# This script can executed on a preconfigured OpenWrt box
+# This script can be executed on a preconfigured OpenWrt box
 # https://lauri.vosandi.com/2017/01/reconfiguring-openwrt-as-dummy-ap.html
 
 # Password protected wireless area
@@ -10,13 +10,13 @@ for band in 2ghz 5ghz; do
     uci set wireless.lan$band.mode=ap
     uci set wireless.lan$band.device=radio$band
     uci set wireless.lan$band.encryption=psk2
-    {% if attributes.protected and attributes.protected.ssid %}
-    uci set wireless.lan$band.ssid={{ attrbutes.protected.ssid }}
+    {% if attributes.wireless.protected and attributes.wireless.protected.ssid %}
+    uci set wireless.lan$band.ssid={{ attrbutes.wireless.protected.ssid }}
     {% else %}
     uci set wireless.lan$band.ssid=$(uci get system.@system[0].hostname)-protected
     {% endif %}
-    {% if attributes.protected and attributes.protected.psk %}
-    uci set wireless.lan$band.key={{ attributes.protected.psk }}
+    {% if attributes.wireless.protected and attributes.wireless.protected.psk %}
+    uci set wireless.lan$band.key={{ attributes.wireless.protected.psk }}
     {% else %}
     uci set wireless.lan$band.key=salakala
     {% endif %}
@@ -29,8 +29,8 @@ for band in 2ghz 5ghz; do
     uci set wireless.guest$band.mode=ap
     uci set wireless.guest$band.device=radio$band
     uci set wireless.guest$band.encryption=none
-    {% if attributes.public and attributes.public.ssid %}
-    uci set wireless.guest$band.ssid={{ attrbutes.public.ssid }}
+    {% if attributes.wireless.public and attributes.wireless.public.ssid %}
+    uci set wireless.guest$band.ssid={{ attrbutes.wireless.public.ssid }}
     {% else %}
     uci set wireless.guest$band.ssid=$(uci get system.@system[0].hostname)-public
     {% endif %}

@@ -1,0 +1,3 @@
+{% for key, value in certificate.attributes %}
+<span class="attribute icon {{ key | replace('.', ' ') }}">{{ value }}</span>
+{% endfor %}

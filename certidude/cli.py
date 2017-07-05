@@ -1004,24 +1004,15 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     static_path = os.path.join(os.path.realpath(os.path.dirname(__file__)), "static")
     certidude_path = sys.argv[0]
 
-    # Push server config generation
-    if os.path.exists("/etc/nginx"):
-        listen = "127.0.1.1"
-        port = "8080"
-        click.echo("Generating: %s" % nginx_config.name)
-        nginx_config.write(env.get_template("server/nginx.conf").render(vars()))
-        nginx_config.close()
-        if not os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
-            os.symlink("../sites-available/certidude.conf", "/etc/nginx/sites-enabled/certidude.conf")
-            click.echo("Symlinked %s -> /etc/nginx/sites-enabled/" % nginx_config.name)
-        if os.path.exists("/etc/nginx/sites-enabled/default"):
-            os.unlink("/etc/nginx/sites-enabled/default")
-        os.system("service nginx restart")
-    else:
-        click.echo("Directory /etc/nginx does not exist, hence not creating nginx configuration")
-        click.echo("Remember to install/configure nchan capable nginx instead of regular nginx!")
-        listen = "0.0.0.0"
-        port = "80"
+    click.echo("Generating: %s" % nginx_config.name)
+    nginx_config.write(env.get_template("server/nginx.conf").render(vars()))
+    nginx_config.close()
+    if not os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
+        os.symlink("../sites-available/certidude.conf", "/etc/nginx/sites-enabled/certidude.conf")
+        click.echo("Symlinked %s -> /etc/nginx/sites-enabled/" % nginx_config.name)
+    if os.path.exists("/etc/nginx/sites-enabled/default"):
+        os.unlink("/etc/nginx/sites-enabled/default")
+    os.system("service nginx restart")
 
     if os.path.exists("/etc/systemd"):
         if os.path.exists("/etc/systemd/system/certidude.service"):
@@ -1284,16 +1275,19 @@ def certidude_cron():
 
 @click.command("serve", help="Run server")
 @click.option("-e", "--exit-handler", default=False, is_flag=True, help="Install /api/exit/ handler")
-@click.option("-p", "--port", default=80, help="Listen port")
-@click.option("-l", "--listen", default="0.0.0.0", help="Listen address")
+@click.option("-p", "--port", default=8080, help="Listen port")
+@click.option("-l", "--listen", default="127.0.0.1", help="Listen address")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 def certidude_serve(port, listen, fork, exit_handler):
     import pwd
     from setproctitle import setproctitle
     from certidude.signer import SignServer
     from certidude import authority, const
-    click.echo("Using configuration from: %s" % const.CONFIG_PATH)
 
+    if port == 80:
+        click.echo("WARNING: Please run Certidude behind nginx, remote address is assumed to be forwarded by nginx!")
+
+    click.echo("Using configuration from: %s" % const.CONFIG_PATH)
 
     log_handlers = []
 

@@ -8,6 +8,7 @@ import click
 import hashlib
 from datetime import datetime
 from time import sleep
+from xattr import listxattr, getxattr
 from certidude import authority, mailer
 from certidude.auth import login_required, authorize_admin
 from certidude.user import User
@@ -32,7 +33,6 @@ class SessionResource(object):
     @serialize
     @login_required
     def on_get(self, req, resp):
-        import xattr
 
         def serialize_requests(g):
             for common_name, path, buf, obj, server in g():
@@ -50,7 +50,7 @@ class SessionResource(object):
                 # Extract certificate tags from filesystem
                 try:
                     tags = []
-                    for tag in xattr.getxattr(path, "user.xdg.tags").split(","):
+                    for tag in getxattr(path, "user.xdg.tags").split(","):
                         if "=" in tag:
                             k, v = tag.split("=", 1)
                         else:
@@ -59,12 +59,17 @@ class SessionResource(object):
                 except IOError: # No such attribute(s)
                     tags = None
 
+                attributes = {}
+                for key in listxattr(path):
+                    if key.startswith("user.machine."):
+                        attributes[key[13:]] = getxattr(path, key)
+
                 # Extract lease information from filesystem
                 try:
-                    last_seen = datetime.strptime(xattr.getxattr(path, "user.lease.last_seen"), "%Y-%m-%dT%H:%M:%S.%fZ")
+                    last_seen = datetime.strptime(getxattr(path, "user.lease.last_seen"), "%Y-%m-%dT%H:%M:%S.%fZ")
                     lease = dict(
-                        inner_address = xattr.getxattr(path, "user.lease.inner_address"),
-                        outer_address = xattr.getxattr(path, "user.lease.outer_address"),
+                        inner_address = getxattr(path, "user.lease.inner_address"),
+                        outer_address = getxattr(path, "user.lease.outer_address"),
                         last_seen = last_seen,
                         age = datetime.utcnow() - last_seen
                     )
@@ -80,7 +85,8 @@ class SessionResource(object):
                     expires = obj.not_valid_after,
                     sha256sum = hashlib.sha256(buf).hexdigest(),
                     lease = lease,
-                    tags = tags
+                    tags = tags,
+                    attributes = attributes or None,
                 )
 
         if req.context.get("user").is_admin():
@@ -160,7 +166,7 @@ import ipaddress
 class NormalizeMiddleware(object):
     def process_request(self, req, resp, *args):
         assert not req.get_param("unicode") or req.get_param("unicode") == u"✓", "Unicode sanity check failed"
-        req.context["remote_addr"] = ipaddress.ip_address(req.env["REMOTE_ADDR"].decode("utf-8"))
+        req.context["remote_addr"] = ipaddress.ip_address(req.access_route[0].decode("utf-8"))
 
     def process_response(self, req, resp, resource=None):
         # wtf falcon?!
@@ -181,6 +187,7 @@ def certidude_app(log_handlers=[]):
 
     app = falcon.API(middleware=NormalizeMiddleware())
     app.req_options.auto_parse_form_urlencoded = True
+    #app.req_options.strip_url_path_trailing_slash = False
 
     # Certificate authority API calls
     app.add_route("/api/certificate/", CertificateAuthorityResource())
@@ -194,7 +201,7 @@ def certidude_app(log_handlers=[]):
         app.add_route("/api/token/", TokenResource())
 
     # Extended attributes for scripting etc.
-    app.add_route("/api/signed/{cn}/attr/", AttributeResource())
+    app.add_route("/api/signed/{cn}/attr/", AttributeResource(namespace="machine"))
     app.add_route("/api/signed/{cn}/script/", ScriptResource())
 
     # API calls used by pushed events on the JS end
@@ -215,18 +222,13 @@ def certidude_app(log_handlers=[]):
         from .scep import SCEPResource
         app.add_route("/api/scep/", SCEPResource())
 
-    if config.OCSP_SUBNETS:
-        from .ocsp import OCSPResource
-        app.add_route("/api/ocsp/", OCSPResource())
 
     # Add sink for serving static files
     app.add_sink(StaticResource(os.path.join(__file__, "..", "..", "static")))
 
-    def log_exceptions(ex, req, resp, params):
-        logger.debug("Caught exception: %s" % ex)
-        raise ex
-
-    app.add_error_handler(Exception, log_exceptions)
+    if config.OCSP_SUBNETS:
+        from .ocsp import OCSPResource
+        app.add_sink(OCSPResource(), prefix="/api/ocsp")
 
     # Set up log handlers
     if config.LOGGING_BACKEND == "sql":

@@ -1,14 +1,24 @@
+import click
 import falcon
 import logging
-from ipaddress import ip_address
+import re
+from xattr import setxattr, listxattr, removexattr
 from datetime import datetime
-from certidude import config, authority
-from certidude.decorators import serialize
+from certidude import config, authority, push
+from certidude.decorators import serialize, csrf_protection
+from certidude.firewall import whitelist_subject
+from certidude.auth import login_required, login_optional, authorize_admin
+from ipaddress import ip_address
 
 logger = logging.getLogger(__name__)
 
 class AttributeResource(object):
+    def __init__(self, namespace):
+        self.namespace = namespace
+
     @serialize
+    @login_required
+    @authorize_admin
     def on_get(self, req, resp, cn):
         """
         Return extended attributes stored on the server.
@@ -17,22 +27,32 @@ class AttributeResource(object):
         Results made available only to lease IP address.
         """
         try:
-            path, buf, cert, attribs = authority.get_attributes(cn)
+            path, buf, cert, attribs = authority.get_attributes(cn, namespace=self.namespace)
         except IOError:
             raise falcon.HTTPNotFound()
         else:
-            try:
-                whitelist = ip_address(attribs.get("user").get("lease").get("inner_address").decode("ascii"))
-            except AttributeError: # TODO: probably race condition
-                raise falcon.HTTPForbidden("Forbidden",
-                    "Attributes only accessible to the machine")
-
-            if req.context.get("remote_addr") != whitelist:
-                logger.info("Attribute access denied from %s, expected %s for %s",
-                    req.context.get("remote_addr"),
-                    whitelist,
-                    cn)
-                raise falcon.HTTPForbidden("Forbidden",
-                    "Attributes only accessible to the machine")
-
             return attribs
+
+    @csrf_protection
+    @whitelist_subject # TODO: sign instead
+    def on_post(self, req, resp, cn):
+        try:
+            path, buf, cert = authority.get_signed(cn)
+        except IOError:
+            raise falcon.HTTPNotFound()
+        else:
+            for key in req.params:
+                if not re.match("[a-z0-9_\.]+$", key):
+                    raise falcon.HTTPBadRequest("Invalid key")
+            valid = set()
+            for key, value in req.params.items():
+                identifier = ("user.%s.%s" % (self.namespace, key)).encode("ascii")
+                setxattr(path, identifier, value.encode("utf-8"))
+                valid.add(identifier)
+            for key in listxattr(path):
+                if not key.startswith("user.%s." % self.namespace):
+                    continue
+                if key not in valid:
+                    removexattr(path, key)
+            push.publish("attribute-update", cn)
+
