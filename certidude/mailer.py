@@ -42,7 +42,8 @@ def send(template, to=None, include_admins=True, attachments=(), **context):
         part.add_header('Content-Disposition', 'attachment', filename=suggested_filename)
         part.set_payload(attachment)
         msg.attach(part)
-    click.echo("Sending to: %s" % msg["to"])
 
-    conn = smtplib.SMTP("localhost")
-    conn.sendmail(config.MAILER_ADDRESS, [u.mail for u in recipients], msg.as_string())
+    if config.MAILER_ADDRESS:
+        click.echo("Sending to: %s" % msg["to"])
+        conn = smtplib.SMTP("localhost")
+        conn.sendmail(config.MAILER_ADDRESS, [u.mail for u in recipients], msg.as_string())

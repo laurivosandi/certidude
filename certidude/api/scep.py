@@ -15,12 +15,12 @@ from oscrypto.errors import SignatureError
 class SetOfPrintableString(SetOf):
     _child_spec = PrintableString
 
-cms.CMSAttributeType._map['2.16.840.1.113733.1.9.2'] = "message_type"
-cms.CMSAttributeType._map['2.16.840.1.113733.1.9.3'] = "pki_status"
-cms.CMSAttributeType._map['2.16.840.1.113733.1.9.4'] = "fail_info"
-cms.CMSAttributeType._map['2.16.840.1.113733.1.9.5'] = "sender_nonce"
-cms.CMSAttributeType._map['2.16.840.1.113733.1.9.6'] = "recipient_nonce"
-cms.CMSAttributeType._map['2.16.840.1.113733.1.9.7'] = "trans_id"
+cms.CMSAttributeType._map['2.16.840.1.113733.1.9.2'] = u"message_type"
+cms.CMSAttributeType._map['2.16.840.1.113733.1.9.3'] = u"pki_status"
+cms.CMSAttributeType._map['2.16.840.1.113733.1.9.4'] = u"fail_info"
+cms.CMSAttributeType._map['2.16.840.1.113733.1.9.5'] = u"sender_nonce"
+cms.CMSAttributeType._map['2.16.840.1.113733.1.9.6'] = u"recipient_nonce"
+cms.CMSAttributeType._map['2.16.840.1.113733.1.9.7'] = u"trans_id"
 
 cms.CMSAttribute._oid_specs['message_type'] = SetOfPrintableString
 cms.CMSAttribute._oid_specs['pki_status'] = SetOfPrintableString
@@ -54,12 +54,12 @@ class SCEPResource(object):
         encrypted_container = b""
         attr_list = [
             cms.CMSAttribute({
-                'type': "message_type",
-                'values': ["3"]
+                'type': u"message_type",
+                'values': [u"3"]
             }),
             cms.CMSAttribute({
-                'type': "pki_status",
-                'values': ["2"] # rejected
+                'type': u"pki_status",
+                'values': [u"2"] # rejected
             })
         ]
 
@@ -139,7 +139,7 @@ class SCEPResource(object):
 
         except SCEPError, e:
             attr_list.append(cms.CMSAttribute({
-                'type': "fail_info",
+                'type': u"fail_info",
                 'values': ["%d" % e.code]
             }))
         else:
@@ -149,17 +149,17 @@ class SCEPResource(object):
             ##################################
 
             degenerate = cms.ContentInfo({
-                'content_type': 'signed_data',
+                'content_type': u"signed_data",
                 'content': cms.SignedData({
-                    'version': 'v1',
+                    'version': u"v1",
                     'certificates': [signed_certificate.asn1],
                     'digest_algorithms': [cms.DigestAlgorithm({
-                        'algorithm':'md5'
+                        'algorithm': u"md5"
                     })],
                     'encap_content_info': {
-                        'content_type': 'data',
+                        'content_type': u"data",
                         'content':  cms.ContentInfo({
-                            'content_type': 'signed_data',
+                            'content_type': u"signed_data",
                             'content': None
                         }).dump()
                     },
@@ -178,7 +178,7 @@ class SCEPResource(object):
 
             ri = cms.RecipientInfo({
                 'ktri': cms.KeyTransRecipientInfo({
-                    'version': 'v0',
+                    'version': u"v0",
                     'rid': cms.RecipientIdentifier({
                         'issuer_and_serial_number': cms.IssuerAndSerialNumber({
                             'issuer': current_certificate.chosen["tbs_certificate"]["issuer"],
@@ -186,7 +186,7 @@ class SCEPResource(object):
                         }),
                     }),
                     'key_encryption_algorithm': {
-                        'algorithm': 'rsa'
+                        'algorithm': u"rsa"
                     },
                     'encrypted_key': asymmetric.rsa_pkcs1v15_encrypt(
                         asymmetric.load_certificate(current_certificate.chosen.dump()), key)
@@ -194,14 +194,14 @@ class SCEPResource(object):
             })
 
             encrypted_container = cms.ContentInfo({
-                'content_type': 'enveloped_data',
+                'content_type': u"enveloped_data",
                 'content': cms.EnvelopedData({
-                    'version': 'v1',
+                    'version': u"v1",
                     'recipient_infos': [ri],
                     'encrypted_content_info': {
-                        'content_type': 'data',
+                        'content_type': u"data",
                         'content_encryption_algorithm': {
-                            'algorithm': 'des',
+                            'algorithm': u"des",
                             'parameters': iv
                         },
                         'encrypted_content': encrypted_content
@@ -211,16 +211,16 @@ class SCEPResource(object):
 
             attr_list = [
                 cms.CMSAttribute({
-                    'type': 'message_digest',
+                    'type': u"message_digest",
                     'values': [hashlib.sha1(encrypted_container).digest()]
                 }),
                 cms.CMSAttribute({
-                    'type': "message_type",
-                    'values': ["3"]
+                    'type': u"message_type",
+                    'values': [u"3"]
                 }),
                 cms.CMSAttribute({
-                    'type': "pki_status",
-                    'values': ["0"] # ok
+                    'type': u"pki_status",
+                    'values': [u"0"] # ok
                 })
             ]
         finally:
@@ -231,40 +231,40 @@ class SCEPResource(object):
 
             attrs = cms.CMSAttributes(attr_list + [
                 cms.CMSAttribute({
-                    'type': "recipient_nonce",
+                    'type': u"recipient_nonce",
                     'values': [sender_nonce]
                 }),
                 cms.CMSAttribute({
-                    'type': 'trans_id',
+                    'type': u"trans_id",
                     'values': [transaction_id]
                 })
             ])
 
             signer = cms.SignerInfo({
                 "signed_attrs": attrs,
-                'version':'v1',
+                'version': u"v1",
                 'sid': cms.SignerIdentifier({
                     'issuer_and_serial_number': cms.IssuerAndSerialNumber({
                         'issuer': server_certificate.asn1["tbs_certificate"]["issuer"],
                         'serial_number': server_certificate.asn1["tbs_certificate"]["serial_number"],
                     }),
                 }),
-                'digest_algorithm': algos.DigestAlgorithm({'algorithm': 'sha1'}),
-                'signature_algorithm': algos.SignedDigestAlgorithm({'algorithm': 'rsassa_pkcs1v15'}),
+                'digest_algorithm': algos.DigestAlgorithm({'algorithm': u"sha1"}),
+                'signature_algorithm': algos.SignedDigestAlgorithm({'algorithm': u"rsassa_pkcs1v15"}),
                 'signature': b64decode(authority.signer_exec("sign-pkcs7", b64encode(b"\x31" + attrs.dump()[1:])))
             })
 
             resp.append_header("Content-Type", "application/x-pki-message")
             resp.body = cms.ContentInfo({
-                'content_type': 'signed_data',
+                'content_type': u"signed_data",
                 'content': cms.SignedData({
-                    'version': 'v1',
+                    'version': u"v1",
                     'certificates': [x509.Certificate.load(server_certificate.asn1.dump())], # wat
                     'digest_algorithms': [cms.DigestAlgorithm({
-                        'algorithm':'sha1'
+                        'algorithm': u"sha1"
                     })],
                     'encap_content_info': {
-                        'content_type': 'data',
+                        'content_type': u"data",
                         'content': encrypted_container
                     },
                     'signer_infos': [signer]

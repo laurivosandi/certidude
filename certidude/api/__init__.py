@@ -90,9 +90,9 @@ class SessionResource(object):
                 )
 
         if req.context.get("user").is_admin():
-            logger.info("Logged in authority administrator %s" % req.context.get("user"))
+            logger.info("Logged in authority administrator %s from %s" % (req.context.get("user"), req.context.get("remote_addr")))
         else:
-            logger.info("Logged in authority user %s" % req.context.get("user"))
+            logger.info("Logged in authority user %s from %s" % (req.context.get("user"), req.context.get("remote_addr")))
         return dict(
             user = dict(
                 name=req.context.get("user").name,

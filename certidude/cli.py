@@ -1276,7 +1276,7 @@ def certidude_cron():
 @click.command("serve", help="Run server")
 @click.option("-e", "--exit-handler", default=False, is_flag=True, help="Install /api/exit/ handler")
 @click.option("-p", "--port", default=8080, help="Listen port")
-@click.option("-l", "--listen", default="127.0.0.1", help="Listen address")
+@click.option("-l", "--listen", default="127.0.1.1", help="Listen address")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 def certidude_serve(port, listen, fork, exit_handler):
     import pwd

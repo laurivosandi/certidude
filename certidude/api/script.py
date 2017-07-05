@@ -18,14 +18,17 @@ class ScriptResource():
         else:
             script = config.SCRIPT_DEFAULT
             tags = []
-            for tag in attribs.get("user").get("xdg").get("tags").split(","):
-                if "=" in tag:
-                    k, v = tag.split("=", 1)
-                else:
-                    k, v = "other", tag
-                if k == "script":
-                    script = v
-                tags.append(dict(id=tag, key=k, value=v))
+            try:
+                for tag in attribs.get("user").get("xdg").get("tags").split(","):
+                    if "=" in tag:
+                        k, v = tag.split("=", 1)
+                    else:
+                        k, v = "other", tag
+                    if k == "script":
+                        script = v
+                    tags.append(dict(id=tag, key=k, value=v))
+            except AttributeError: # No tags
+                pass
 
             resp.set_header("Content-Type", "text/x-shellscript")
             resp.body = env.get_template(script).render(

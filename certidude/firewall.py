@@ -50,9 +50,14 @@ def whitelist_subject(func):
         except IOError:
             raise falcon.HTTPNotFound()
         else:
-            inner_address = getxattr(path, "user.lease.inner_address").decode("ascii")
-            if req.context.get("remote_addr") != ip_address(inner_address):
+            try:
+                inner_address = getxattr(path, "user.lease.inner_address").decode("ascii")
+            except IOError:
                 raise falcon.HTTPForbidden("Forbidden", "Remote address %s not whitelisted" % req.context.get("remote_addr"))
-            return func(self, req, resp, cn, *args, **kwargs)
+            else:
+                if req.context.get("remote_addr") != ip_address(inner_address):
+                    raise falcon.HTTPForbidden("Forbidden", "Remote address %s mismatch" % req.context.get("remote_addr"))
+                else:
+                   return func(self, req, resp, cn, *args, **kwargs)
     return wrapped
 

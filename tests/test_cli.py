@@ -485,13 +485,19 @@ def test_cli_setup_authority():
 
     # Test attribute fetching API call
     r = client().simulate_get("/api/signed/test/attr/")
+    assert r.status_code == 401, r.text
+    r = client().simulate_get("/api/signed/test/attr/", headers={"Authorization":usertoken})
     assert r.status_code == 403, r.text
-    r = client().simulate_get("/api/signed/nonexistant/attr/")
-    assert r.status_code == 404, r.text
-    r = client().simulate_get("/api/signed/test/lease/", headers={"Authorization":admintoken})
+    r = client().simulate_get("/api/signed/test/attr/", headers={"Authorization":admintoken})
+    assert r.status_code == 200, r.text
+    r = client().simulate_get("/api/signed/nonexistant/attr/", headers={"Authorization":admintoken})
     assert r.status_code == 404, r.text
 
     # Insert lease
+    r = client().simulate_get("/api/signed/test/script/")
+    assert r.status_code == 403, r.text # script not authorized
+    r = client().simulate_get("/api/signed/test/lease/", headers={"Authorization":admintoken})
+    assert r.status_code == 404, r.text
     r = client().simulate_post("/api/lease/",
         query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8",
         headers={"Authorization":admintoken})
@@ -500,21 +506,16 @@ def test_cli_setup_authority():
     assert r.status_code == 404, r.text # cert not found
     r = client().simulate_get("/api/signed/test/script/")
     assert r.status_code == 200, r.text # script render ok
-    assert "uci set " in r.text, r.text
+    assert "curl http://ca.example.lan/api/signed/test/attr " in r.text, r.text
 
     r = client().simulate_post("/api/lease/",
         query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8&serial=0",
         headers={"Authorization":admintoken})
     assert r.status_code == 403, r.text # invalid serial number supplied
-    r = client().simulate_get("/api/signed/test/attr/")
-    assert r.status_code == 200, r.text # read okay from own address
     r = client().simulate_post("/api/lease/",
         query_string = "client=test&inner_address=1.2.3.4&outer_address=8.8.8.8",
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text # lease update ok
-    r = client().simulate_get("/api/signed/test/attr/")
-    assert r.status_code == 403, r.text # read failed from other address
-
 
     # Test lease retrieval
     r = client().simulate_get("/api/signed/test/lease/")
@@ -978,6 +979,7 @@ def test_cli_setup_authority():
     os.system("sed -e 's/machine enrollment =.*/machine enrollment = allowed/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/scep subnets =.*/scep subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/ocsp subnets =.*/ocsp subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf")
+    os.system("sed -e 's/address = certificates@example.lan/address =/g' -i /etc/certidude/server.conf")
     from certidude.common import pip
     pip("asn1crypto certbuilder")
 
@@ -1101,6 +1103,20 @@ def test_cli_setup_authority():
         return
     else:
         os.waitpid(mach_pid, 0)
+
+
+    ##################
+    ### SCEP tests ###
+    ##################
+
+    os.umask(0022)
+    assert not os.system("git clone  https://github.com/certnanny/sscep /tmp/sscep")
+    assert not os.system("cd /tmp/sscep && ./Configure && make sscep_dyn")
+    assert not os.system("/tmp/sscep/sscep_dyn getca -c /tmp/sscep/ca.pem -u http://ca.example.lan/cgi-bin/pkiclient.exe")
+    assert not os.system("openssl genrsa -out /tmp/key.pem 1024")
+    assert not os.system("echo '.\n.\n.\n.\n.\ntest8\n\n\n\n' | openssl req -new -sha256 -key /tmp/key.pem -out /tmp/req.pem")
+    assert not os.system("/tmp/sscep/sscep_dyn enroll -c /tmp/sscep/ca.pem -u http://ca.example.lan/cgi-bin/pkiclient.exe -k /tmp/key.pem -r /tmp/req.pem -l /tmp/cert.pem")
+    # TODO: test e-mails at this point
 
 
     ###################

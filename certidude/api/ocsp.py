@@ -2,13 +2,12 @@ import click
 import hashlib
 import os
 from asn1crypto.util import timezone
-from datetime import datetime, timedelta
-
 from asn1crypto import cms, algos, x509, ocsp
 from base64 import b64decode, b64encode
 from certbuilder import pem_armor_certificate
 from certidude import authority, push, config
 from certidude.firewall import whitelist_subnets
+from datetime import datetime, timedelta
 from oscrypto import keys, asymmetric, symmetric
 from oscrypto.errors import SignatureError
 
@@ -35,7 +34,7 @@ class OCSPResource(object):
                 if ext["extn_id"].native == "nonce":
                     response_extensions.append(
                         ocsp.ResponseDataExtension({
-                            'extn_id': "nonce",
+                            'extn_id': u"nonce",
                             'critical': False,
                             'extn_value': ext["extn_value"]
                         })
@@ -62,7 +61,7 @@ class OCSPResource(object):
                         name='revoked',
                         value={
                             'revocation_time': revoked,
-                            'revocation_reason': "key_compromise",
+                            'revocation_reason': u"key_compromise",
                         })
                 except EnvironmentError:
                     status = ocsp.CertStatus(name="unknown", value=None)
@@ -70,7 +69,7 @@ class OCSPResource(object):
             responses.append({
                 'cert_id': {
                     'hash_algorithm': {
-                        'algorithm': "sha1"
+                        'algorithm': u"sha1"
                     },
                     'issuer_name_hash': server_certificate.asn1.subject.sha1,
                     'issuer_key_hash': server_certificate.public_key.asn1.sha1,
@@ -89,12 +88,12 @@ class OCSPResource(object):
         })
 
         resp.body = ocsp.OCSPResponse({
-            'response_status': "successful",
+            'response_status': u"successful",
             'response_bytes': {
-                'response_type': 'basic_ocsp_response',
+                'response_type': u"basic_ocsp_response",
                 'response': {
                     'tbs_response_data': response_data,
-                    'signature_algorithm': {'algorithm': "sha1_rsa"},
+                    'signature_algorithm': {'algorithm': u"sha1_rsa"},
                     'signature': b64decode(authority.signer_exec("sign-pkcs7", b64encode(response_data.dump()))),
                     'certs': [server_certificate.asn1]
                 }
