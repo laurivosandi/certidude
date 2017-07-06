@@ -493,40 +493,6 @@ def test_cli_setup_authority():
     r = client().simulate_get("/api/signed/nonexistant/attr/", headers={"Authorization":admintoken})
     assert r.status_code == 404, r.text
 
-    # Insert lease
-    r = client().simulate_get("/api/signed/test/script/")
-    assert r.status_code == 403, r.text # script not authorized
-    r = client().simulate_get("/api/signed/test/lease/", headers={"Authorization":admintoken})
-    assert r.status_code == 404, r.text
-    r = client().simulate_post("/api/lease/",
-        query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8",
-        headers={"Authorization":admintoken})
-    assert r.status_code == 200, r.text # lease update ok
-    r = client().simulate_get("/api/signed/nonexistant/script/")
-    assert r.status_code == 404, r.text # cert not found
-    r = client().simulate_get("/api/signed/test/script/")
-    assert r.status_code == 200, r.text # script render ok
-    assert "curl http://ca.example.lan/api/signed/test/attr " in r.text, r.text
-
-    r = client().simulate_post("/api/lease/",
-        query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8&serial=0",
-        headers={"Authorization":admintoken})
-    assert r.status_code == 403, r.text # invalid serial number supplied
-    r = client().simulate_post("/api/lease/",
-        query_string = "client=test&inner_address=1.2.3.4&outer_address=8.8.8.8",
-        headers={"Authorization":admintoken})
-    assert r.status_code == 200, r.text # lease update ok
-
-    # Test lease retrieval
-    r = client().simulate_get("/api/signed/test/lease/")
-    assert r.status_code == 401, r.text
-    r = client().simulate_get("/api/signed/test/lease/", headers={"Authorization":usertoken})
-    assert r.status_code == 403, r.text
-    r = client().simulate_get("/api/signed/test/lease/", headers={"Authorization":admintoken})
-    assert r.status_code == 200, r.text
-    assert r.headers.get('content-type') == "application/json; charset=UTF-8"
-
-
     # Tags should not be visible anonymously
     r = client().simulate_get("/api/signed/test/tag/")
     assert r.status_code == 401, r.text
@@ -568,6 +534,56 @@ def test_cli_setup_authority():
     assert r.status_code == 200, r.text
     assert r.text == '[{"value": "Tartu", "key": "location", "id": "location=Tartu"}, {"value": "else", "key": "other", "id": "else"}]', r.text
 
+
+
+    # Test scripting
+    r = client().simulate_get("/api/signed/test/script/")
+    assert r.status_code == 403, r.text # script not authorized
+    r = client().simulate_get("/api/signed/nonexistant/script/")
+    assert r.status_code == 404, r.text # cert not found
+
+    # Insert lease
+    r = client().simulate_get("/api/signed/test/lease/", headers={"Authorization":admintoken})
+    assert r.status_code == 404, r.text
+    r = client().simulate_post("/api/lease/",
+        query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 200, r.text # lease update ok
+
+    # Test tagging integration in scripting framework
+    r = client().simulate_get("/api/signed/test/script/")
+    assert r.status_code == 200, r.text # script render ok
+    assert "curl http://ca.example.lan/api/signed/test/attr " in r.text, r.text
+    assert "Tartu" in r.text, r.text
+
+    r = client().simulate_post("/api/signed/test/tag/",
+        body="key=script&value=openwrt.sh",
+        headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
+    assert r.status_code == 200, r.text
+
+    r = client().simulate_get("/api/signed/test/script/")
+    assert r.status_code == 200, r.text # script render ok
+    assert "uci set " in r.text, r.text
+
+    # Test lease update
+    r = client().simulate_post("/api/lease/",
+        query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8&serial=0",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 403, r.text # invalid serial number supplied
+    r = client().simulate_post("/api/lease/",
+        query_string = "client=test&inner_address=1.2.3.4&outer_address=8.8.8.8",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 200, r.text # lease update ok
+
+    # Test lease retrieval
+    r = client().simulate_get("/api/signed/test/lease/")
+    assert r.status_code == 401, r.text
+    r = client().simulate_get("/api/signed/test/lease/", headers={"Authorization":usertoken})
+    assert r.status_code == 403, r.text
+    r = client().simulate_get("/api/signed/test/lease/", headers={"Authorization":admintoken})
+    assert r.status_code == 200, r.text
+    assert r.headers.get('content-type') == "application/json; charset=UTF-8"
+
     # Tags can be deleted only by admin
     r = client().simulate_delete("/api/signed/test/tag/else/")
     assert r.status_code == 401, r.text
@@ -578,6 +594,9 @@ def test_cli_setup_authority():
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
     assert r.status_code == 200, r.text
     r = client().simulate_delete("/api/signed/test/tag/location=Tartu/",
+        headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
+    assert r.status_code == 200, r.text
+    r = client().simulate_delete("/api/signed/test/tag/script=openwrt.sh/",
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
     assert r.status_code == 200, r.text
     r = client().simulate_get("/api/signed/test/tag/", headers={"Authorization":admintoken})

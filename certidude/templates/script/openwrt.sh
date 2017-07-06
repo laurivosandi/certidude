@@ -10,13 +10,13 @@ for band in 2ghz 5ghz; do
     uci set wireless.lan$band.mode=ap
     uci set wireless.lan$band.device=radio$band
     uci set wireless.lan$band.encryption=psk2
-    {% if attributes.wireless.protected and attributes.wireless.protected.ssid %}
-    uci set wireless.lan$band.ssid={{ attrbutes.wireless.protected.ssid }}
+    {% if named_tags and named_tags.wireless and named_tags.wireless.protected and named_tags.wireless.protected.ssid %}
+    uci set wireless.lan$band.ssid={{ named_tags.wireless.protected.ssid }}
     {% else %}
     uci set wireless.lan$band.ssid=$(uci get system.@system[0].hostname)-protected
     {% endif %}
-    {% if attributes.wireless.protected and attributes.wireless.protected.psk %}
-    uci set wireless.lan$band.key={{ attributes.wireless.protected.psk }}
+    {% if named_tags and named_tags.wireless and named_tags.wireless.protected and named_tags.wireless.protected.psk %}
+    uci set wireless.lan$band.key={{ named_tags.wireless.protected.psk }}
     {% else %}
     uci set wireless.lan$band.key=salakala
     {% endif %}
@@ -29,8 +29,8 @@ for band in 2ghz 5ghz; do
     uci set wireless.guest$band.mode=ap
     uci set wireless.guest$band.device=radio$band
     uci set wireless.guest$band.encryption=none
-    {% if attributes.wireless.public and attributes.wireless.public.ssid %}
-    uci set wireless.guest$band.ssid={{ attrbutes.wireless.public.ssid }}
+    {% if named_tags and named_tags.wireless and named_tags.wireless.public and named_tags.wireless.public.ssid %}
+    uci set wireless.guest$band.ssid={{ named_tags.wireless.public.ssid }}
     {% else %}
     uci set wireless.guest$band.ssid=$(uci get system.@system[0].hostname)-public
     {% endif %}

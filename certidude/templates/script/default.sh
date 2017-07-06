@@ -1,10 +1,14 @@
 #!/bin/sh
 
 # Tags:
-{% for tag in tags %}
+{% for key, value in named_tags.items() %}
+# {{ key }} -> {{ value }}
+{% endfor %}
+{% for tag in other_tags %}
 # {{ tag }}
 {% endfor %}
 
+# Submit some stats to CA
 curl http://{{ authority_name }}/api/signed/{{ common_name }}/attr -X POST -d "\
 dmi.product_name=$(cat /sys/class/dmi/id/product_name)&\
 dmi.product_serial=$(cat /sys/class/dmi/id/product_serial)&\
