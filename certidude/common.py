@@ -7,10 +7,9 @@ def selinux_fixup(path):
     """
     Fix OpenVPN credential store security context on Fedora
     """
-    if not os.path.exists("/usr/bin/chcon"):
-        return
-    cmd = "chcon", "--type=home_cert_t", path
-    subprocess.call(cmd)
+    if os.path.exists("/usr/bin/chcon"):
+        cmd = "chcon", "--type=home_cert_t", path
+        subprocess.call(cmd)
 
 def drop_privileges():
     from certidude import config

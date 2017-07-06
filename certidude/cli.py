@@ -122,6 +122,7 @@ def certidude_request(fork, renew, no_wait, kerberos):
     context = globals()
     context.update(locals())
 
+    # TODO: Create per-authority timers
     if not os.path.exists("/etc/systemd/system/certidude.timer"):
         click.echo("Creating systemd timer...")
         with open("/etc/systemd/system/certidude.timer", "w") as fh:
@@ -232,6 +233,15 @@ def certidude_request(fork, renew, no_wait, kerberos):
 
                 # curl on Fedora ?
                 # pip
+
+                # Firefox (?) on Debian, Ubuntu
+                if os.path.exists("/usr/bin/update-ca-certificates"):
+                    link_path = "/usr/local/share/ca-certificates/%s" % authority_name
+                    if not os.path.lexists(link_path):
+                        os.symlink(authority_path, link_path)
+                    os.system("update-ca-certificates")
+
+                # TODO: test for curl, wget
 
 
         ###############

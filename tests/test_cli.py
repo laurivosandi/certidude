@@ -153,12 +153,16 @@ def test_cli_setup_authority():
     assert not os.environ.get("KRB5CCNAME"), "Environment contaminated"
     assert not os.environ.get("KRB5_KTNAME"), "Environment contaminated"
 
-    # Mock SELinux
-    with open("/usr/bin/chcon", "w") as fh:
-        fh.write("#!/bin/bash\n")
-        fh.write("exit 0\n")
-    os.chmod("/usr/bin/chcon", 0755)
+    # Mock Fedora
+    for util in "/usr/bin/chcon", "/usr/bin/dnf", "/usr/bin/update-ca-trust":
+        with open(util, "w") as fh:
+            fh.write("#!/bin/bash\n")
+            fh.write("exit 0\n")
+        os.chmod(util, 0755)
+    if not os.path.exists("/etc/pki/ca-trust/source/anchors/"):
+        os.makedirs("/etc/pki/ca-trust/source/anchors/")
 
+    # Back up original DNS server
     if not os.path.exists("/etc/resolv.conf.orig"):
         shutil.copyfile("/etc/resolv.conf", "/etc/resolv.conf.orig")
 
@@ -565,16 +569,6 @@ def test_cli_setup_authority():
     assert r.status_code == 200, r.text # script render ok
     assert "uci set " in r.text, r.text
 
-    # Test lease update
-    r = client().simulate_post("/api/lease/",
-        query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8&serial=0",
-        headers={"Authorization":admintoken})
-    assert r.status_code == 403, r.text # invalid serial number supplied
-    r = client().simulate_post("/api/lease/",
-        query_string = "client=test&inner_address=1.2.3.4&outer_address=8.8.8.8",
-        headers={"Authorization":admintoken})
-    assert r.status_code == 200, r.text # lease update ok
-
     # Test lease retrieval
     r = client().simulate_get("/api/signed/test/lease/")
     assert r.status_code == 401, r.text
@@ -603,6 +597,20 @@ def test_cli_setup_authority():
     assert r.status_code == 200, r.text
     assert r.text == "[]", r.text
 
+    # Test script without tags
+    r = client().simulate_get("/api/signed/test/script/")
+    assert r.status_code == 200, r.text # script render ok
+    assert "# No tags" in r.text, r.text
+
+    # Test lease update
+    r = client().simulate_post("/api/lease/",
+        query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8&serial=0",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 403, r.text # invalid serial number supplied
+    r = client().simulate_post("/api/lease/",
+        query_string = "client=test&inner_address=1.2.3.4&outer_address=8.8.8.8",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 200, r.text # lease update ok
 
     # Test revocation
     r = client().simulate_delete("/api/signed/test/")

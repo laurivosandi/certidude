@@ -1,5 +1,6 @@
 #!/bin/sh
 
+{% if named_tags or other_tags %}
 # Tags:
 {% for key, value in named_tags.items() %}
 # {{ key }} -> {{ value }}
@@ -7,6 +8,9 @@
 {% for tag in other_tags %}
 # {{ tag }}
 {% endfor %}
+{% else %}
+# No tags
+{% endif %}
 
 # Submit some stats to CA
 curl http://{{ authority_name }}/api/signed/{{ common_name }}/attr -X POST -d "\
