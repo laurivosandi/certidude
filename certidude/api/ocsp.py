@@ -12,6 +12,7 @@ from oscrypto import keys, asymmetric, symmetric
 from oscrypto.errors import SignatureError
 
 class OCSPResource(object):
+    @whitelist_subnets(config.OCSP_SUBNETS)
     def __call__(self, req, resp):
         if req.method == "GET":
             _, _, _, tail = req.path.split("/", 3)

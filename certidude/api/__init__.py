@@ -175,7 +175,6 @@ class NormalizeMiddleware(object):
 
 def certidude_app(log_handlers=[]):
     from certidude import config
-    from .revoked import RevocationListResource
     from .signed import SignedCertificateDetailResource
     from .request import RequestListResource, RequestDetailResource
     from .lease import LeaseResource, LeaseDetailResource
@@ -191,7 +190,6 @@ def certidude_app(log_handlers=[]):
 
     # Certificate authority API calls
     app.add_route("/api/certificate/", CertificateAuthorityResource())
-    app.add_route("/api/revoked/", RevocationListResource())
     app.add_route("/api/signed/{cn}/", SignedCertificateDetailResource())
     app.add_route("/api/request/{cn}/", RequestDetailResource())
     app.add_route("/api/request/", RequestListResource())
@@ -216,6 +214,11 @@ def certidude_app(log_handlers=[]):
 
     # Bootstrap resource
     app.add_route("/api/bootstrap/", BootstrapResource())
+
+    # Add CRL handler if we have any whitelisted subnets
+    if config.CRL_SUBNETS:
+        from .revoked import RevocationListResource
+        app.add_route("/api/revoked/", RevocationListResource())
 
     # Add SCEP handler if we have any whitelisted subnets
     if config.SCEP_SUBNETS:

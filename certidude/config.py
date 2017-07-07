@@ -36,6 +36,8 @@ SCEP_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "scep subnets").split(" ") if j])
 OCSP_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "ocsp subnets").split(" ") if j])
+CRL_SUBNETS = set([ipaddress.ip_network(j) for j in
+    cp.get("authorization", "crl subnets").split(" ") if j])
 
 AUTHORITY_DIR = "/var/lib/certidude"
 AUTHORITY_PRIVATE_KEY_PATH = cp.get("authority", "private key path")

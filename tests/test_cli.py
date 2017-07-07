@@ -1,4 +1,5 @@
 import pwd
+from xattr import listxattr, getxattr
 from click.testing import CliRunner
 from datetime import datetime, timedelta
 from time import sleep
@@ -154,7 +155,7 @@ def test_cli_setup_authority():
     assert not os.environ.get("KRB5_KTNAME"), "Environment contaminated"
 
     # Mock Fedora
-    for util in "/usr/bin/chcon", "/usr/bin/dnf", "/usr/bin/update-ca-trust":
+    for util in "/usr/bin/chcon", "/usr/bin/dnf", "/usr/bin/update-ca-trust", "/usr/sbin/dmidecode":
         with open(util, "w") as fh:
             fh.write("#!/bin/bash\n")
             fh.write("exit 0\n")
@@ -193,7 +194,7 @@ def test_cli_setup_authority():
 
     # Bootstrap domain controller here,
     # Samba startup takes some time
-    os.system("apt-get install -y samba krb5-user winbind")
+    os.system("apt-get install -y samba krb5-user winbind bc")
     if os.path.exists("/etc/samba/smb.conf"):
         os.unlink("/etc/samba/smb.conf")
     os.system("samba-tool domain provision --server-role=dc --domain=EXAMPLE --realm=EXAMPLE.LAN --host-name=ca")
@@ -308,6 +309,11 @@ def test_cli_setup_authority():
     r = requests.get("http://ca.example.lan/api/revoked/")
     assert r.status_code == 200, r.text
 
+    # Check that SCEP and OCSP are disabled by default
+    r = requests.get("http://ca.example.lan/api/ocsp/")
+    assert r.status_code == 404, r.text
+    r = requests.get("http://ca.example.lan/api/scep/")
+    assert r.status_code == 404, r.text
 
     # Test command line interface
     result = runner.invoke(cli, ['list', '-srv'])
@@ -553,6 +559,16 @@ def test_cli_setup_authority():
         query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8",
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text # lease update ok
+
+    # Attempt to fetch and execute default.sh script
+    assert not [j for j in listxattr("/var/lib/certidude/ca.example.lan/signed/test.pem") if j.startswith("user.machine.")]
+    #os.system("curl http://ca.example.lan/api/signed/test/script | bash")
+    r = client().simulate_post("/api/signed/test/attr", body="cpu=i5&mem=512M&dist=Ubuntu",
+        headers={"content-type": "application/x-www-form-urlencoded"})
+    assert r.status_code == 200, r.text
+    assert getxattr("/var/lib/certidude/ca.example.lan/signed/test.pem", "user.machine.cpu") == "i5"
+    assert getxattr("/var/lib/certidude/ca.example.lan/signed/test.pem", "user.machine.mem") == "512M"
+    assert getxattr("/var/lib/certidude/ca.example.lan/signed/test.pem", "user.machine.dist") == "Ubuntu"
 
     # Test tagging integration in scripting framework
     r = client().simulate_get("/api/signed/test/script/")
@@ -1006,9 +1022,14 @@ def test_cli_setup_authority():
     os.system("sed -e 's/machine enrollment =.*/machine enrollment = allowed/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/scep subnets =.*/scep subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/ocsp subnets =.*/ocsp subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf")
+    os.system("sed -e 's/crl subnets =.*/crl subnets =/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/address = certificates@example.lan/address =/g' -i /etc/certidude/server.conf")
     from certidude.common import pip
     pip("asn1crypto certbuilder")
+
+    # CRL-s disabled now
+    r = requests.get("http://ca.example.lan/api/revoked/")
+    assert r.status_code == 404, r.text
 
     # Update server credential cache
     with open("/etc/cron.hourly/certidude") as fh:
