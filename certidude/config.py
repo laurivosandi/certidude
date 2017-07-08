@@ -67,7 +67,8 @@ REQUEST_SUBMISSION_ALLOWED = cp.getboolean("authority", "request submission allo
 CLIENT_CERTIFICATE_LIFETIME = cp.getint("signature", "client certificate lifetime")
 SERVER_CERTIFICATE_LIFETIME = cp.getint("signature", "server certificate lifetime")
 AUTHORITY_CERTIFICATE_URL = cp.get("signature", "authority certificate url")
-CERTIFICATE_CRL_URL = cp.get("signature", "revoked url")
+AUTHORITY_CRL_URL = cp.get("signature", "revoked url")
+AUTHORITY_OCSP_URL = cp.get("signature", "responder url")
 CERTIFICATE_RENEWAL_ALLOWED = cp.getboolean("signature", "renewal allowed")
 
 REVOCATION_LIST_LIFETIME = cp.getint("signature", "revocation list lifetime")

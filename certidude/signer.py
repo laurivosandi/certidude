@@ -99,6 +99,18 @@ class SignHandler(asynchat.async_chat):
                 extended_key_usage_flags.append( # OpenVPN client
                     ExtendedKeyUsageOID.CLIENT_AUTH)
 
+            aia = [
+                x509.AccessDescription(
+                    AuthorityInformationAccessOID.CA_ISSUERS,
+                    x509.UniformResourceIdentifier(config.AUTHORITY_CERTIFICATE_URL))
+            ]
+
+            if config.AUTHORITY_OCSP_URL:
+                aia.append(
+                    x509.AccessDescription(
+                        AuthorityInformationAccessOID.OCSP,
+                        x509.UniformResourceIdentifier(config.AUTHORITY_OCSP_URL)))
+
             builder = x509.CertificateBuilder(
                 ).subject_name(
                     x509.Name([common_name])
@@ -142,28 +154,25 @@ class SignHandler(asynchat.async_chat):
                         request.public_key()),
                     critical=False
                 ).add_extension(
-                    x509.AuthorityInformationAccess([
-                        x509.AccessDescription(
-                            AuthorityInformationAccessOID.CA_ISSUERS,
-                            x509.UniformResourceIdentifier(
-                                config.AUTHORITY_CERTIFICATE_URL)
-                        )
-                    ]),
-                    critical=False
-                ).add_extension(
-                    x509.CRLDistributionPoints([
-                        x509.DistributionPoint(
-                            full_name=[
-                                x509.UniformResourceIdentifier(
-                                    config.CERTIFICATE_CRL_URL)],
-                            relative_name=None,
-                            crl_issuer=None,
-                            reasons=None)
-                    ]),
+                    x509.AuthorityInformationAccess(aia),
                     critical=False
                 ).add_extension(
                     x509.AuthorityKeyIdentifier.from_issuer_public_key(
                         self.server.certificate.public_key()),
+                    critical=False
+                )
+
+            if config.AUTHORITY_CRL_URL:
+                builder = builder.add_extension(
+                    x509.CRLDistributionPoints([
+                        x509.DistributionPoint(
+                            full_name=[
+                                x509.UniformResourceIdentifier(
+                                    config.AUTHORITY_CRL_URL)],
+                            relative_name=None,
+                            crl_issuer=None,
+                            reasons=None)
+                    ]),
                     critical=False
                 )
 
