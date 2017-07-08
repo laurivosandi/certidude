@@ -1,5 +1,4 @@
 import pwd
-from xattr import listxattr, getxattr
 from click.testing import CliRunner
 from datetime import datetime, timedelta
 from time import sleep
@@ -561,6 +560,7 @@ def test_cli_setup_authority():
     assert r.status_code == 200, r.text # lease update ok
 
     # Attempt to fetch and execute default.sh script
+    from xattr import listxattr, getxattr
     assert not [j for j in listxattr("/var/lib/certidude/ca.example.lan/signed/test.pem") if j.startswith("user.machine.")]
     #os.system("curl http://ca.example.lan/api/signed/test/script | bash")
     r = client().simulate_post("/api/signed/test/attr", body="cpu=i5&mem=512M&dist=Ubuntu",
