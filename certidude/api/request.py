@@ -81,7 +81,7 @@ class RequestListResource(object):
                 try:
                     renewal_signature = b64decode(renewal_header)
                 except TypeError, ValueError:
-                    logger.error("Renewal failed, bad signature supplied for %s", common_name.value)
+                    logger.error(u"Renewal failed, bad signature supplied for %s", common_name.value)
                     reasons.append("Renewal failed, bad signature supplied")
                 else:
                     try:
@@ -97,20 +97,20 @@ class RequestListResource(object):
                         verifier.update(body)
                         verifier.verify()
                     except InvalidSignature:
-                        logger.error("Renewal failed, invalid signature supplied for %s", common_name.value)
+                        logger.error(u"Renewal failed, invalid signature supplied for %s", common_name.value)
                         reasons.append("Renewal failed, invalid signature supplied")
                     else:
                         # At this point renewal signature was valid but we need to perform some extra checks
                         if datetime.utcnow() > cert.not_valid_after:
-                            logger.error("Renewal failed, current certificate for %s has expired", common_name.value)
+                            logger.error(u"Renewal failed, current certificate for %s has expired", common_name.value)
                             reasons.append("Renewal failed, current certificate expired")
                         elif not config.CERTIFICATE_RENEWAL_ALLOWED:
-                            logger.error("Renewal requested for %s, but not allowed by authority settings", common_name.value)
+                            logger.error(u"Renewal requested for %s, but not allowed by authority settings", common_name.value)
                             reasons.append("Renewal requested, but not allowed by authority settings")
                         else:
                             resp.set_header("Content-Type", "application/x-x509-user-cert")
                             _, resp.body = authority._sign(csr, body, overwrite=True)
-                            logger.info("Renewed certificate for %s", common_name.value)
+                            logger.info(u"Renewed certificate for %s", common_name.value)
                             return
 
 
@@ -125,10 +125,10 @@ class RequestListResource(object):
                         try:
                             resp.set_header("Content-Type", "application/x-pem-file")
                             _, resp.body = authority._sign(csr, body)
-                            logger.info("Autosigned %s as %s is whitelisted", common_name.value, req.context.get("remote_addr"))
+                            logger.info(u"Autosigned %s as %s is whitelisted", common_name.value, req.context.get("remote_addr"))
                             return
                         except EnvironmentError:
-                            logger.info("Autosign for %s from %s failed, signed certificate already exists",
+                            logger.info(u"Autosign for %s from %s failed, signed certificate already exists",
                                 common_name.value, req.context.get("remote_addr"))
                             reasons.append("Autosign failed, signed certificate already exists")
                         break

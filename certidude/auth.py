@@ -99,10 +99,10 @@ def authenticate(optional=False):
             try:
                 conn.simple_bind_s(upn, passwd)
             except ldap.STRONG_AUTH_REQUIRED:
-                logger.critical("LDAP server demands encryption, use ldaps:// instead of ldaps://")
+                logger.critical(u"LDAP server demands encryption, use ldaps:// instead of ldaps://")
                 raise
             except ldap.SERVER_DOWN:
-                logger.critical("Failed to connect LDAP server at %s, are you sure LDAP server's CA certificate has been copied to this machine?",
+                logger.critical(u"Failed to connect LDAP server at %s, are you sure LDAP server's CA certificate has been copied to this machine?",
                     config.LDAP_AUTHENTICATION_URI)
                 raise
             except ldap.INVALID_CREDENTIALS:

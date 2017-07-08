@@ -68,7 +68,7 @@ def serialize(func):
     import falcon
     def wrapped(instance, req, resp, **kwargs):
         if not req.client_accepts("application/json"):
-            logger.debug("Client did not accept application/json")
+            logger.debug(u"Client did not accept application/json")
             raise falcon.HTTPUnsupportedMediaType(
                 "Client did not accept application/json")
         resp.set_header("Cache-Control", "no-cache, no-store, must-revalidate")

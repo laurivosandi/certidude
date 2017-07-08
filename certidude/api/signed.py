@@ -38,7 +38,7 @@ class SignedCertificateDetailResource(object):
             logger.debug(u"Served certificate %s to %s as application/json",
                 cn, req.context.get("remote_addr"))
         else:
-            logger.debug("Client did not accept application/json or application/x-pem-file")
+            logger.debug(u"Client did not accept application/json or application/x-pem-file")
             raise falcon.HTTPUnsupportedMediaType(
                 "Client did not accept application/json or application/x-pem-file")
 

@@ -34,5 +34,5 @@ class ScriptResource():
             other_tags=other_tags,
             named_tags=named_tags,
             attributes=attribs.get("user").get("machine"))
-        logger.info("Served script %s for %s at %s" % (script, cn, req.context["remote_addr"]))
+        logger.info(u"Served script %s for %s at %s" % (script, cn, req.context["remote_addr"]))
         # TODO: Assert time is within reasonable range

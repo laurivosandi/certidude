@@ -34,7 +34,7 @@ def fqdn_required(func):
     def wrapped(**args):
         common_name = args.get("common_name")
         if "." in common_name:
-            logger.info("Using fully qualified hostname %s" % common_name)
+            logger.info(u"Using fully qualified hostname %s" % common_name)
         else:
             raise ValueError("Fully qualified hostname not specified as common name, make sure hostname -f works")
         return func(**args)
@@ -1422,10 +1422,10 @@ def certidude_serve(port, listen, fork, exit_handler):
             pidfile.write("%d\n" % pid)
 
         def exit_handler():
-            logger.debug("Shutting down Certidude")
+            logger.debug(u"Shutting down Certidude")
         import atexit
         atexit.register(exit_handler)
-        logger.debug("Started Certidude at %s", const.FQDN)
+        logger.debug(u"Started Certidude at %s", const.FQDN)
 
         drop_privileges()
 

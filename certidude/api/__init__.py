@@ -90,9 +90,9 @@ class SessionResource(object):
                 )
 
         if req.context.get("user").is_admin():
-            logger.info("Logged in authority administrator %s from %s" % (req.context.get("user"), req.context.get("remote_addr")))
+            logger.info(u"Logged in authority administrator %s from %s" % (req.context.get("user"), req.context.get("remote_addr")))
         else:
-            logger.info("Logged in authority user %s from %s" % (req.context.get("user"), req.context.get("remote_addr")))
+            logger.info(u"Logged in authority user %s from %s" % (req.context.get("user"), req.context.get("remote_addr")))
         return dict(
             user = dict(
                 name=req.context.get("user").name,
@@ -156,11 +156,11 @@ class StaticResource(object):
             if content_encoding:
                 resp.append_header("Content-Encoding", content_encoding)
             resp.stream = open(path, "rb")
-            logger.debug("Serving '%s' from '%s'", req.path, path)
+            logger.debug(u"Serving '%s' from '%s'", req.path, path)
         else:
             resp.status = falcon.HTTP_404
             resp.body = "File '%s' not found" % req.path
-            logger.info("Fail '%s' not found, path resolved to '%s'", req.path, path)
+            logger.info(u"File '%s' not found, path resolved to '%s'", req.path, path)
 import ipaddress
 
 class NormalizeMiddleware(object):
