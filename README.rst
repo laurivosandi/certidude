@@ -111,7 +111,7 @@ System dependencies for Ubuntu 16.04:
 .. code:: bash
 
     apt install -y python python-cffi python-click python-configparser \
-        python-cryptography python-falcon python-humanize \
+        python-humanize \
         python-ipaddress python-jinja2 python-ldap python-markdown \
         python-mimeparse python-mysql.connector python-openssl python-pip \
         python-pyasn1 python-pysqlite2 python-requests \
