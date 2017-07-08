@@ -16,7 +16,7 @@ from cryptography.hazmat.primitives.serialization import Encoding
 from certidude import config, push, mailer, const
 from certidude import errors
 from jinja2 import Template
-from xattr import getxattr, listxattr
+from xattr import getxattr, listxattr, setxattr
 
 RE_HOSTNAME =  "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])(@(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9]))?$"
 
