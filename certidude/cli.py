@@ -1284,15 +1284,14 @@ def certidude_cron():
 
 
 @click.command("serve", help="Run server")
-@click.option("-e", "--exit-handler", default=False, is_flag=True, help="Install /api/exit/ handler")
 @click.option("-p", "--port", default=8080, help="Listen port")
 @click.option("-l", "--listen", default="127.0.1.1", help="Listen address")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
-def certidude_serve(port, listen, fork, exit_handler):
+def certidude_serve(port, listen, fork):
     import pwd
     from setproctitle import setproctitle
     from certidude.signer import SignServer
-    from certidude import authority, const
+    from certidude import authority, const, push
 
     if port == 80:
         click.echo("WARNING: Please run Certidude behind nginx, remote address is assumed to be forwarded by nginx!")
@@ -1332,7 +1331,8 @@ def certidude_serve(port, listen, fork, exit_handler):
     if os.path.exists(const.SIGNER_SOCKET_PATH):
         os.unlink(const.SIGNER_SOCKET_PATH)
 
-    if not os.fork():
+    signer_pid = os.fork()
+    if not signer_pid:
         click.echo("Signer process spawned with PID %d at %s" % (os.getpid(), const.SIGNER_SOCKET_PATH))
         setproctitle("[signer]")
 
@@ -1421,29 +1421,23 @@ def certidude_serve(port, listen, fork, exit_handler):
         with open(const.SERVER_PID_PATH, "w") as pidfile:
             pidfile.write("%d\n" % pid)
 
-        def exit_handler():
+        def cleanup_handler(*args):
+            push.publish("server-stopped")
             logger.debug(u"Shutting down Certidude")
-        import atexit
-        atexit.register(exit_handler)
+            assert authority.signer_exec("exit") == "ok"
+            sys.exit(0) # TODO: use another code, needs test refactor
+
+        import signal
+        signal.signal(signal.SIGTERM, cleanup_handler) # Handle SIGTERM from systemd
+
+        push.publish("server-started")
         logger.debug(u"Started Certidude at %s", const.FQDN)
 
         drop_privileges()
-
-        class ExitResource():
-            """
-            Provide way to gracefully shutdown server
-            """
-            def on_get(self, req, resp):
-                assert httpd._BaseServer__shutdown_request == False
-                httpd._BaseServer__shutdown_request = True
-
-        if exit_handler:
-            app.add_route("/api/exit/", ExitResource())
-        httpd.serve_forever()
-
-        # Shut down signer as well
-        assert authority.signer_exec("exit") == "ok"
-
+        try:
+            httpd.serve_forever()
+        except KeyboardInterrupt:
+            cleanup_handler() # FIXME
 
 
 @click.command("yubikey", help="Set up Yubikey as client authentication token")

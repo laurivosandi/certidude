@@ -5,7 +5,6 @@ After=network.target
 [Service]
 Environment=PYTHON_EGG_CACHE=/tmp/.cache
 PIDFile=/run/certidude/server.pid
-ExecReload=/bin/kill -s HUP $MAINPID
 ExecStop=/bin/kill -s TERM $MAINPID
 ExecStart={{ certidude_path }} serve
 

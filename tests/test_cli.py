@@ -270,7 +270,7 @@ def test_cli_setup_authority():
     server_pid = os.fork()
     if not server_pid:
         # Fork to prevent umask, setuid, setgid side effects
-        result = runner.invoke(cli, ['serve', '-p', '8080', '-l', '127.0.1.1', '-e'])
+        result = runner.invoke(cli, ['serve'])
         assert not result.exception, result.output
         return
 
@@ -988,7 +988,7 @@ def test_cli_setup_authority():
     ####################################
 
     # Shut down current instance
-    requests.get("http://ca.example.lan/api/exit")
+    os.kill(server_pid, 15)
     requests.get("http://ca.example.lan/api/")
     os.waitpid(server_pid, 0)
 
@@ -1051,7 +1051,7 @@ def test_cli_setup_authority():
         assert "admin;adminbot;Admin;Bot;adminbot@example.lan" in result.output
         assert "admin;Administrator;Administrator;;Administrator@example.lan" in result.output
 
-        result = runner.invoke(cli, ['serve', '-p', '8080', '-l', '127.0.1.1', '-e'])
+        result = runner.invoke(cli, ['serve'])
         assert not result.exception, result.output
         return
 
@@ -1179,7 +1179,7 @@ def test_cli_setup_authority():
 
     # Shut down server
     assert os.path.exists("/proc/%d" % server_pid)
-    requests.get("http://ca.example.lan/api/exit")
+    os.kill(server_pid, 15)
     os.waitpid(server_pid, 0)
 
     # Note: STORAGE_PATH was mangled above, hence it's /tmp not /var/lib/certidude

@@ -199,6 +199,18 @@ function onAttributeUpdated(e) {
     })
 }
 
+function onServerStarted() {
+    console.info("Server started");
+    location.reload();
+}
+
+function onServerStopped() {
+    $("#container").hide();
+    $("#under_maintenance").show();
+    console.info("Server stopped");
+
+}
+
 $(document).ready(function() {
     console.info("Loading CA, to debug: curl " + window.location.href + " --negotiate -u : -H 'Accept: application/json'");
     $.ajax({
@@ -247,6 +259,8 @@ $(document).ready(function() {
                 source.addEventListener("certificate-revoked", onCertificateRevoked);
                 source.addEventListener("tag-update", onTagUpdated);
                 source.addEventListener("attribute-update", onAttributeUpdated);
+                source.addEventListener("server-started", onServerStarted);
+                source.addEventListener("server-stopped", onServerStopped);
 
                 console.info("Swtiching to requests section");
                 $("section").hide();

@@ -7,12 +7,11 @@ from datetime import datetime
 from certidude import config
 
 
-def publish(event_type, event_data):
+def publish(event_type, event_data=''):
     """
     Publish event on nchan EventSource publisher
     """
     assert event_type, "No event type specified"
-    assert event_data, "No event data specified"
 
     if not isinstance(event_data, basestring):
         from certidude.decorators import MyEncoder
