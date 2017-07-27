@@ -934,7 +934,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     apt("python-setproctitle cython python-dev libkrb5-dev libffi-dev libssl-dev")
     apt("python-mimeparse python-markdown python-xattr python-jinja2 python-cffi")
     apt("python-ldap software-properties-common libsasl2-modules-gssapi-mit")
-    pip("gssapi falcon cryptography humanize ipaddress simplepam humanize requests pyopenssl")
+    pip("gssapi falcon humanize ipaddress simplepam humanize requests pyopenssl")
     click.echo("Software dependencies installed")
 
     os.system("add-apt-repository -y ppa:nginx/stable")
@@ -945,12 +945,8 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         os.system("apt-get install -y nginx")
 
     import pwd
-    from cryptography import x509
-    from cryptography.x509.oid import NameOID, ExtendedKeyUsageOID
-    from cryptography.hazmat.backends import default_backend
-    from cryptography.hazmat.primitives import serialization
-    from cryptography.hazmat.primitives import hashes, serialization
-    from cryptography.hazmat.primitives.asymmetric import rsa
+    from oscrypto import asymmetric
+    from certbuilder import CertificateBuilder, pem_armor_certificate
     from jinja2 import Environment, PackageLoader
     env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
 
@@ -1075,74 +1071,46 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     if not os.path.exists(ca_key):
         click.echo("Generating %d-bit RSA key for CA ..." % const.KEY_SIZE)
 
-        key = rsa.generate_private_key(
-            public_exponent=65537,
-            key_size=const.KEY_SIZE,
-            backend=default_backend()
+        public_key, private_key = asymmetric.generate_pair('rsa', bit_size=const.KEY_SIZE)
+
+        names = (
+            (u"country_name", country),
+            (u"state_or_province_name", state),
+            (u"locality_name", locality),
+            (u"organization_name", organization),
+            (u"common_name", common_name)
         )
 
-        subject = issuer = x509.Name([
-            x509.NameAttribute(o, value) for o, value in (
-                (NameOID.COUNTRY_NAME, country),
-                (NameOID.STATE_OR_PROVINCE_NAME, state),
-                (NameOID.LOCALITY_NAME, locality),
-                (NameOID.ORGANIZATION_NAME, organization),
-                (NameOID.COMMON_NAME, common_name),
-            ) if value
-        ])
-
-        builder = x509.CertificateBuilder(
-            ).subject_name(subject
-            ).issuer_name(issuer
-            ).public_key(key.public_key()
-            ).not_valid_before(datetime.utcnow()
-            ).not_valid_after(
-                datetime.utcnow() + timedelta(days=authority_lifetime)
-            ).serial_number(
-                random.randint(
-                    0x100000000000000000000000000000000000000,
-                    0xfffffffffffffffffffffffffffffffffffffff)
-            ).add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True,
-            ).add_extension(x509.KeyUsage(
-                digital_signature=server_flags,
-                key_encipherment=server_flags,
-                content_commitment=False,
-                data_encipherment=False,
-                key_agreement=False,
-                key_cert_sign=True,
-                crl_sign=True,
-                encipher_only=False,
-                decipher_only=False), critical=True,
-            ).add_extension(
-                x509.SubjectKeyIdentifier.from_public_key(key.public_key()),
-                critical=False
-            ).add_extension(
-                x509.AuthorityKeyIdentifier.from_issuer_public_key(key.public_key()),
-                critical=False
-            )
+        builder = CertificateBuilder(
+            dict([(k,v) for (k,v) in names if v]),
+            public_key
+        )
+        builder.self_signed = True
+        builder.ca = True
+        builder.subject_alt_domains = [common_name]
+        builder.serial_number = random.randint(
+            0x100000000000000000000000000000000000000,
+            0xfffffffffffffffffffffffffffffffffffffff)
+        now = datetime.utcnow()
+        builder.begin_date = now - timedelta(minutes=5)
+        builder.end_date = now + timedelta(days=authority_lifetime)
 
         if server_flags:
-            builder = builder.add_extension(x509.ExtendedKeyUsage([
-                ExtendedKeyUsageOID.SERVER_AUTH,
-                x509.ObjectIdentifier("1.3.6.1.5.5.8.2.2")]), critical=False)
+            builder.key_usage(set(['digital_signature', 'key_encipherment', 'key_cert_sign', 'crl_sign']))
+            builder.extended_key_usage(['server_auth', "1.3.6.1.5.5.8.2.2"])
 
-        cert = builder.sign(key, hashes.SHA512(), default_backend())
-
-        click.echo("Signing %s..." % cert.subject)
+        certificate = builder.build(private_key)
 
         # Set permission bits to 640
         os.umask(0o137)
-        with open(ca_crt, "wb") as fh:
-            fh.write(cert.public_bytes(serialization.Encoding.PEM))
+        with open(ca_crt, 'wb') as f:
+            f.write(pem_armor_certificate(certificate))
 
         # Set permission bits to 600
         os.umask(0o177)
-        with open(ca_key, "wb") as fh:
-            fh.write(key.private_bytes(
-                encoding=serialization.Encoding.PEM,
-                format=serialization.PrivateFormat.TraditionalOpenSSL,
-                encryption_algorithm=serialization.NoEncryption() # TODO: Implement passphrase
-            ))
+        with open(ca_key, 'wb') as f:
+            f.write(asymmetric.dump_private_key(private_key, None))
+
 
     click.echo("To enable e-mail notifications install Postfix as sattelite system and set mailer address in %s" % const.CONFIG_PATH)
     click.echo()
