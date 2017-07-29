@@ -1027,10 +1027,6 @@ def test_cli_setup_authority():
     from certidude.common import pip
     pip("asn1crypto certbuilder")
 
-    # CRL-s disabled now
-    r = requests.get("http://ca.example.lan/api/revoked/")
-    assert r.status_code == 404, r.text
-
     # Update server credential cache
     with open("/etc/cron.hourly/certidude") as fh:
         cronjob = fh.read()
@@ -1056,6 +1052,10 @@ def test_cli_setup_authority():
         return
 
     sleep(1) # Wait for serve to start up
+
+    # CRL-s disabled now
+    r = requests.get("http://ca.example.lan/api/revoked/")
+    assert r.status_code == 404, r.text
 
     assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_crt.pem -cert /var/lib/certidude/ca.example.lan/signed/roadwarrior2.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp1.log") == 0
     assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_crt.pem -cert /var/lib/certidude/ca.example.lan/ca_crt.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp2.log") == 0
