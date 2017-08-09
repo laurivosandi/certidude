@@ -39,6 +39,7 @@ class SessionResource(object):
                 yield dict(
                     common_name = common_name,
                     server = server,
+                    address = getxattr(path, "user.request.address"), # TODO: move to authority.py
                     md5sum = hashlib.md5(buf).hexdigest(),
                     sha1sum = hashlib.sha1(buf).hexdigest(),
                     sha256sum = hashlib.sha256(buf).hexdigest(),

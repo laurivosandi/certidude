@@ -18,8 +18,16 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.exceptions import InvalidSignature
 from cryptography.x509.oid import NameOID
 from datetime import datetime
+from xattr import getxattr
 
 logger = logging.getLogger(__name__)
+
+"""
+openssl genrsa -out test.key 1024
+openssl req -new -sha256 -key test.key -out test.csr -subj "/CN=test"
+curl -f -L -H "Content-type: application/pkcs10" --data-binary @test.csr \
+  http://ca.example.lan/api/request/?wait=yes
+"""
 
 class RequestListResource(object):
     @login_optional
@@ -139,7 +147,8 @@ class RequestListResource(object):
 
         # Attempt to save the request otherwise
         try:
-            csr = authority.store_request(body.decode("ascii"))
+            request_path, _, _ = authority.store_request(body.decode("ascii"),
+                address=str(req.context.get("remote_addr")))
         except errors.RequestExists:
             reasons.append("Same request already uploaded exists")
             # We should still redirect client to long poll URL below
@@ -175,7 +184,7 @@ class RequestDetailResource(object):
         """
 
         try:
-            _, buf, _ = authority.get_request(cn)
+            path, buf, _ = authority.get_request(cn)
         except errors.RequestDoesNotExist:
             logger.warning(u"Failed to serve non-existant request %s to %s",
                 cn, req.context.get("remote_addr"))
@@ -199,6 +208,7 @@ class RequestDetailResource(object):
             resp.body = json.dumps(dict(
                 common_name = cn,
                 server = authority.server_flags(cn),
+                address = getxattr(path, "user.request.address"), # TODO: move to authority.py
                 md5sum = hashlib.md5(buf).hexdigest(),
                 sha1sum = hashlib.sha1(buf).hexdigest(),
                 sha256sum = hashlib.sha256(buf).hexdigest(),

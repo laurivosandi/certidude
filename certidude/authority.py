@@ -77,7 +77,7 @@ def get_attributes(cn, namespace=None):
     return path, buf, cert, attribs
 
 
-def store_request(buf, overwrite=False):
+def store_request(buf, overwrite=False, address="", user=""):
     """
     Store CSR for later processing
     """
@@ -116,7 +116,9 @@ def store_request(buf, overwrite=False):
     mailer.send("request-stored.md",
         attachments=(attach_csr,),
         common_name=common_name.value)
-    return csr, common_name.value
+    setxattr(request_path, "user.request.address", address)
+    setxattr(request_path, "user.request.user", user)
+    return request_path, csr, common_name.value
 
 
 def signer_exec(cmd, *bits):
