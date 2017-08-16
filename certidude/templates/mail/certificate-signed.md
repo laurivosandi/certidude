@@ -1,11 +1,11 @@
-Signed {{ common_name.value }} ({{ cert_serial_hex }})
+Signed {{ common_name }} ({{ cert_serial_hex }})
 
-This is simply to notify that certificate {{ common_name.value }}
+This is simply to notify that certificate {{ common_name }}
 with serial number {{ cert_serial_hex }}
 was signed{% if signer %} by {{ signer }}{% endif %}.
 
-The certificate is valid from {{ cert.not_valid_before }} until
-{{ cert.not_valid_after }}.
+The certificate is valid from {{ builder.begin_date }} until
+{{ builder.end_date }}.
 
 {% if overwritten %}
 By doing so existing certificate with the same common name

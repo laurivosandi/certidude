@@ -6,9 +6,6 @@ import logging
 from certidude import const, config
 from certidude.authority import export_crl, list_revoked
 from certidude.firewall import whitelist_subnets
-from cryptography import x509
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives.serialization import Encoding
 
 logger = logging.getLogger(__name__)
 
@@ -23,9 +20,8 @@ class RevocationListResource(object):
                 "Content-Disposition",
                 ("attachment; filename=%s.crl" % const.HOSTNAME).encode("ascii"))
             # Convert PEM to DER
-            logger.debug(u"Serving revocation list to %s in DER format", req.context.get("remote_addr"))
-            resp.body = x509.load_pem_x509_crl(export_crl(),
-                default_backend()).public_bytes(Encoding.DER)
+            logger.debug(u"Serving revocation list (DER) to %s", req.context.get("remote_addr"))
+            resp.body = export_crl(pem=False)
         elif req.client_accepts("application/x-pem-file"):
             if req.get_param_as_bool("wait"):
                 url = config.LONG_POLL_SUBSCRIBE % "crl"
@@ -38,7 +34,7 @@ class RevocationListResource(object):
                 resp.append_header(
                     "Content-Disposition",
                     ("attachment; filename=%s-crl.pem" % const.HOSTNAME).encode("ascii"))
-                logger.debug(u"Serving revocation list to %s in PEM format", req.context.get("remote_addr"))
+                logger.debug(u"Serving revocation list (PEM) to %s", req.context.get("remote_addr"))
                 resp.body = export_crl()
         else:
             logger.debug(u"Client %s asked revocation list in unsupported format" % req.context.get("remote_addr"))

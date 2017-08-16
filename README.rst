@@ -11,9 +11,8 @@ Certidude
 Introduction
 ------------
 
-Certidude is a novel X.509 Certificate Authority management tool
-with privilege isolation mechanism and Kerberos authentication
-mainly designed for OpenVPN gateway operators to make
+Certidude is a minimalist X.509 Certificate Authority management tool
+with Kerberos authentication mainly designed for OpenVPN gateway operators to make
 VPN client setup on laptops, desktops and mobile devices as painless as possible.
 
 .. figure:: doc/certidude.png
@@ -54,13 +53,6 @@ Following usecases are covered:
   The user logs in using domain account in the web interface and can automatically
   retrieve a P12 bundle which can be installed on her Android device.
 
-Future usecases:
-
-* I want to store the private key of my CA on a SmartCard.
-  I want to make use of it while I log in to my CA web interface.
-  When I am asked to sign a certificate I have to enter PIN code to unlock the
-  SmartCard.
-
 
 Features
 --------
@@ -68,16 +60,14 @@ Features
 Common:
 
 * Standard request, sign, revoke workflow via web interface.
-* Kerberos and basic auth based web interface authentication.
-* Preliminary `OCSP <https://tools.ietf.org/html/rfc4557>`_ and `SCEP <https://tools.ietf.org/html/draft-nourse-scep-23>`_ support.
+* `OCSP <https://tools.ietf.org/html/rfc4557>`_ and `SCEP <https://tools.ietf.org/html/draft-nourse-scep-23>`_ support.
 * PAM and Active Directory compliant authentication backends: Kerberos single sign-on, LDAP simple bind.
 * POSIX groups and Active Directory (LDAP) group membership based authorization.
 * Server-side command-line interface, check out ``certidude list``, ``certidude sign`` and ``certidude revoke``.
-* Privilege isolation, separate signer process is spawned per private key isolating
-  private key use from the the web interface.
 * Certificate serial numbers are intentionally randomized to avoid leaking information about business practices.
 * Server-side events support via `nchan <https://nchan.slact.net/>`_.
-* E-mail notifications about pending, signed, revoked, renewed and overwritten certificates
+* E-mail notifications about pending, signed, revoked, renewed and overwritten certificates.
+* Built using compilation-free `oscrypto <https://github.com/wbond/oscrypto>`_ library.
 
 Virtual private networking:
 
@@ -95,9 +85,7 @@ HTTPS:
 TODO
 ----
 
-* WebCrypto support, meanwhile check out `hwcrypto.js <https://github.com/open-eid/hwcrypto.js>`_.
 * Use `pki.js <https://pkijs.org/>`_ for generating keypair in the browser when claiming a token.
-* Signer process logging.
 
 
 Install
@@ -110,7 +98,8 @@ System dependencies for Ubuntu 16.04:
 
 .. code:: bash
 
-    apt install -y python python-cffi python-click python-configparser \
+    apt install -y
+        python-click python-configparser \
         python-humanize \
         python-ipaddress python-jinja2 python-ldap python-markdown \
         python-mimeparse python-mysql.connector python-openssl python-pip \
@@ -124,7 +113,7 @@ System dependencies for Fedora 25+:
     yum install redhat-rpm-config python-devel openssl-devel openldap-devel
 
 At the moment package at PyPI is rather outdated.
-Please proceed down to Development section to install Certidude from source.
+Please proceed down to `Development <#development>`_ section to install Certidude from source.
 
 
 Setting up authority

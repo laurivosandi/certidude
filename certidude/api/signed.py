@@ -31,9 +31,9 @@ class SignedCertificateDetailResource(object):
             resp.set_header("Content-Disposition", ("attachment; filename=%s.json" % cn))
             resp.body = json.dumps(dict(
                 common_name = cn,
-                serial_number = "%x" % cert.serial,
-                signed = cert.not_valid_before.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-                expires = cert.not_valid_after.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                serial_number = "%x" % cert.serial_number,
+                signed = cert["tbs_certificate"]["validity"]["not_before"].native.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
+                expires = cert["tbs_certificate"]["validity"]["not_after"].native.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                 sha256sum = hashlib.sha256(buf).hexdigest()))
             logger.debug(u"Served certificate %s to %s as application/json",
                 cn, req.context.get("remote_addr"))

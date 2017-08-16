@@ -12,6 +12,7 @@ import socket
 import string
 import subprocess
 import sys
+from asn1crypto.util import timezone
 from base64 import b64encode
 from configparser import ConfigParser, NoOptionError, NoSectionError
 from certidude.common import ip_address, ip_network, apt, rpm, pip, drop_privileges, selinux_fixup
@@ -26,9 +27,7 @@ logger = logging.getLogger(__name__)
 # keyUsage, extendedKeyUsage - https://www.openssl.org/docs/apps/x509v3_client_config.html
 # strongSwan key paths - https://wiki.strongswan.org/projects/1/wiki/SimpleCA
 
-# Parse command-line argument defaults from environment
-
-NOW = datetime.utcnow().replace(tzinfo=None)
+NOW = datetime.utcnow()
 
 def fqdn_required(func):
     def wrapped(**args):
@@ -321,8 +320,8 @@ def certidude_request(fork, renew, no_wait, kerberos):
             with open(certificate_path, "rb") as ch, open(request_path, "rb") as rh, open(key_path, "rb") as kh:
                 cert_buf = ch.read()
                 cert = asymmetric.load_certificate(cert_buf)
-                expires = cert.asn1["tbs_certificate"]["validity"]["not_after"].native
-                if renewal_overlap and datetime.now() > expires - timedelta(days=renewal_overlap):
+                expires = cert.asn1["tbs_certificate"]["validity"]["not_after"].native.replace(tzinfo=None)
+                if renewal_overlap and NOW > expires - timedelta(days=renewal_overlap):
                     click.echo("Certificate will expire %s, will attempt to renew" % expires)
                     renew = True
                 headers["X-Renewal-Signature"] = b64encode(
@@ -931,15 +930,13 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
 @fqdn_required
 def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags):
     # Install only rarely changing stuff from OS package management
-    apt("python-setproctitle cython python-dev libkrb5-dev libffi-dev libssl-dev")
-    apt("python-mimeparse python-markdown python-xattr python-jinja2 python-cffi")
-    apt("python-ldap software-properties-common libsasl2-modules-gssapi-mit")
-    pip("gssapi falcon humanize ipaddress simplepam humanize requests pyopenssl")
+    apt("cython python-dev python-mimeparse python-markdown python-xattr python-jinja2 python-cffi python-ldap software-properties-common libsasl2-modules-gssapi-mit")
+    pip("gssapi falcon humanize ipaddress simplepam humanize requests")
     click.echo("Software dependencies installed")
 
-    os.system("add-apt-repository -y ppa:nginx/stable")
-    os.system("apt-get update")
     if not os.path.exists("/usr/lib/nginx/modules/ngx_nchan_module.so"):
+        os.system("add-apt-repository -y ppa:nginx/stable")
+        os.system("apt-get update")
         os.system("apt-get install -y libnginx-mod-nchan")
     if not os.path.exists("/usr/sbin/nginx"):
         os.system("apt-get install -y nginx")
@@ -1091,13 +1088,13 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         builder.serial_number = random.randint(
             0x100000000000000000000000000000000000000,
             0xfffffffffffffffffffffffffffffffffffffff)
-        now = datetime.utcnow()
-        builder.begin_date = now - timedelta(minutes=5)
-        builder.end_date = now + timedelta(days=authority_lifetime)
+
+        builder.begin_date = NOW - timedelta(minutes=5)
+        builder.end_date = NOW + timedelta(days=authority_lifetime)
 
         if server_flags:
-            builder.key_usage(set(['digital_signature', 'key_encipherment', 'key_cert_sign', 'crl_sign']))
-            builder.extended_key_usage(['server_auth', "1.3.6.1.5.5.8.2.2"])
+            builder.key_usage = set(['digital_signature', 'key_encipherment', 'key_cert_sign', 'crl_sign'])
+            builder.extended_key_usage = set(['server_auth', "1.3.6.1.5.5.8.2.2"])
 
         certificate = builder.build(private_key)
 
@@ -1162,9 +1159,6 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
             click.echo("sha1sum: %s" % hashlib.sha1(buf).hexdigest())
             click.echo("sha256sum: %s" % hashlib.sha256(buf).hexdigest())
         click.echo()
-        for ext in cert.extensions:
-            print " -", ext.value
-        click.echo()
 
     if not hide_requests:
         for common_name, path, buf, csr, server in authority.list_requests():
@@ -1172,6 +1166,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
             if not verbose:
                 click.echo("s " + path)
                 continue
+            click.echo()
             click.echo(click.style(common_name, fg="blue"))
             click.echo("=" * len(common_name))
             click.echo("State: ? " + click.style("submitted", fg="yellow") + " " + naturaltime(created) + click.style(", %s" %created,  fg="white"))
@@ -1181,35 +1176,39 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
 
     if show_signed:
         for common_name, path, buf, cert, server in authority.list_signed():
+            signed = cert["tbs_certificate"]["validity"]["not_before"].native.replace(tzinfo=None)
+            expires = cert["tbs_certificate"]["validity"]["not_after"].native.replace(tzinfo=None)
             if not verbose:
-                if cert.not_valid_before < NOW and cert.not_valid_after > NOW:
+                if signed < NOW and NOW < expires:
                     click.echo("v " + path)
-                elif NOW > cert.not_valid_after:
+                elif expires < NOW:
                     click.echo("e " + path)
                 else:
                     click.echo("y " + path)
                 continue
-
-            click.echo(click.style(common_name, fg="blue") + " " + click.style("%x" % cert.serial, fg="white"))
+            click.echo()
+            click.echo(click.style(common_name, fg="blue") + " " + click.style("%x" % cert.serial_number, fg="white"))
             click.echo("="*(len(common_name)+60))
-            expires = 0 # TODO
-            if cert.not_valid_before < NOW and cert.not_valid_after > NOW:
-                click.echo("Status: " + click.style("valid", fg="green") + " until " + naturaltime(cert.not_valid_after) + click.style(", %s" % cert.not_valid_after,  fg="white"))
-            elif NOW > cert.not_valid_after:
-                click.echo("Status: " + click.style("expired", fg="red") + " " + naturaltime(expires) + click.style(", %s" %expires,  fg="white"))
+
+            if signed < NOW and NOW < expires:
+                click.echo("Status: " + click.style("valid", fg="green") + " until " + naturaltime(expires) + click.style(", %s" % expires,  fg="white"))
+            elif NOW > expires:
+                click.echo("Status: " + click.style("expired", fg="red") + " " + naturaltime(expires) + click.style(", %s" % expires,  fg="white"))
             else:
-                click.echo("Status: " + click.style("not valid yet", fg="red") + click.style(", %s" %expires,  fg="white"))
+                click.echo("Status: " + click.style("not valid yet", fg="red") + click.style(", %s" % expires,  fg="white"))
             click.echo()
             click.echo("openssl x509 -in %s -text -noout" % path)
             dump_common(common_name, path, cert)
+            for ext in cert["tbs_certificate"]["extensions"]:
+                print " - %s: %s" % (ext["extn_id"].native, repr(ext["extn_value"].native))
 
     if show_revoked:
         for common_name, path, buf, cert, server in authority.list_revoked():
             if not verbose:
                 click.echo("r " + path)
                 continue
-
-            click.echo(click.style(common_name, fg="blue") + " " + click.style("%x" % cert.serial, fg="white"))
+            click.echo()
+            click.echo(click.style(common_name, fg="blue") + " " + click.style("%x" % cert.serial_number, fg="white"))
             click.echo("="*(len(common_name)+60))
 
             _, _, _, _, _, _, _, _, mtime, _ = os.stat(path)
@@ -1217,24 +1216,24 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
             click.echo("Status: " + click.style("revoked", fg="red") + " %s%s" % (naturaltime(NOW-changed), click.style(", %s" % changed, fg="white")))
             click.echo("openssl x509 -in %s -text -noout" % path)
             dump_common(common_name, path, cert)
-
-    click.echo()
+            for ext in cert["tbs_certificate"]["extensions"]:
+                print " - %s: %s" % (ext["extn_id"].native, repr(ext["extn_value"].native))
 
 
 @click.command("sign", help="Sign certificate")
 @click.argument("common_name")
 @click.option("--overwrite", "-o", default=False, is_flag=True, help="Revoke valid certificate with same CN")
 def certidude_sign(common_name, overwrite):
-    drop_privileges()
     from certidude import authority
+    drop_privileges()
     cert = authority.sign(common_name, overwrite)
 
 
 @click.command("revoke", help="Revoke certificate")
 @click.argument("common_name")
 def certidude_revoke(common_name):
-    drop_privileges()
     from certidude import authority
+    drop_privileges()
     authority.revoke(common_name)
 
 
@@ -1242,10 +1241,10 @@ def certidude_revoke(common_name):
 def certidude_cron():
     import itertools
     from certidude import authority, config
-    now = datetime.now()
     for cn, path, buf, cert, server in itertools.chain(authority.list_signed(), authority.list_revoked()):
-        if cert.not_valid_after < now:
-            expired_path = os.path.join(config.EXPIRED_DIR, "%x.pem" % cert.serial)
+        expires = cert["tbs_certificate"]["validity"]["not_after"].native.replace(tzinfo=None)
+        if expires < NOW:
+            expired_path = os.path.join(config.EXPIRED_DIR, "%x.pem" % cert.serial_number)
             assert not os.path.exists(expired_path)
             os.rename(path, expired_path)
             click.echo("Moved %s to %s" % (path, expired_path))
@@ -1258,7 +1257,6 @@ def certidude_cron():
 def certidude_serve(port, listen, fork):
     import pwd
     from setproctitle import setproctitle
-    from certidude.signer import SignServer
     from certidude import authority, const, push
 
     if port == 80:
@@ -1272,7 +1270,7 @@ def certidude_serve(port, listen, fork):
 
     # Rebuild reverse mapping
     for cn, path, buf, cert, server in authority.list_signed():
-        by_serial = os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % cert.serial)
+        by_serial = os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % cert.serial_number)
         if not os.path.exists(by_serial):
             click.echo("Linking %s to ../%s.pem" % (by_serial, cn))
             os.symlink("../%s.pem" % cn, by_serial)
@@ -1290,55 +1288,6 @@ def certidude_serve(port, listen, fork):
     rh = RotatingFileHandler("/var/log/certidude.log", maxBytes=1048576*5, backupCount=5)
     rh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
     log_handlers.append(rh)
-
-
-    """
-    Spawn signer process
-    """
-
-    if os.path.exists(const.SIGNER_SOCKET_PATH):
-        os.unlink(const.SIGNER_SOCKET_PATH)
-
-    signer_pid = os.fork()
-    if not signer_pid:
-        click.echo("Signer process spawned with PID %d at %s" % (os.getpid(), const.SIGNER_SOCKET_PATH))
-        setproctitle("[signer]")
-
-        with open(const.SIGNER_PID_PATH, "w") as fh:
-            fh.write("%d\n" % os.getpid())
-
-        logging.basicConfig(
-            filename=const.SIGNER_LOG_PATH,
-            level=logging.INFO)
-
-        os.umask(0o007)
-        server = SignServer()
-
-        # Drop privileges
-        _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
-        os.chown(const.SIGNER_SOCKET_PATH, uid, gid)
-        os.chmod(const.SIGNER_SOCKET_PATH, 0770)
-
-        click.echo("Dropping privileges of signer")
-        _, _, uid, gid, gecos, root, shell = pwd.getpwnam("nobody")
-        os.setgroups([])
-        os.setgid(gid)
-        os.setuid(uid)
-
-        try:
-            asyncore.loop()
-        except asyncore.ExitNow:
-            pass
-        click.echo("Signer was shut down")
-        return
-    click.echo("Waiting for signer to start up")
-    time_left = 2.0
-    delay = 0.1
-    while not os.path.exists(const.SIGNER_SOCKET_PATH) and time_left > 0:
-        sleep(delay)
-        time_left -= delay
-    assert authority.signer_exec("ping") == "pong"
-    click.echo("Signer alive")
 
     click.echo("Users subnets: %s" %
         ", ".join([str(j) for j in config.USER_SUBNETS]))
@@ -1392,7 +1341,6 @@ def certidude_serve(port, listen, fork):
         def cleanup_handler(*args):
             push.publish("server-stopped")
             logger.debug(u"Shutting down Certidude")
-            assert authority.signer_exec("exit") == "ok"
             sys.exit(0) # TODO: use another code, needs test refactor
 
         import signal

@@ -13,7 +13,6 @@ from certidude import authority, mailer
 from certidude.auth import login_required, authorize_admin
 from certidude.user import User
 from certidude.decorators import serialize, csrf_protection
-from cryptography.x509.oid import NameOID
 from certidude import const, config
 
 logger = logging.getLogger(__name__)
@@ -82,8 +81,8 @@ class SessionResource(object):
                     common_name = common_name,
                     server = server,
                     # TODO: key type, key length, key exponent, key modulo
-                    signed = obj.not_valid_before,
-                    expires = obj.not_valid_after,
+                    signed = obj["tbs_certificate"]["validity"]["not_before"].native,
+                    expires = obj["tbs_certificate"]["validity"]["not_after"].native,
                     sha256sum = hashlib.sha256(buf).hexdigest(),
                     lease = lease,
                     tags = tags,
@@ -108,8 +107,7 @@ class SessionResource(object):
                     offline = 600, # Seconds from last seen activity to consider lease offline, OpenVPN reneg-sec option
                     dead = 604800 # Seconds from last activity to consider lease dead, X509 chain broken or machine discarded
                 ),
-                common_name = authority.ca_cert.subject.get_attributes_for_oid(
-                    NameOID.COMMON_NAME)[0].value,
+                common_name = authority.certificate.subject.native["common_name"],
                 mailer = dict(
                     name = config.MAILER_NAME,
                     address = config.MAILER_ADDRESS

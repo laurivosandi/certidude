@@ -41,7 +41,7 @@ class SCEPResource(object):
     def on_get(self, req, resp):
         operation = req.get_param("operation")
         if operation.lower() == "getcacert":
-            resp.stream = keys.parse_certificate(authority.ca_buf).dump()
+            resp.stream = keys.parse_certificate(authority.certificate_buf).dump()
             resp.append_header("Content-Type", "application/x-x509-ca-cert")
             return
 
@@ -125,14 +125,16 @@ class SCEPResource(object):
             encrypted_content = encrypted_content_info['encrypted_content'].native
             recipient, = encrypted_envelope['recipient_infos']
 
-            if recipient.native["rid"]["serial_number"] != authority.ca_cert.serial:
+            if recipient.native["rid"]["serial_number"] != authority.certificate.serial_number:
                 raise SCEPBadCertId()
 
             # Since CA private key is not directly readable here, we'll redirect it to signer socket
-            key = b64decode(authority.signer_exec("decrypt-pkcs7", b64encode(recipient.native["encrypted_key"])))
+            key = asymmetric.rsa_pkcs1v15_decrypt(
+                authority.private_key,
+                recipient.native["encrypted_key"])
             if len(key) == 8: key = key * 3 # Convert DES to 3DES
             buf = symmetric.tripledes_cbc_pkcs5_decrypt(key, encrypted_content, iv)
-            _, common_name = authority.store_request(buf, overwrite=True)
+            _, _, common_name = authority.store_request(buf, overwrite=True)
             cert, buf = authority.sign(common_name, overwrite=True)
             signed_certificate = asymmetric.load_certificate(buf)
             content = signed_certificate.asn1.dump()
@@ -251,7 +253,11 @@ class SCEPResource(object):
                 }),
                 'digest_algorithm': algos.DigestAlgorithm({'algorithm': u"sha1"}),
                 'signature_algorithm': algos.SignedDigestAlgorithm({'algorithm': u"rsassa_pkcs1v15"}),
-                'signature': b64decode(authority.signer_exec("sign-pkcs7", b64encode(b"\x31" + attrs.dump()[1:])))
+                'signature': asymmetric.rsa_pkcs1v15_sign(
+                    authority.private_key,
+                    b"\x31" + attrs.dump()[1:],
+                    "sha1"
+                )
             })
 
             resp.append_header("Content-Type", "application/x-pki-message")

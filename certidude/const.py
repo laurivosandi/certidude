@@ -12,9 +12,6 @@ CLIENT_CONFIG_PATH = os.path.join(CONFIG_DIR, "client.conf")
 SERVICES_CONFIG_PATH = os.path.join(CONFIG_DIR, "services.conf")
 SERVER_PID_PATH = os.path.join(RUN_DIR, "server.pid")
 SERVER_LOG_PATH = "/var/log/certidude-server.log"
-SIGNER_SOCKET_PATH = "/run/certidude/signer.sock"
-SIGNER_PID_PATH = os.path.join(RUN_DIR, "signer.pid")
-SIGNER_LOG_PATH = "/var/log/certidude-signer.log"
 STORAGE_PATH = "/var/lib/certidude/"
 
 try:

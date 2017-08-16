@@ -52,7 +52,7 @@ class OCSPResource(object):
                 assert link_target.startswith("../")
                 assert link_target.endswith(".pem")
                 path, buf, cert = authority.get_signed(link_target[3:-4])
-                if serial != cert.serial:
+                if serial != cert.serial_number:
                     raise EnvironmentError("integrity check failed")
                 status = ocsp.CertStatus(name='good', value=None)
             except EnvironmentError:
@@ -94,9 +94,13 @@ class OCSPResource(object):
                 'response_type': u"basic_ocsp_response",
                 'response': {
                     'tbs_response_data': response_data,
+                    'certs': [server_certificate.asn1],
                     'signature_algorithm': {'algorithm': u"sha1_rsa"},
-                    'signature': b64decode(authority.signer_exec("sign-pkcs7", b64encode(response_data.dump()))),
-                    'certs': [server_certificate.asn1]
+                    'signature': asymmetric.rsa_pkcs1v15_sign(
+                        authority.private_key,
+                        response_data.dump(),
+                        "sha1"
+                    )
                 }
             }
         }).dump()
