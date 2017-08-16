@@ -1256,7 +1256,6 @@ def certidude_cron():
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 def certidude_serve(port, listen, fork):
     import pwd
-    from setproctitle import setproctitle
     from certidude import authority, const, push
 
     if port == 80:
