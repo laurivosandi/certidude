@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from time import sleep
 import pytest
 import shutil
+import sys
 import os
 
 UA_FEDORA_FIREFOX = "Mozilla/5.0 (X11; Fedora; Linux x86_64) " \
@@ -138,11 +139,10 @@ def clean_server():
     shutil.copyfile("/etc/resolv.conf.orig", "/etc/resolv.conf")
 
 def test_cli_setup_authority():
-    # apt install nano git build-essential python-dev libkrb5-dev
-    import os
-    import sys
-
     assert os.getuid() == 0, "Run tests as root in a clean VM or container"
+
+    os.system("apt-get install -y git build-essential python-dev libkrb5-dev")
+    os.system("pip install cryptography")
 
     assert not os.environ.get("KRB5CCNAME"), "Environment contaminated"
     assert not os.environ.get("KRB5_KTNAME"), "Environment contaminated"
@@ -736,8 +736,6 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ["setup", "nginx", "-cn", "www.example.lan", "ca.example.lan"])
     assert not result.exception, result.output # client conf already exists, remove to regenerate
-
-    import os
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")
