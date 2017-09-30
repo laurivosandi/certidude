@@ -1278,7 +1278,7 @@ def certidude_serve(port, listen, fork):
     if not os.path.exists(const.RUN_DIR):
         click.echo("Creating: %s" % const.RUN_DIR)
         os.makedirs(const.RUN_DIR)
-        os.chmod(const.RUN_DIR, 0755)
+        os.chmod(const.RUN_DIR, 0o755)
 
     # TODO: umask!
 
