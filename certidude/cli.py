@@ -18,7 +18,7 @@ from configparser import ConfigParser, NoOptionError, NoSectionError
 from certidude.common import ip_address, ip_network, apt, rpm, pip, drop_privileges, selinux_fixup
 from datetime import datetime, timedelta
 from time import sleep
-import const
+from . import const
 
 logger = logging.getLogger(__name__)
 
