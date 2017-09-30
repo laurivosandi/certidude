@@ -139,7 +139,7 @@ class SCEPResource(object):
             signed_certificate = asymmetric.load_certificate(buf)
             content = signed_certificate.asn1.dump()
 
-        except SCEPError, e:
+        except SCEPError as e:
             attr_list.append(cms.CMSAttribute({
                 'type': u"fail_info",
                 'values': ["%d" % e.code]

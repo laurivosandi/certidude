@@ -85,7 +85,7 @@ class RequestListResource(object):
 
                 try:
                     renewal_signature = b64decode(renewal_header)
-                except TypeError, ValueError:
+                except (TypeError, ValueError):
                     logger.error(u"Renewal failed, bad signature supplied for %s", common_name)
                     reasons.append("Renewal failed, bad signature supplied")
                 else:
