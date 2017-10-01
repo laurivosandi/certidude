@@ -152,7 +152,7 @@ def test_cli_setup_authority():
         with open(util, "w") as fh:
             fh.write("#!/bin/bash\n")
             fh.write("exit 0\n")
-        os.chmod(util, 0755)
+        os.chmod(util, 0o755)
     if not os.path.exists("/etc/pki/ca-trust/source/anchors/"):
         os.makedirs("/etc/pki/ca-trust/source/anchors/")
 
@@ -198,7 +198,7 @@ def test_cli_setup_authority():
     if os.path.exists("/etc/krb5.keytab"):
         os.unlink("/etc/krb5.keytab")
     os.symlink("/var/lib/samba/private/secrets.keytab", "/etc/krb5.keytab")
-    os.chmod("/var/lib/samba/private/secrets.keytab", 0644) # To allow access to certidude server
+    os.chmod("/var/lib/samba/private/secrets.keytab", 0o644) # To allow access to certidude server
     if os.path.exists("/etc/krb5.conf"): # Remove the one from krb5-user package
         os.unlink("/etc/krb5.conf")
     os.symlink("/var/lib/samba/private/krb5.conf", "/etc/krb5.conf")
@@ -227,11 +227,11 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ['setup', 'authority', '-s'])
     os.setgid(0) # Restore GID
-    os.umask(0022)
+    os.umask(0o022)
 
     result = runner.invoke(cli, ['setup', 'authority']) # For if-else branches
     os.setgid(0) # Restore GID
-    os.umask(0022)
+    os.umask(0o022)
 
     # Make sure nginx is running
     assert not result.exception, result.output
@@ -1280,7 +1280,7 @@ def test_cli_setup_authority():
     ### SCEP tests ###
     ##################
 
-    os.umask(0022)
+    os.umask(0o022)
     if not os.path.exists("/tmp/sscep"):
         assert not os.system("git clone  https://github.com/certnanny/sscep /tmp/sscep")
     if not os.path.exists("/tmp/sscep/sscep_dyn"):

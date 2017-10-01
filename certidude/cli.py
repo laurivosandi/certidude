@@ -18,7 +18,7 @@ from configparser import ConfigParser, NoOptionError, NoSectionError
 from certidude.common import ip_address, ip_network, apt, rpm, pip, drop_privileges, selinux_fixup
 from datetime import datetime, timedelta
 from time import sleep
-import const
+from . import const
 
 logger = logging.getLogger(__name__)
 
@@ -1128,9 +1128,9 @@ def certidude_users():
     from certidude.user import User
     admins = set(User.objects.filter_admins())
     for user in User.objects.all():
-        print "%s;%s;%s;%s;%s" % (
+        print ("%s;%s;%s;%s;%s" % (
             "admin" if user in admins else "user",
-            user.name, user.given_name, user.surname, user.mail)
+            user.name, user.given_name, user.surname, user.mail))
 
 
 @click.command("list", help="List certificates")
@@ -1200,7 +1200,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
             click.echo("openssl x509 -in %s -text -noout" % path)
             dump_common(common_name, path, cert)
             for ext in cert["tbs_certificate"]["extensions"]:
-                print " - %s: %s" % (ext["extn_id"].native, repr(ext["extn_value"].native))
+                print (" - %s: %s" % (ext["extn_id"].native, repr(ext["extn_value"].native)))
 
     if show_revoked:
         for common_name, path, buf, cert, server in authority.list_revoked():
@@ -1217,7 +1217,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
             click.echo("openssl x509 -in %s -text -noout" % path)
             dump_common(common_name, path, cert)
             for ext in cert["tbs_certificate"]["extensions"]:
-                print " - %s: %s" % (ext["extn_id"].native, repr(ext["extn_value"].native))
+                print (" - %s: %s" % (ext["extn_id"].native, repr(ext["extn_value"].native)))
 
 
 @click.command("sign", help="Sign certificate")
@@ -1278,7 +1278,7 @@ def certidude_serve(port, listen, fork):
     if not os.path.exists(const.RUN_DIR):
         click.echo("Creating: %s" % const.RUN_DIR)
         os.makedirs(const.RUN_DIR)
-        os.chmod(const.RUN_DIR, 0755)
+        os.chmod(const.RUN_DIR, 0o755)
 
     # TODO: umask!
 

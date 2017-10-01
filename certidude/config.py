@@ -5,7 +5,7 @@ import configparser
 import ipaddress
 import os
 import string
-import const
+from . import const
 from random import choice
 
 # Options that are parsed from config file are fetched here
