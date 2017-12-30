@@ -1,10 +1,10 @@
 [Unit]
-Description=Run certidude service weekly
+Description=Run certidude enroll daily
 
 [Timer]
-OnCalendar=weekly
+OnCalendar=daily
 Persistent=true
-Unit=certidude.service
+Unit=certidude-enroll.service
 
 [Install]
 WantedBy=timers.target

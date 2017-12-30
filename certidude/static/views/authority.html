@@ -1,9 +1,96 @@
+  <div class="modal fade" id="request_submission_modal" role="dialog">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal">&times;</button>
+          <h4 class="modal-title">Request submission</h4>
+        </div>
+        <div class="modal-body">
+
+          <h5>Certidude client</h5>
+
+          <p>Submit a certificate signing request from Mac OS X, Ubuntu or Fedora:</p>
+          <div class="highlight">
+            <pre><code>easy_install pip;
+pip3 install certidude;
+certidude bootstrap {{session.authority.common_name}}
+</code></pre>
+          </div>
+
+          <h5>UNIX & UNIX-like</h5>
+
+          <p>On other UNIX-like machines generate key pair and submit the signing request using OpenSSL and cURL:</p>
+          <div class="highlight">
+            <pre class="code"><code>NAME=$(hostname);
+openssl genrsa -out client_key.pem 2048;
+openssl req -new -sha256 -key client_key.pem -out client_req.pem -subj "/CN=$NAME";
+curl -f -L -H "Content-type: application/pkcs10" --data-binary @client_req.pem \
+  http://{{ window.location.hostname }}/api/request/?wait=yes > client_cert.pem</code></pre>
+          </div>
+
+          <h5>OpenWrt/LEDE</h5>
+
+          <p>On OpenWrt/LEDE router to convert it into VPN gateway:</p>
+          <div class="highlight">
+            <pre class="code"><code>mkdir -p /var/lib/certidude/{{ window.location.hostname }}; \
+grep -c certidude /etc/sysupgrade.conf || echo /var/lib/certidude >> /etc/sysupgrade.conf; \
+curl -f http://{{ window.location.hostname }}/api/certificate/ -o /var/lib/certidude/{{ window.location.hostname }}/ca_cert.pem; \
+test -e /var/lib/certidude/{{ window.location.hostname }}/client_key.pem || openssl genrsa -out /var/lib/certidude/{{ window.location.hostname }}/client_key.pem 2048; \
+test -e /var/lib/certidude/{{ window.location.hostname }}/client_req.pem || read -p "Enter FQDN: " NAME; openssl req -new -sha256 \
+  -key /var/lib/certidude/{{ window.location.hostname }}/client_key.pem \
+  -out /var/lib/certidude/{{ window.location.hostname }}/client_req.pem -subj "/CN=$NAME"; \
+curl -f -L -H "Content-type: application/pkcs10" \
+  --data-binary @/var/lib/certidude/{{ window.location.hostname }}/client_req.pem \
+  -o /var/lib/certidude/{{ window.location.hostname }}/client_cert.pem \
+  http://{{ window.location.hostname }}/api/request/?wait=yes</code></pre>
+          </div>
+
+          <h5>SCEP</h5>
+          <p>Use following as the enrollment URL: http://{{ window.location.hostname }}/cgi-bin/pkiclient.exe</p>
+
+          <h5>Copy & paste</h5>
+
+          <p>Use whatever tools you have available on your platform to generate
+          keypair and just paste ASCII armored PEM file contents here and hit submit:</p>
+
+          <textarea id="request_body" style="width:100%; min-height: 4em;"
+              placeholder="-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----"></textarea>
+        </div>
+        <div class="modal-footer">
+          <div class="btn-group">
+            <button type="button" class="btn btn-success"><i class="fa fa-upload"></i> Submit</button>
+            <button type="button" class="btn" data-dismiss="modal"><i class="fa fa-ban"></i> Close</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal fade" id="revocation_list_modal" role="dialog">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal">&times;</button>
+          <h4 class="modal-title">Revocation lists</h4>
+        </div>
+        <div class="modal-body">
+          <p>To fetch <a href="http://{{window.location.hostname}}/api/revoked/">certificate revocation list</a>:</p>
+<pre><code>curl http://{{window.location.hostname}}/api/revoked/ > crl.der
+curl http://{{window.location.hostname}}/api/revoked/ -L -H "Accept: application/x-pem-file"
+curl http://{{window.location.hostname}}/api/revoked/?wait=yes -L -H "Accept: application/x-pem-file" > crl.pem</code></pre>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn" data-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
 <section id="about">
 <h2>{{ session.user.gn }} {{ session.user.sn }} ({{session.user.name }}) settings</h2>
 
 <p title="Bundles are mainly intended for Android and iOS users">
-Click <a href="/api/bundle/">here</a> to generate Android or iOS bundle for current user account.</p>
+Click <button id="enroll">here</button> to generate Android or iOS bundle for current user account.</p>
 
 <p>Mails will be sent to: {{ session.user.mail }}</p>
 
@@ -57,10 +144,10 @@ forbidden
 </ul>
 
 <p>Authenticated users allowed from:
-
-{% if "0.0.0.0/0" in session.authority.user_subnets %}
-    anywhere
-    </p>
+{% if not session.authority.user_subnets %}
+    nowhere</p>
+{% elif "0.0.0.0/0" in session.authority.user_subnets %}
+    anywhere</p>
 {% else %}
     </p>
     <ul>
@@ -71,37 +158,12 @@ forbidden
 {% endif %}
 
 
-<p>Request submission is allowed from:
-
-{% if "0.0.0.0/0" in session.authority.request_subnets %}
-    anywhere
-    </p>
-{% else %}
-    </p>
-    <ul>
-        {% for subnet in session.authority.request_subnets %}
-            <li>{{ subnet }}</li>
-        {% endfor %}
-    </ul>
-{% endif %}
-
-<p>Autosign is allowed from:
-{% if "0.0.0.0/0" in session.authority.autosign_subnets %}
-    anywhere
-    </p>
-{% else %}
-    </p>
-    <ul>
-        {% for subnet in session.authority.autosign_subnets %}
-            <li>{{ subnet }}</li>
-        {% endfor %}
-    </ul>
-{% endif %}
 
 <p>Authority administration is allowed from:
-{% if "0.0.0.0/0" in session.authority.admin_subnets %}
-    anywhere
-    </p>
+{% if not session.authority.admin_subnets %}
+    nowhere</p>
+{% elif "0.0.0.0/0" in session.authority.admin_subnets %}
+    anywhere</p>
 {% else %}
     <ul>
         {% for subnet in session.authority.admin_subnets %}
@@ -127,88 +189,87 @@ forbidden
 {% set s = session.certificate.identity %}
 
 
+
+<div class="row">
+
+
+  <div class="col-sm-6">
+    <h1>Signed certificates</h1>
+    <p>Following certificates have been signed:</p>
+    <div id="signed_certificates">
+    {% for certificate in session.authority.signed | sort(attribute="signed", reverse=true) %}
+      {% include "views/signed.html" %}
+    {% endfor %}
+    </div>
+  </div>
+  <div class="col-sm-6">
+
+  <h1>Tokens</h1>
+
+  <p>Tokens allow enrolling smartphones and third party devices.</p>
+  <ul>
+    <li>You can issue yourself a token to be used on a mobile device</li>
+    <li>Enter username to issue a token to issue a token for another user</li>
+    <li>Enter e-mail address to issue a token to guest users outside domain</li>
+  </ul>
+  <p>
+    <div class="input-group">
+        <input id="token_username" name="username" type="text" class="form-control" placeholder="Username" aria-describedby="sizing-addon2">
+        <input id="token_mail" name="mail" type="mail" class="form-control" placeholder="Optional e-mail" aria-describedby="sizing-addon2">
+        <span class="input-group-btn">
+            <button class="btn btn-secondary" type="button" onClick="onSendToken();"><i class="fa fa-send"></i> Send token</button>
+        </span>
+    </div>
+  </p>
+
+  <div id="token_qrcode"></div>
+
+
 {% if session.authority %}
-<section id="requests">
     <h1>Pending requests</h1>
 
-    {% if session.request_submission_allowed %}
-      <p>Generate private key and certificate signing request:</p>
+    <p>Use Certidude client to apply for a certificate.
 
-      <pre>
-openssl genrsa -out example.key 2048
-openssl req -new -sha256 -key example.key -out example.csr
-cat example.csr
-</pre>
-
-      <p>Paste the contents here and click submit:</p>
-      <textarea id="request_body" style="width:100%; min-height: 4em;" placeholder="-----BEGIN CERTIFICATE REQUEST-----"></textarea>
-      <button class="icon upload" id="request_submit" style="float:none;">Submit</button>
+    {% if not session.authority.request_subnets %}
+       Request submission disabled.
+    {% elif "0.0.0.0/0" in session.authority.request_subnets %}
+       Request submission is enabled.
     {% else %}
-      <p>Submit a certificate signing request from Mac OS X, Ubuntu or Fedora:</p>
-      <pre>easy_install pip
-pip install certidude
-certidude bootstrap {{session.authority.common_name}}</pre>
+       Request submission allowed from
+       {% for subnet in session.authority.request_subnets %}{{ subnet }},{% endfor %}.
     {% endif %}
 
-    <ul id="pending_requests">
-      {% for request in session.authority.requests %}
-             {% include "views/request.html" %}
-      {% endfor %}
-        <li class="notify">
-            <p>No certificate signing requests to sign!</p>
-        </li>
-    </ul>
-</section>
+    {# if session.request_submission_allowed #}
+        See <a href="#request_submission_modal" data-toggle="modal">here</a> for more information on manual signing request upload.
+    {# endif #}
 
-<section id="signed">
-    <h1>Signed certificates</h1>
-    <input id="search" type="search" class="icon search">
-    <ul id="signed_certificates">
-        {% for certificate in session.authority.signed | sort | reverse %}
-            {% include "views/signed.html" %}
-	    {% endfor %}
-    </ul>
-</section>
-
-<section id="log">
-    <h1>Log</h1>
-    <p>
-        <input id="log_level_critical" type="checkbox" checked/> <label for="log_level_critical">Critical</label>
-        <input id="log_level_error" type="checkbox" checked/> <label for="log_level_error">Errors</label>
-        <input id="log_level_warning" type="checkbox" checked/> <label for="log_level_warning">Warnings</label>
-        <input id="log_level_info" type="checkbox" checked/> <label for="log_level_info">Info</label>
-        <input id="log_level_debug" type="checkbox"/> <label for="log_level_debug">Debug</label>
-    </p>
-    <ul id="log_entries">
-    </ul>
-</section>
-
-<section id="revoked">
-    <h1>Revoked certificates</h1>
-    <p>To fetch <a href="{{window.location.href}}api/revoked/">certificate revocation list</a>:</p>
-    <pre>curl {{window.location.href}}api/revoked/ > crl.der
-curl http://ca2.koodur.lan/api/revoked/ -L -H "Accept: application/x-pem-file"
-curl http://ca2.koodur.lan/api/revoked/?wait=yes -L -H "Accept: application/x-pem-file" > crl.pem</pre>
-    <!--
-    <p>To perform online certificate status request</p>
-
-    <pre>
-    curl {{request.url}}/certificate/ > session.pem
-    openssl ocsp -issuer session.pem -CAfile session.pem -url {{request.url}}/ocsp/ -serial 0x
-    </pre>
-    -->
-    <ul>
-        {% for j in session.authority.revoked %}
-            <li id="certificate_{{ j.sha256sum }}">
-                {{j.changed}}
-                {{j.serial_number}} <span class="monospace">{{j.identity}}</span>
-            </li>
+    {% if session.authority.autosign_subnets %}
+        {% if "0.0.0.0/0" in session.authority.autosign_subnets %}
+            All requests are automatically signed.
         {% else %}
-            <li>Great job! No certificate signing requests to sign.</li>
-	    {% endfor %}
-    </ul>
-</section>
+           Requests from
+                {% for subnet in session.authority.autosign_subnets %}
+                    {{ subnet }},
+                {% endfor %}
+           are automatically signed.
+        {% endif %}
+    {% endif %}
+    </p>
 
+    <div id="pending_requests">
+    {% for request in session.authority.requests | sort(attribute="submitted", reverse=true) %}
+      {% include "views/request.html" %}
+    {% endfor %}
+    </div>
+    <p><h1>Revoked certificates</h1></p>
+    <p>Following certificates have been revoked,for more information click
+    <a href="#revocation_list_modal" data-toggle="modal">here</a>.</p>
+
+    {% for certificate in session.authority.revoked | sort(attribute="revoked", reverse=true) %}
+      {% include "views/revoked.html" %}
+    {% endfor %}
+  </div>
+</div>
 <section id="config">
 </section>
 

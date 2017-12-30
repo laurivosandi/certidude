@@ -13,7 +13,7 @@ def publish(event_type, event_data=''):
     """
     assert event_type, "No event type specified"
 
-    if not isinstance(event_data, basestring):
+    if not isinstance(event_data, str):
         from certidude.decorators import MyEncoder
         event_data = json.dumps(event_data, cls=MyEncoder)
 

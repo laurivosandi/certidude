@@ -1,5 +1,6 @@
 {% for tag in certificate.tags %}
-<span onclick="onTagClicked(event);"
-title="{{ tag.id }}" class="tag icon {{ tag.key | replace('.', ' ') }}"
-data-cn="{{ certificate.common_name }}">{{ tag.value }}</span>
+  <span data-cn="{{ certificate.common_name }}"
+    title="{{ tag.id }}"
+    class="badge badge-default"
+    onClick="onTagClicked(this);">{{ tag.value }}</span>
 {% endfor %}

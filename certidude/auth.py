@@ -1,4 +1,5 @@
 
+import binascii
 import click
 import gssapi
 import falcon
@@ -23,7 +24,7 @@ def authenticate(optional=False):
                     req.context["user"] = None
                     return func(resource, req, resp, *args, **kwargs)
 
-                logger.debug(u"No Kerberos ticket offered while attempting to access %s from %s",
+                logger.debug("No Kerberos ticket offered while attempting to access %s from %s",
                     req.env["PATH_INFO"], req.context.get("remote_addr"))
                 raise falcon.HTTPUnauthorized("Unauthorized",
                     "No Kerberos ticket offered, are you sure you've logged in with domain user account?",
@@ -44,12 +45,15 @@ def authenticate(optional=False):
 
             try:
                 context.step(b64decode(token))
-            except TypeError: # base64 errors
+            except binascii.Error: # base64 errors
                 raise falcon.HTTPBadRequest("Bad request", "Malformed token")
             except gssapi.raw.exceptions.BadMechanismError:
                 raise falcon.HTTPBadRequest("Bad request", "Unsupported authentication mechanism (NTLM?) was offered. Please make sure you've logged into the computer with domain user account. The web interface should not prompt for username or password.")
 
-            username, domain = str(context.initiator_name).split("@")
+            try:
+                username, domain = str(context.initiator_name).split("@")
+            except AttributeError: # TODO: Better exception
+                raise falcon.HTTPForbidden("Failed to determine username, are you trying to log in with correct domain account?")
 
             if domain.lower() != const.DOMAIN.lower():
                 raise falcon.HTTPForbidden("Forbidden",
@@ -64,7 +68,7 @@ def authenticate(optional=False):
                 # Attempt to look up real user
                 req.context["user"] = User.objects.get(username)
 
-            logger.debug(u"Succesfully authenticated user %s for %s from %s",
+            logger.debug("Succesfully authenticated user %s for %s from %s",
                 req.context["user"], req.env["PATH_INFO"], req.context["remote_addr"])
             return func(resource, req, resp, *args, **kwargs)
 
@@ -89,24 +93,24 @@ def authenticate(optional=False):
 
             from base64 import b64decode
             basic, token = req.auth.split(" ", 1)
-            user, passwd = b64decode(token).split(":", 1)
+            user, passwd = b64decode(token).decode("ascii").split(":", 1)
 
             upn = "%s@%s" % (user, const.DOMAIN)
             click.echo("Connecting to %s as %s" % (config.LDAP_AUTHENTICATION_URI, upn))
-            conn = ldap.initialize(config.LDAP_AUTHENTICATION_URI)
+            conn = ldap.initialize(config.LDAP_AUTHENTICATION_URI, bytes_mode=False)
             conn.set_option(ldap.OPT_REFERRALS, 0)
 
             try:
                 conn.simple_bind_s(upn, passwd)
             except ldap.STRONG_AUTH_REQUIRED:
-                logger.critical(u"LDAP server demands encryption, use ldaps:// instead of ldaps://")
+                logger.critical("LDAP server demands encryption, use ldaps:// instead of ldaps://")
                 raise
             except ldap.SERVER_DOWN:
-                logger.critical(u"Failed to connect LDAP server at %s, are you sure LDAP server's CA certificate has been copied to this machine?",
+                logger.critical("Failed to connect LDAP server at %s, are you sure LDAP server's CA certificate has been copied to this machine?",
                     config.LDAP_AUTHENTICATION_URI)
                 raise
             except ldap.INVALID_CREDENTIALS:
-                logger.critical(u"LDAP bind authentication failed for user %s from  %s",
+                logger.critical("LDAP bind authentication failed for user %s from  %s",
                     repr(user), req.context.get("remote_addr"))
                 raise falcon.HTTPUnauthorized("Forbidden",
                     "Please authenticate with %s domain account username" % const.DOMAIN,
@@ -134,11 +138,11 @@ def authenticate(optional=False):
                 raise falcon.HTTPBadRequest("Bad request", "Bad header: %s" % req.auth)
 
             basic, token = req.auth.split(" ", 1)
-            user, passwd = b64decode(token).split(":", 1)
+            user, passwd = b64decode(token).decode("ascii").split(":", 1)
 
             import simplepam
             if not simplepam.authenticate(user, passwd, "sshd"):
-                logger.critical(u"Basic authentication failed for user %s from  %s, "
+                logger.critical("Basic authentication failed for user %s from  %s, "
                     "are you sure server process has read access to /etc/shadow?",
                     repr(user), req.context.get("remote_addr"))
                 raise falcon.HTTPUnauthorized("Forbidden", "Invalid password", ("Basic",))
@@ -175,6 +179,27 @@ def authorize_admin(func):
         if req.context.get("user").is_admin():
             req.context["admin_authorized"] = True
             return func(resource, req, resp, *args, **kwargs)
-        logger.info(u"User '%s' not authorized to access administrative API", req.context.get("user").name)
+        logger.info("User '%s' not authorized to access administrative API", req.context.get("user").name)
         raise falcon.HTTPForbidden("Forbidden", "User not authorized to perform administrative operations")
+    return wrapped
+
+def authorize_server(func):
+    """
+    Make sure the request originator has a certificate with server flags
+    """
+    from asn1crypto import pem, x509
+    def wrapped(resource, req, resp, *args, **kwargs):
+        buf = req.get_header("X-SSL-CERT")
+        if not buf:
+            logger.info("No TLS certificate presented to access administrative API call")
+            raise falcon.HTTPForbidden("Forbidden", "Machine not authorized to perform the operation")
+
+        header, _, der_bytes = pem.unarmor(buf.replace("\t", "").encode("ascii"))
+        cert = x509.Certificate.load(der_bytes) # TODO: validate serial
+        for extension in cert["tbs_certificate"]["extensions"]:
+            if extension["extn_id"].native == "extended_key_usage":
+                if "server_auth" in extension["extn_value"].native:
+                    return func(resource, req, resp, *args, **kwargs)
+        logger.info("TLS authenticated machine '%s' not authorized to access administrative API", cert.subject.native["common_name"])
+        raise falcon.HTTPForbidden("Forbidden", "Machine not authorized to perform the operation")
     return wrapped

@@ -36,8 +36,9 @@ class AttributeResource(object):
     @csrf_protection
     @whitelist_subject # TODO: sign instead
     def on_post(self, req, resp, cn):
+        namespace = ("user.%s." % self.namespace).encode("ascii")
         try:
-            path, buf, cert = authority.get_signed(cn)
+            path, buf, cert, signed, expires = authority.get_signed(cn)
         except IOError:
             raise falcon.HTTPNotFound()
         else:
@@ -50,7 +51,7 @@ class AttributeResource(object):
                 setxattr(path, identifier, value.encode("utf-8"))
                 valid.add(identifier)
             for key in listxattr(path):
-                if not key.startswith("user.%s." % self.namespace):
+                if not key.startswith(namespace):
                     continue
                 if key not in valid:
                     removexattr(path, key)

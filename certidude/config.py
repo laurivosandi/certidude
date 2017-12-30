@@ -5,7 +5,8 @@ import configparser
 import ipaddress
 import os
 import string
-import const
+from certidude import const
+from collections import OrderedDict
 from random import choice
 
 # Options that are parsed from config file are fetched here
@@ -91,14 +92,14 @@ if "%s" not in LDAP_ADMIN_FILTER: raise ValueError("No placeholder %s for userna
 TAG_TYPES = [j.split("/", 1) + [cp.get("tagging", j)] for j in cp.options("tagging")]
 
 # Tokens
-BUNDLE_FORMAT = cp.get("token", "format")
-OPENVPN_PROFILE_TEMPLATE = cp.get("token", "openvpn profile template")
 TOKEN_URL = cp.get("token", "url")
 TOKEN_LIFETIME = cp.getint("token", "lifetime") * 60 # Convert minutes to seconds
-TOKEN_SECRET = cp.get("token", "secret")
+TOKEN_SECRET = cp.get("token", "secret").encode("ascii")
 
 # TODO: Check if we don't have base or servers
 
 # The API call for looking up scripts uses following directory as root
 SCRIPT_DIR = os.path.join(os.path.dirname(__file__), "templates", "script")
 SCRIPT_DEFAULT = "default.sh"
+
+PROFILES = OrderedDict([[i, [j.strip() for j in cp.get("profile", i).split(",")]] for i in cp.options("profile")])

@@ -1,68 +1,111 @@
-<li id="certificate-{{ certificate.common_name | replace('@', '--') | replace('.', '-') }}" data-dn="CN={{ certificate.common_name }}" data-cn="{{ certificate.common_name }}" class="filterable">
-    <a class="button icon download" href="/api/signed/{{certificate.common_name}}/">Fetch</a>
-    <button class="icon revoke" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/signed/{{certificate.common_name}}/',type:'delete'});">Revoke</button>
-
-    <div class="monospace">
+<p>
+<div id="certificate-{{ certificate.common_name | replace('@', '--') | replace('.', '-') }}" class="card">
+  <div class="card-header">
     {% if certificate.server %}
-    {% include 'img/iconmonstr-server-1.svg' %}
+      <i class="fa fa-server"></i>
     {% else %}
-    {% include 'img/iconmonstr-certificate-15.svg' %}
+      <i class="fa fa-laptop"></i>
     {% endif %}
+    {{ certificate.common_name }}
+  </div>
+  <div class="card-block">
+    <p>
+      <span class="lease">
+        {% if certificate.lease %}
+          {% include "views/lease.html" %}
+        {% endif %}
+      </span>
 
-    {{certificate.common_name}}
-    </div>
-
-    {% if certificate.email_address %}
-    <div class="email">{% include 'img/iconmonstr-email-2.svg' %} {{ certificate.email_address }}</div>
+      Signed
+      <time class="timeago" datetime="{{ certificate.signed }}">Certificate was signed {{ certificate.signed }}</time>,
+      expires
+      <time class="timeago" datetime="{{ certificate.expires }}">Certificate expires {{ certificate.expires }}</time>.
+      {% if certificate.organizational_unit %}
+        Part of {{ certificate.organizational_unit }} organizational unit.
+      {% endif %}
+    </p>
+    {% if session.authority.tagging %}
+      <p class="tags" data-cn="{{ certificate.common_name }}">
+        {% include "views/tags.html" %}
+      </p>
     {% endif %}
-
-    {% if certificate.given_name or certificate.surname %}
-    <div class="person">{% include 'img/iconmonstr-user-5.svg' %} {{ certificate.given_name }} {{ certificate.surname }}</div>
-    {% endif %}
-
-    <div class="lifetime">
-        {% include 'img/iconmonstr-calendar-6.svg' %}
-        Signed <time class="timeago" datetime="{{ certificate.signed }}">Certificate was signed {{ certificate.signed }}</time>,
-        expires <time class="timeago" datetime="{{ certificate.expires }}">Certificate expires {{ certificate.expires }}</time>
+    <div class="btn-group">
+      <button type="button" class="btn btn-secondary" data-toggle="collapse" data-target="#details-{{ certificate.sha256sum }}"><i class="fa fa-list"></i> Details</button>
+      <button type="button" class="btn btn-danger"
+       onclick="javascript:$(this).button('loading');$.ajax({url:'/api/signed/{{certificate.common_name}}/?sha256sum={{ certificate.sha256sum }}',type:'delete'});">
+       <i class="fa fa-ban"></i> Revoke</button>
+      <button type="button" class="btn btn-danger dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        <span class="sr-only">Toggle Dropdown</span>
+      </button>
+      <div class="dropdown-menu">
+        <a class="dropdown-item" href="#"
+          onclick="javascript:$(this).button('loading');$.ajax({url:'/api/signed/{{certificate.common_name}}/?sha256sum={{ certificate.sha256sum }}&reason=1',type:'delete'});">Revoke due to key compromise</a>
+        <a class="dropdown-item" href="#"
+          onclick="javascript:$(this).button('loading');$.ajax({url:'/api/signed/{{certificate.common_name}}/?sha256sum={{ certificate.sha256sum }}&reason=5',type:'delete'});">Revoke due to cessation of operation</a>
+        <a class="dropdown-item" href="#"
+          onclick="javascript:$(this).button('loading');$.ajax({url:'/api/signed/{{certificate.common_name}}/?sha256sum={{ certificate.sha256sum }}&reason=9',type:'delete'});">Revoke due to withdrawn privilege</a>
+      </div>
     </div>
-
-    {#
-
-    <div class="monospace">
-    {% include 'img/iconmonstr-key-3.svg' %}
-    <span title="SHA-256 of public key">
-    {{ certificate.sha256sum }}
-    </span>
-    {{ certificate.key_length }}-bit
-    {{ certificate.key_type }}
-    </div>
-
-    <div>
-    {% include 'img/iconmonstr-flag-3.svg' %}
-    {{certificate.key_usage}}
-    </div>
-
-    #}
-
-    {% if session.features.tagging %}
-    <div class="tags">
-        <span data-cn="{{ certificate.common_name }}">
-            {% include 'views/tags.html' %}
-        </span>
-        <select class="icon tag" data-cn="{{ certificate.common_name }}" onChange="onNewTagClicked(event);">
-            <option value="">Add tag...</option>
-            {% for tag_type in session.authority.tagging %}
-            <option value="{{ tag_type.name }}">{{ tag_type.title }}</option>
+    <div class="collapse" id="details-{{ certificate.sha256sum }}">
+      <p>
+      <div class="btn-group">
+        {% if session.authority.tagging %}
+          <button type="button" class="btn btn-default" onclick="onNewTagClicked(this);" data-key="other" data-cn="{{ certificate.common_name }}">
+           <i class="fa fa-tag"></i> Tag</button>
+          <button type="button" class="btn btn-default dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+            <span class="sr-only">Toggle Dropdown</span>
+          </button>
+          <div class="dropdown-menu">
+            {% for tag_category in session.authority.tagging %}
+            <a class="dropdown-item" href="#" data-key="{{ tag_category.name }}" data-cn="{{ certificate.common_name }}"
+              onclick="onNewTagClicked(this);">{{ tag_category.title }}</a>
             {% endfor %}
-        </select>
-    </div>
-    {% endif %}
+          </div>
+        {% endif %}
+      </div>
+      </p>
 
-    <div class="status">
-    {% include 'views/status.html' %}
-    </div>
+      <p>To fetch certificate:</p>
 
-    <div class="attributes" data-cn="{{ certificate.common_name }}">
-        {% include 'views/attributes.html' %}
+      <div class="bd-example">
+        <pre><code class="language-sh" data-lang="sh">wget <a href="/api/signed/{{ certificate.common_name }}/">http://{{ window.location.hostname }}/api/signed/{{ certificate.common_name }}/</a>
+curl http://{{ window.location.hostname }}/api/signed/{{ certificate.common_name }}/ \
+  | openssl x509 -text -noout</code></pre>
+      </div>
+
+      <p>To perform online certificate status request:</p>
+      <pre><code class="language-bash" data-lang="bash">curl http://{{ window.location.hostname }}/api/certificate/ > session.pem
+openssl ocsp -issuer session.pem -CAfile session.pem \
+  -url http://{{ window.location.hostname }}/api/ocsp/ \
+  -serial 0x{{ certificate.serial }}</span></code></pre>
+
+      <p>To fetch script:</p>
+      <pre><code class="language-bash" data-lang="bash">cd /var/lib/certidude/{{ window.location.hostname }}/
+curl --cert client_cert.pem https://{{ window.location.hostname }}:8443/api/signed/{{ certificate.common_name }}/script/</pre></code>
+
+      <div style="overflow: auto; max-width: 100%;">
+        <table class="table" id="signed_certificates">
+          <tbody>
+            <tr><th>Common name</th><td>{{ certificate.common_name }}</td></tr>
+            <tr><th>Organizational unit</th><td>{% if certificate.organizational_unit %}{{ certificate.organizational_unit }}{% else %}-{% endif %}</td></tr>
+            <tr><th>Serial number</th><td style="word-wrap:break-word;">{{ certificate.serial | serial }}</td></tr>
+            <tr><th>Signed</th><td>{{ certificate.signed | datetime  }}{% if certificate.signer %}, by {{ certificate.signer }}{% endif %}</td></tr>
+            <tr><th>Expires</th><td>{{ certificate.expires | datetime  }}</td></tr>
+            {% if certificate.lease %}
+            <tr><th>Lease</th><td><a href="http://{{ certificate.lease.inner_address }}">{{ certificate.lease.inner_address }}</a> at {{ certificate.lease.last_seen | datetime  }}
+              from <a href="https://geoiptool.com/en/?ip={{ certificate.lease.outer_address }}" target="_blank">{{ certificate.lease.outer_address }}</a>
+            </td></tr>
+            {% endif %}
+
+            <!--
+            <tr><th>MD5</th><td>{{ certificate.md5sum }}</td></tr>
+            <tr><th>SHA1</th><td>{{ certificate.sha1sum }}</td></tr>
+            -->
+            <tr><th>SHA256</th><td style="word-wrap:break-word;  overflow-wrap: break-word;  ">{{ certificate.sha256sum }}</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
-</li>
+  </div>
+</div>
+</p>

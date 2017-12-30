@@ -22,7 +22,7 @@ class ScriptResource():
                     k, v = tag.split("=", 1)
                     named_tags[k] = v
                 else:
-                    other_tags.append(v)
+                    other_tags.append(tag)
         except AttributeError: # No tags
             pass
 
@@ -34,5 +34,5 @@ class ScriptResource():
             other_tags=other_tags,
             named_tags=named_tags,
             attributes=attribs.get("user").get("machine"))
-        logger.info(u"Served script %s for %s at %s" % (script, cn, req.context["remote_addr"]))
+        logger.info("Served script %s for %s at %s" % (script, cn, req.context["remote_addr"]))
         # TODO: Assert time is within reasonable range

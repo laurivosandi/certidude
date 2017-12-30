@@ -5,6 +5,7 @@ import re
 import requests
 import hashlib
 import socket
+import sys
 from oscrypto import asymmetric
 from asn1crypto import pem, x509
 from asn1crypto.csr import CertificationRequest
@@ -28,25 +29,53 @@ RE_HOSTNAME =  "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z
 
 # Cache CA certificate
 
-with open(config.AUTHORITY_CERTIFICATE_PATH) as fh:
+with open(config.AUTHORITY_CERTIFICATE_PATH, "rb") as fh:
     certificate_buf = fh.read()
     header, _, certificate_der_bytes = pem.unarmor(certificate_buf)
     certificate = x509.Certificate.load(certificate_der_bytes)
     public_key = asymmetric.load_public_key(certificate["tbs_certificate"]["subject_public_key_info"])
-with open(config.AUTHORITY_PRIVATE_KEY_PATH) as fh:
+with open(config.AUTHORITY_PRIVATE_KEY_PATH, "rb") as fh:
     key_buf = fh.read()
     header, _, key_der_bytes = pem.unarmor(key_buf)
     private_key = asymmetric.load_private_key(key_der_bytes)
+
+def self_enroll():
+    from certidude import const
+    common_name = const.FQDN
+    directory = os.path.join("/var/lib/certidude", const.FQDN)
+    # Sign certificate used for HTTPS
+    public_key, private_key = asymmetric.generate_pair('rsa', bit_size=2048)
+    with open(os.path.join(directory, "self_key.pem"), 'wb') as fh:
+        fh.write(asymmetric.dump_private_key(private_key, None))
+    builder = CSRBuilder({"common_name": common_name}, public_key)
+    request = builder.build(private_key)
+    with open(os.path.join(directory, "requests", common_name + ".pem"), "wb") as fh:
+        fh.write(pem_armor_csr(request))
+    pid = os.fork()
+    if not pid:
+        from certidude import authority
+        from certidude.common import drop_privileges
+        drop_privileges()
+        authority.sign(common_name, skip_push=True, overwrite=True)
+        sys.exit(0)
+    else:
+        os.waitpid(pid, 0)
+        if os.path.exists("/etc/systemd"):
+            os.system("systemctl reload nginx")
+        else:
+            os.system("service nginx reload")
+
 
 def get_request(common_name):
     if not re.match(RE_HOSTNAME, common_name):
         raise ValueError("Invalid common name %s" % repr(common_name))
     path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
     try:
-        with open(path) as fh:
+        with open(path, "rb") as fh:
             buf = fh.read()
             header, _, der_bytes = pem.unarmor(buf)
-            return path, buf, CertificationRequest.load(der_bytes)
+            return path, buf, CertificationRequest.load(der_bytes), \
+                datetime.utcfromtimestamp(os.stat(path).st_ctime)
     except EnvironmentError:
         raise errors.RequestDoesNotExist("Certificate signing request file %s does not exist" % path)
 
@@ -54,24 +83,33 @@ def get_signed(common_name):
     if not re.match(RE_HOSTNAME, common_name):
         raise ValueError("Invalid common name %s" % repr(common_name))
     path = os.path.join(config.SIGNED_DIR, common_name + ".pem")
-    with open(path) as fh:
+    with open(path, "rb") as fh:
         buf = fh.read()
         header, _, der_bytes = pem.unarmor(buf)
-        return path, buf, x509.Certificate.load(der_bytes)
+        cert = x509.Certificate.load(der_bytes)
+        return path, buf, cert, \
+            cert["tbs_certificate"]["validity"]["not_before"].native.replace(tzinfo=None), \
+            cert["tbs_certificate"]["validity"]["not_after"].native.replace(tzinfo=None)
 
 def get_revoked(serial):
+    if isinstance(serial, str):
+        serial = int(serial, 16)
     path = os.path.join(config.REVOKED_DIR, "%x.pem" % serial)
-    with open(path) as fh:
+    with open(path, "rb") as fh:
         buf = fh.read()
         header, _, der_bytes = pem.unarmor(buf)
-        return path, buf, x509.Certificate.load(der_bytes), \
+        cert = x509.Certificate.load(der_bytes)
+        return path, buf, cert, \
+            cert["tbs_certificate"]["validity"]["not_before"].native.replace(tzinfo=None), \
+            cert["tbs_certificate"]["validity"]["not_after"].native.replace(tzinfo=None), \
             datetime.utcfromtimestamp(os.stat(path).st_ctime)
 
 
 def get_attributes(cn, namespace=None):
-    path, buf, cert = get_signed(cn)
+    path, buf, cert, signed, expires = get_signed(cn)
     attribs = dict()
     for key in listxattr(path):
+        key = key.decode("ascii")
         if not key.startswith("user."):
             continue
         if namespace and not key.startswith("user.%s." % namespace):
@@ -84,7 +122,7 @@ def get_attributes(cn, namespace=None):
                 if component not in current:
                     current[component] = dict()
                 current = current[component]
-        current[key] = value
+        current[key] = value.decode("utf-8")
     return path, buf, cert, attribs
 
 
@@ -113,12 +151,12 @@ def store_request(buf, overwrite=False, address="", user=""):
 
     # If there is cert, check if it's the same
     if os.path.exists(request_path) and not overwrite:
-        if open(request_path).read() == buf:
+        if open(request_path, "rb").read() == buf:
             raise errors.RequestExists("Request already exists")
         else:
             raise errors.DuplicateCommonNameError("Another request with same common name already exists")
     else:
-        with open(request_path + ".part", "w") as fh:
+        with open(request_path + ".part", "wb") as fh:
             fh.write(buf)
         os.rename(request_path + ".part", request_path)
 
@@ -128,6 +166,12 @@ def store_request(buf, overwrite=False, address="", user=""):
         common_name=common_name)
     setxattr(request_path, "user.request.address", address)
     setxattr(request_path, "user.request.user", user)
+    try:
+        hostname, aliaslist, ipaddrlist = socket.gethostbyaddr(address)
+    except (socket.herror, OSError): # Failed to resolve hostname or resolved to multiple
+        pass
+    else:
+        setxattr(request_path, "user.request.hostname", hostname)
     return request_path, csr, common_name
 
 
@@ -135,10 +179,12 @@ def revoke(common_name):
     """
     Revoke valid certificate
     """
-    signed_path, buf, cert = get_signed(common_name)
+    signed_path, buf, cert, signed, expires = get_signed(common_name)
     revoked_path = os.path.join(config.REVOKED_DIR, "%x.pem" % cert.serial_number)
-    os.rename(signed_path, revoked_path)
+
     os.unlink(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % cert.serial_number))
+    os.rename(signed_path, revoked_path)
+
 
     push.publish("certificate-revoked", common_name)
 
@@ -172,30 +218,37 @@ def list_requests(directory=config.REQUESTS_DIR):
     for filename in os.listdir(directory):
         if filename.endswith(".pem"):
             common_name = filename[:-4]
-            path, buf, req = get_request(common_name)
-            yield common_name, path, buf, req, server_flags(common_name),
+            path, buf, req, submitted = get_request(common_name)
+            yield common_name, path, buf, req, submitted, "." in common_name
 
 def _list_certificates(directory):
     for filename in os.listdir(directory):
         if filename.endswith(".pem"):
-            common_name = filename[:-4]
             path = os.path.join(directory, filename)
-            with open(path) as fh:
+            with open(path, "rb") as fh:
                 buf = fh.read()
                 header, _, der_bytes = pem.unarmor(buf)
                 cert = x509.Certificate.load(der_bytes)
                 server = False
                 for extension in cert["tbs_certificate"]["extensions"]:
-                    if extension["extn_id"].native == u"extended_key_usage":
-                        if u"server_auth" in extension["extn_value"].native:
+                    if extension["extn_id"].native == "extended_key_usage":
+                        if "server_auth" in extension["extn_value"].native:
                             server = True
-                yield common_name, path, buf, cert, server
+                yield cert.subject.native["common_name"], path, buf, cert, server
 
-def list_signed():
-    return _list_certificates(config.SIGNED_DIR)
+def list_signed(directory=config.SIGNED_DIR):
+    for filename in os.listdir(directory):
+        if filename.endswith(".pem"):
+            common_name = filename[:-4]
+            path, buf, cert, signed, expires = get_signed(common_name)
+            yield common_name, path, buf, cert, signed, expires
 
-def list_revoked():
-    return _list_certificates(config.REVOKED_DIR)
+def list_revoked(directory=config.REVOKED_DIR):
+    for filename in os.listdir(directory):
+        if filename.endswith(".pem"):
+            common_name = filename[:-4]
+            path, buf, cert, signed, expired, revoked = get_revoked(common_name)
+            yield cert.subject.native["common_name"], path, buf, cert, signed, expired, revoked
 
 def list_server_names():
     return [cn for cn, path, buf, cert, server in list_signed() if server]
@@ -218,7 +271,7 @@ def export_crl(pem=True):
         builder.add_certificate(
             int(filename[:-4], 16),
             datetime.utcfromtimestamp(s.st_ctime),
-            u"key_compromise")
+            "key_compromise")
 
     certificate_list = builder.build(private_key)
     if pem:
@@ -231,7 +284,7 @@ def delete_request(common_name):
     if not re.match(RE_HOSTNAME, common_name):
         raise ValueError("Invalid common name")
 
-    path, buf, csr = get_request(common_name)
+    path, buf, csr, submitted = get_request(common_name)
     os.unlink(path)
 
     # Publish event at CA channel
@@ -242,28 +295,28 @@ def delete_request(common_name):
         config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest(),
         headers={"User-Agent": "Certidude API"})
 
-def sign(common_name, overwrite=False):
+def sign(common_name, skip_notify=False, skip_push=False, overwrite=False, ou=None, signer=None):
     """
     Sign certificate signing request by it's common name
     """
 
     req_path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
-    with open(req_path) as fh:
+    with open(req_path, "rb") as fh:
         csr_buf = fh.read()
         header, _, der_bytes = pem.unarmor(csr_buf)
         csr = CertificationRequest.load(der_bytes)
 
 
     # Sign with function below
-    cert, buf = _sign(csr, csr_buf, overwrite)
+    cert, buf = _sign(csr, csr_buf, skip_notify, skip_push, overwrite, ou, signer)
 
     os.unlink(req_path)
     return cert, buf
 
-def _sign(csr, buf, overwrite=False):
+def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, ou=None, signer=None):
     # TODO: CRLDistributionPoints, OCSP URL, Certificate URL
 
-    assert buf.startswith("-----BEGIN CERTIFICATE REQUEST-----\n")
+    assert buf.startswith(b"-----BEGIN CERTIFICATE REQUEST-----")
     assert isinstance(csr, CertificationRequest)
     csr_pubkey = asymmetric.load_public_key(csr["certification_request_info"]["subject_pk_info"])
     common_name = csr["certification_request_info"]["subject"].native["common_name"]
@@ -279,7 +332,7 @@ def _sign(csr, buf, overwrite=False):
 
     # Move existing certificate if necessary
     if os.path.exists(cert_path):
-        with open(cert_path) as fh:
+        with open(cert_path, "rb") as fh:
             prev_buf = fh.read()
             header, _, der_bytes = pem.unarmor(prev_buf)
             prev = x509.Certificate.load(der_bytes)
@@ -298,10 +351,13 @@ def _sign(csr, buf, overwrite=False):
             attachments += [(prev_buf, "application/x-pem-file", "deprecated.crt" if renew else "overwritten.crt")]
             overwritten = True
         else:
-            raise EnvironmentError("Will not overwrite existing certificate")
+            raise FileExistsError("Will not overwrite existing certificate")
 
     # Sign via signer process
-    builder = CertificateBuilder({u'common_name': common_name }, csr_pubkey)
+    dn = {u'common_name': common_name }
+    if ou:
+        dn["organizational_unit"] = ou
+    builder = CertificateBuilder(dn, csr_pubkey)
     builder.serial_number = random.randint(
         0x1000000000000000000000000000000000000000,
         0xffffffffffffffffffffffffffffffffffffffff)
@@ -313,14 +369,14 @@ def _sign(csr, buf, overwrite=False):
         else config.CLIENT_CERTIFICATE_LIFETIME)
     builder.issuer = certificate
     builder.ca = False
-    builder.key_usage = set([u"digital_signature", u"key_encipherment"])
+    builder.key_usage = set(["digital_signature", "key_encipherment"])
 
     # OpenVPN uses CN while StrongSwan uses SAN
     if server_flags(common_name):
         builder.subject_alt_domains = [common_name]
-        builder.extended_key_usage = set([u"server_auth", u"1.3.6.1.5.5.8.2.2", u"client_auth"])
+        builder.extended_key_usage = set(["server_auth", "1.3.6.1.5.5.8.2.2", "client_auth"])
     else:
-        builder.extended_key_usage = set([u"client_auth"])
+        builder.extended_key_usage = set(["client_auth"])
 
     end_entity_cert = builder.build(private_key)
     end_entity_cert_buf = asymmetric.dump_certificate(end_entity_cert)
@@ -339,20 +395,26 @@ def _sign(csr, buf, overwrite=False):
     # Copy filesystem attributes to newly signed certificate
     if revoked_path:
         for key in listxattr(revoked_path):
-            if not key.startswith("user."):
+            if not key.startswith(b"user."):
                 continue
             setxattr(cert_path, key, getxattr(revoked_path, key))
 
-    # Send mail
-    if renew: # Same keypair
-        mailer.send("certificate-renewed.md", **locals())
-    else: # New keypair
-        mailer.send("certificate-signed.md", **locals())
+    # Attach signer username
+    if signer:
+        setxattr(cert_path, "user.signature.username", signer)
 
-    url = config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest()
-    click.echo("Publishing certificate at %s ..." % url)
-    requests.post(url, data=end_entity_cert_buf,
-        headers={"User-Agent": "Certidude API", "Content-Type": "application/x-x509-user-cert"})
+    if not skip_notify:
+        # Send mail
+        if renew: # Same keypair
+            mailer.send("certificate-renewed.md", **locals())
+        else: # New keypair
+            mailer.send("certificate-signed.md", **locals())
 
-    push.publish("request-signed", common_name)
+    if not skip_push:
+        url = config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest()
+        click.echo("Publishing certificate at %s ..." % url)
+        requests.post(url, data=end_entity_cert_buf,
+            headers={"User-Agent": "Certidude API", "Content-Type": "application/x-x509-user-cert"})
+
+        push.publish("request-signed", common_name)
     return end_entity_cert, end_entity_cert_buf

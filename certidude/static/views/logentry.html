@@ -1,5 +1,8 @@
-<li id="log_entry_{{ entry.id }}" class="filterable">
-<span class="created monospace" style="float:right;">{{ entry.created }}</span>
-<span class="message icon {{ entry.severity }}">{{ entry.message }}</span>
+<li id="log_entry_{{ entry.id }}" class="list-group-item justify-content-between filterable">
+<span>
+<i class="fa fa-{{ entry.severity }}-circle"/>
+{{ entry.message }}
+</span>
+<span class="badge badge-default badge-pill">{{ entry.created }}</span>
 </li>
 

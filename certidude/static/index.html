@@ -1,39 +1,65 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="utf-8"/>
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8"/>
     <title>Certidude server</title>
+    <link href="/assets/css/bundle.css" rel="stylesheet" type="text/css"/>
     <link href="/css/style.css" rel="stylesheet" type="text/css"/>
-    <script type="text/javascript" src="/js/jquery-2.1.4.min.js"></script>
-    <script type="text/javascript" src="/js/jquery.timeago.js"></script>
-    <script type="text/javascript" src="/js/nunjucks.min.js"></script>
-    <script type="text/javascript" src="/js/templates.js"></script>
+    <script type="text/javascript" src="/assets/js/bundle.js"></script>
     <script type="text/javascript" src="/js/certidude.js"></script>
     <link rel="shortcut icon" href="data:image/x-icon;," type="image/x-icon">
-</head>
-<body>
-    <nav id="menu">
-        <ul class="container">
-          <li data-section="about">Profile</li>
-          <li id="section-requests" data-section="requests" style="display:none;">Requests</li>
-          <li id="section-signed" data-section="signed" style="display:none;">Signed</li>
-          <li id="section-revoked" data-section="revoked" style="display:none;">Revoked</li>
-          <li id="section-log" data-section="log" style="display:none;">Log</li>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=0">
+  </head>
+  <body onhashchange="onHashChanged();">
+    <nav class="navbar navbar-toggleable-md navbar-inverse bg-inverse fixed-top">
+      <button class="navbar-toggler navbar-toggler-right" type="button" data-toggle="collapse" data-target="#navbarsExampleDefault" aria-controls="navbarsExampleDefault" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <a class="navbar-brand" href="#">Certidude</a>
+
+      <div class="collapse navbar-collapse" id="navbarsExampleDefault">
+        <ul class="navbar-nav mr-auto">
+          <li class="nav-item active">
+            <a class="nav-link" href="#">Dashboard <span class="sr-only">(current)</span></a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="#">Settings</a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link disabled log" href="#">Log</a>
+          </li>
         </ul>
+        <form class="form-inline my-2 my-lg-0">
+          <input class="form-control mr-sm-2" type="search" placeholder="🔍">
+        </form>
+      </div>
     </nav>
-    <div id="under_maintenance" class="container" style="display:none;">
-        Server under maintenance...
+    <div id="view-dashboard" class="container-fluid">
+      <div id="view">
+          <div class="loader-container">
+            <div class="loader"></div>
+            <p>Loading certificate authority...</p>
+          </div>
+      </div>
     </div>
-    <div id="container" class="container">
-        Loading certificate authority...
+    <div id="view-log" class="container-fluid" style="margin: 5em 0 0 0; display: none;">
+        <h1>Log</h1>
+        <div class="btn-group" data-toggle="buttons">
+          <label class="btn btn-primary active"><input id="log-level-critical" type="checkbox" autocomplete="off" checked> Critical</label>
+          <label class="btn btn-primary active"><input id="log-level-errors" type="checkbox" autocomplete="off" checked> Errors</label>
+          <label class="btn btn-primary active"><input id="log-level-warnings" type="checkbox" autocomplete="off" checked> Warnings</label>
+          <label class="btn btn-primary active"><input id="log-level-info" type="checkbox" autocomplete="off" checked> Info</label>
+          <label class="btn btn-primary"><input id="log-level-debug" type="checkbox" autocomplete="off"> Debug</label>
+        </div>
+        <ul id="log-entries" class="list-group">
+        </ul>
     </div>
-</body>
-
-<footer>
-    <a href="http://github.com/laurivosandi/certidude">Certidude</a> by
-    <a href="http://github.com/laurivosandi/">Lauri Võsandi</a>
-</footer>
-
+    <footer class="footer">
+      <div class="container">
+        <a href="http://github.com/laurivosandi/certidude">Certidude</a> by
+        <a href="http://github.com/laurivosandi/">Lauri Võsandi</a>
+      </div>
+    </footer>
+  </body>
 </html>
 

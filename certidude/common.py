@@ -32,20 +32,12 @@ def drop_privileges():
         ("certidude", os.getuid(), os.getgid(), ", ".join([str(j) for j in os.getgroups()])))
     os.umask(0o007)
 
-def ip_network(j):
-    import ipaddress
-    return ipaddress.ip_network(unicode(j))
-
-def ip_address(j):
-    import ipaddress
-    return ipaddress.ip_address(unicode(j))
-
 def apt(packages):
     """
     Install packages for Debian and Ubuntu
     """
     if os.path.exists("/usr/bin/apt-get"):
-        cmd = ["/usr/bin/apt-get", "install", "-yqq"] + packages.split(" ")
+        cmd = ["/usr/bin/apt-get", "install", "-yqq", "-o", "Dpkg::Options::=--force-confold"] + packages.split(" ")
         click.echo("Running: %s" % " ".join(cmd))
         subprocess.call(cmd)
         return True
@@ -65,7 +57,7 @@ def rpm(packages):
 
 
 def pip(packages):
-    click.echo("Running: pip install %s" % packages)
+    click.echo("Running: pip3 install %s" % packages)
     import pip
     pip.main(['install'] + packages.split(" "))
     return True

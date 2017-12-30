@@ -22,7 +22,7 @@ class OCSPResource(object):
         else:
             raise falcon.HTTPMethodNotAllowed()
 
-        fh = open(config.AUTHORITY_CERTIFICATE_PATH)
+        fh = open(config.AUTHORITY_CERTIFICATE_PATH, "rb") # TODO: import from authority
         server_certificate = asymmetric.load_certificate(fh.read())
         fh.close()
 
@@ -35,7 +35,7 @@ class OCSPResource(object):
                 if ext["extn_id"].native == "nonce":
                     response_extensions.append(
                         ocsp.ResponseDataExtension({
-                            'extn_id': u"nonce",
+                            'extn_id': "nonce",
                             'critical': False,
                             'extn_value': ext["extn_value"]
                         })
@@ -51,18 +51,19 @@ class OCSPResource(object):
                 link_target = os.readlink(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % serial))
                 assert link_target.startswith("../")
                 assert link_target.endswith(".pem")
-                path, buf, cert = authority.get_signed(link_target[3:-4])
+                path, buf, cert, signed, expires = authority.get_signed(link_target[3:-4])
                 if serial != cert.serial_number:
-                    raise EnvironmentError("integrity check failed")
+                    logger.error("Certificate store integrity check failed, %s refers to certificate with serial %x" % (link_target, cert.serial_number))
+                    raise EnvironmentError("Integrity check failed")
                 status = ocsp.CertStatus(name='good', value=None)
             except EnvironmentError:
                 try:
-                    path, buf, cert, revoked = authority.get_revoked(serial)
+                    path, buf, cert, signed, expires, revoked = authority.get_revoked(serial)
                     status = ocsp.CertStatus(
                         name='revoked',
                         value={
                             'revocation_time': revoked,
-                            'revocation_reason': u"key_compromise",
+                            'revocation_reason': "key_compromise",
                         })
                 except EnvironmentError:
                     status = ocsp.CertStatus(name="unknown", value=None)
@@ -70,7 +71,7 @@ class OCSPResource(object):
             responses.append({
                 'cert_id': {
                     'hash_algorithm': {
-                        'algorithm': u"sha1"
+                        'algorithm': "sha1"
                     },
                     'issuer_name_hash': server_certificate.asn1.subject.sha1,
                     'issuer_key_hash': server_certificate.public_key.asn1.sha1,
@@ -89,13 +90,13 @@ class OCSPResource(object):
         })
 
         resp.body = ocsp.OCSPResponse({
-            'response_status': u"successful",
+            'response_status': "successful",
             'response_bytes': {
-                'response_type': u"basic_ocsp_response",
+                'response_type': "basic_ocsp_response",
                 'response': {
                     'tbs_response_data': response_data,
                     'certs': [server_certificate.asn1],
-                    'signature_algorithm': {'algorithm': u"sha1_rsa"},
+                    'signature_algorithm': {'algorithm': "sha1_rsa"},
                     'signature': asymmetric.rsa_pkcs1v15_sign(
                         authority.private_key,
                         response_data.dump(),

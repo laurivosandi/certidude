@@ -5,7 +5,7 @@ import logging
 import xattr
 from datetime import datetime
 from certidude import config, authority, push
-from certidude.auth import login_required, authorize_admin
+from certidude.auth import login_required, authorize_admin, authorize_server
 from certidude.decorators import serialize
 
 logger = logging.getLogger(__name__)
@@ -18,9 +18,9 @@ class LeaseDetailResource(object):
     @authorize_admin
     def on_get(self, req, resp, cn):
         try:
-            path, buf, cert = authority.get_signed(cn)
+            path, buf, cert, signed, expires = authority.get_signed(cn)
             return dict(
-                last_seen =     xattr.getxattr(path, "user.lease.last_seen"),
+                last_seen =     xattr.getxattr(path, "user.lease.last_seen").decode("ascii"),
                 inner_address = xattr.getxattr(path, "user.lease.inner_address").decode("ascii"),
                 outer_address = xattr.getxattr(path, "user.lease.outer_address").decode("ascii")
             )
@@ -29,10 +29,10 @@ class LeaseDetailResource(object):
 
 
 class LeaseResource(object):
+    @authorize_server
     def on_post(self, req, resp):
-        # TODO: verify signature
         common_name = req.get_param("client", required=True)
-        path, buf, cert = authority.get_signed(common_name) # TODO: catch exceptions
+        path, buf, cert, signed, expires = authority.get_signed(common_name) # TODO: catch exceptions
         if req.get_param("serial") and cert.serial_number != req.get_param_as_int("serial"): # OCSP-ish solution for OpenVPN, not exposed for StrongSwan
             raise falcon.HTTPForbidden("Forbidden", "Invalid serial number supplied")
 

@@ -17,7 +17,7 @@ def whitelist_subnets(subnets):
                 if req.context.get("remote_addr") in subnet:
                     break
             else:
-                logger.info(u"Rejected access to administrative call %s by %s from %s, source address not whitelisted",
+                logger.info("Rejected access to administrative call %s by %s from %s, source address not whitelisted",
                     req.env["PATH_INFO"],
                     req.context.get("user", "unauthenticated user"),
                     req.context.get("remote_addr"))
@@ -46,7 +46,7 @@ def whitelist_subject(func):
         from certidude import authority
         from xattr import getxattr
         try:
-            path, buf, cert = authority.get_signed(cn)
+            path, buf, cert, signed, expires = authority.get_signed(cn)
         except IOError:
             raise falcon.HTTPNotFound()
         else:

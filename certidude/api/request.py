@@ -11,7 +11,7 @@ from asn1crypto.csr import CertificationRequest
 from base64 import b64decode
 from certidude import config, authority, push, errors
 from certidude.auth import login_required, login_optional, authorize_admin
-from certidude.decorators import serialize, csrf_protection
+from certidude.decorators import csrf_protection, MyEncoder
 from certidude.firewall import whitelist_subnets, whitelist_content_types
 from datetime import datetime
 from oscrypto import asymmetric
@@ -36,7 +36,7 @@ class RequestListResource(object):
         Validate and parse certificate signing request, the RESTful way
         """
         reasons = []
-        body = req.stream.read(req.content_length).encode("ascii")
+        body = req.stream.read(req.content_length)
 
         header, _, der_bytes = pem.unarmor(body)
         csr = CertificationRequest.load(der_bytes)
@@ -56,7 +56,7 @@ class RequestListResource(object):
                 # Automatic enroll with Kerberos machine cerdentials
                 resp.set_header("Content-Type", "application/x-pem-file")
                 cert, resp.body = authority._sign(csr, body, overwrite=True)
-                logger.info(u"Automatically enrolled Kerberos authenticated machine %s from %s",
+                logger.info("Automatically enrolled Kerberos authenticated machine %s from %s",
                     machine, req.context.get("remote_addr"))
                 return
             else:
@@ -66,7 +66,7 @@ class RequestListResource(object):
         Attempt to renew certificate using currently valid key pair
         """
         try:
-            path, buf, cert = authority.get_signed(common_name)
+            path, buf, cert, signed, expires = authority.get_signed(common_name)
         except EnvironmentError:
             pass # No currently valid certificate for this common name
         else:
@@ -85,8 +85,8 @@ class RequestListResource(object):
 
                 try:
                     renewal_signature = b64decode(renewal_header)
-                except TypeError, ValueError:
-                    logger.error(u"Renewal failed, bad signature supplied for %s", common_name)
+                except (TypeError, ValueError):
+                    logger.error("Renewal failed, bad signature supplied for %s", common_name)
                     reasons.append("Renewal failed, bad signature supplied")
                 else:
                     try:
@@ -94,20 +94,20 @@ class RequestListResource(object):
                             asymmetric.load_certificate(cert),
                             renewal_signature, buf + body, "sha512")
                     except SignatureError:
-                        logger.error(u"Renewal failed, invalid signature supplied for %s", common_name)
+                        logger.error("Renewal failed, invalid signature supplied for %s", common_name)
                         reasons.append("Renewal failed, invalid signature supplied")
                     else:
                         # At this point renewal signature was valid but we need to perform some extra checks
                         if datetime.utcnow() > expires:
-                            logger.error(u"Renewal failed, current certificate for %s has expired", common_name)
+                            logger.error("Renewal failed, current certificate for %s has expired", common_name)
                             reasons.append("Renewal failed, current certificate expired")
                         elif not config.CERTIFICATE_RENEWAL_ALLOWED:
-                            logger.error(u"Renewal requested for %s, but not allowed by authority settings", common_name)
+                            logger.error("Renewal requested for %s, but not allowed by authority settings", common_name)
                             reasons.append("Renewal requested, but not allowed by authority settings")
                         else:
                             resp.set_header("Content-Type", "application/x-x509-user-cert")
                             _, resp.body = authority._sign(csr, body, overwrite=True)
-                            logger.info(u"Renewed certificate for %s", common_name)
+                            logger.info("Renewed certificate for %s", common_name)
                             return
 
 
@@ -122,10 +122,10 @@ class RequestListResource(object):
                         try:
                             resp.set_header("Content-Type", "application/x-pem-file")
                             _, resp.body = authority._sign(csr, body)
-                            logger.info(u"Autosigned %s as %s is whitelisted", common_name, req.context.get("remote_addr"))
+                            logger.info("Autosigned %s as %s is whitelisted", common_name, req.context.get("remote_addr"))
                             return
                         except EnvironmentError:
-                            logger.info(u"Autosign for %s from %s failed, signed certificate already exists",
+                            logger.info("Autosign for %s from %s failed, signed certificate already exists",
                                 common_name, req.context.get("remote_addr"))
                             reasons.append("Autosign failed, signed certificate already exists")
                         break
@@ -143,7 +143,7 @@ class RequestListResource(object):
             # We should still redirect client to long poll URL below
         except errors.DuplicateCommonNameError:
             # TODO: Certificate renewal
-            logger.warning(u"Rejected signing request with overlapping common name from %s",
+            logger.warning("Rejected signing request with overlapping common name from %s",
                 req.context.get("remote_addr"))
             raise falcon.HTTPConflict(
                 "CSR with such CN already exists",
@@ -152,14 +152,14 @@ class RequestListResource(object):
             push.publish("request-submitted", common_name)
 
         # Wait the certificate to be signed if waiting is requested
-        logger.info(u"Stored signing request %s from %s", common_name, req.context.get("remote_addr"))
+        logger.info("Stored signing request %s from %s", common_name, req.context.get("remote_addr"))
         if req.get_param("wait"):
             # Redirect to nginx pub/sub
             url = config.LONG_POLL_SUBSCRIBE % hashlib.sha256(body).hexdigest()
             click.echo("Redirecting to: %s"  % url)
             resp.status = falcon.HTTP_SEE_OTHER
-            resp.set_header("Location", url.encode("ascii"))
-            logger.debug(u"Redirecting signing request from %s to %s", req.context.get("remote_addr"), url)
+            resp.set_header("Location", url)
+            logger.debug("Redirecting signing request from %s to %s", req.context.get("remote_addr"), url)
         else:
             # Request was accepted, but not processed
             resp.status = falcon.HTTP_202
@@ -173,14 +173,14 @@ class RequestDetailResource(object):
         """
 
         try:
-            path, buf, _ = authority.get_request(cn)
+            path, buf, _, submitted = authority.get_request(cn)
         except errors.RequestDoesNotExist:
-            logger.warning(u"Failed to serve non-existant request %s to %s",
+            logger.warning("Failed to serve non-existant request %s to %s",
                 cn, req.context.get("remote_addr"))
             raise falcon.HTTPNotFound()
 
         resp.set_header("Content-Type", "application/pkcs10")
-        logger.debug(u"Signing request %s was downloaded by %s",
+        logger.debug("Signing request %s was downloaded by %s",
             cn, req.context.get("remote_addr"))
 
         preferred_type = req.client_prefers(("application/json", "application/x-pem-file"))
@@ -195,13 +195,14 @@ class RequestDetailResource(object):
             resp.set_header("Content-Type", "application/json")
             resp.set_header("Content-Disposition", ("attachment; filename=%s.json" % cn))
             resp.body = json.dumps(dict(
+                submitted = submitted,
                 common_name = cn,
                 server = authority.server_flags(cn),
-                address = getxattr(path, "user.request.address"), # TODO: move to authority.py
+                address = getxattr(path, "user.request.address").decode("ascii"), # TODO: move to authority.py
                 md5sum = hashlib.md5(buf).hexdigest(),
                 sha1sum = hashlib.sha1(buf).hexdigest(),
                 sha256sum = hashlib.sha256(buf).hexdigest(),
-                sha512sum = hashlib.sha512(buf).hexdigest()))
+                sha512sum = hashlib.sha512(buf).hexdigest()), cls=MyEncoder)
         else:
             raise falcon.HTTPUnsupportedMediaType(
                 "Client did not accept application/json or application/x-pem-file")
@@ -214,13 +215,16 @@ class RequestDetailResource(object):
         """
         Sign a certificate signing request
         """
-        cert, buf = authority.sign(cn, overwrite=True)
-        # Mailing and long poll publishing implemented in the function above
+        try:
+            cert, buf = authority.sign(cn, ou=req.get_param("ou"), overwrite=True, signer=req.context.get("user").name)
+            # Mailing and long poll publishing implemented in the function above
+        except EnvironmentError: # no such CSR
+            raise falcon.HTTPNotFound()
 
         resp.body = "Certificate successfully signed"
         resp.status = falcon.HTTP_201
         resp.location = os.path.join(req.relative_uri, "..", "..", "signed", cn)
-        logger.info(u"Signing request %s signed by %s from %s", cn,
+        logger.info("Signing request %s signed by %s from %s", cn,
             req.context.get("user"), req.context.get("remote_addr"))
 
     @csrf_protection
@@ -232,6 +236,6 @@ class RequestDetailResource(object):
             # Logging implemented in the function above
         except errors.RequestDoesNotExist as e:
             resp.body = "No certificate signing request for %s found" % cn
-            logger.warning(u"User %s failed to delete signing request %s from %s, reason: %s",
+            logger.warning("User %s failed to delete signing request %s from %s, reason: %s",
                 req.context["user"], cn, req.context.get("remote_addr"), e)
             raise falcon.HTTPNotFound()

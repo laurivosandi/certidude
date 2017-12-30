@@ -15,12 +15,12 @@ from oscrypto.errors import SignatureError
 class SetOfPrintableString(SetOf):
     _child_spec = PrintableString
 
-cms.CMSAttributeType._map['2.16.840.1.113733.1.9.2'] = u"message_type"
-cms.CMSAttributeType._map['2.16.840.1.113733.1.9.3'] = u"pki_status"
-cms.CMSAttributeType._map['2.16.840.1.113733.1.9.4'] = u"fail_info"
-cms.CMSAttributeType._map['2.16.840.1.113733.1.9.5'] = u"sender_nonce"
-cms.CMSAttributeType._map['2.16.840.1.113733.1.9.6'] = u"recipient_nonce"
-cms.CMSAttributeType._map['2.16.840.1.113733.1.9.7'] = u"trans_id"
+cms.CMSAttributeType._map['2.16.840.1.113733.1.9.2'] = "message_type"
+cms.CMSAttributeType._map['2.16.840.1.113733.1.9.3'] = "pki_status"
+cms.CMSAttributeType._map['2.16.840.1.113733.1.9.4'] = "fail_info"
+cms.CMSAttributeType._map['2.16.840.1.113733.1.9.5'] = "sender_nonce"
+cms.CMSAttributeType._map['2.16.840.1.113733.1.9.6'] = "recipient_nonce"
+cms.CMSAttributeType._map['2.16.840.1.113733.1.9.7'] = "trans_id"
 
 cms.CMSAttribute._oid_specs['message_type'] = SetOfPrintableString
 cms.CMSAttribute._oid_specs['pki_status'] = SetOfPrintableString
@@ -41,25 +41,20 @@ class SCEPResource(object):
     def on_get(self, req, resp):
         operation = req.get_param("operation")
         if operation.lower() == "getcacert":
-            resp.stream = keys.parse_certificate(authority.certificate_buf).dump()
+            resp.body = keys.parse_certificate(authority.certificate_buf).dump()
             resp.append_header("Content-Type", "application/x-x509-ca-cert")
             return
-
-        # Parse CA certificate
-        fh = open(config.AUTHORITY_CERTIFICATE_PATH)
-        server_certificate = asymmetric.load_certificate(fh.read())
-        fh.close()
 
         # If we bump into exceptions later
         encrypted_container = b""
         attr_list = [
             cms.CMSAttribute({
-                'type': u"message_type",
-                'values': [u"3"]
+                'type': "message_type",
+                'values': ["3"]
             }),
             cms.CMSAttribute({
-                'type': u"pki_status",
-                'values': [u"2"] # rejected
+                'type': "pki_status",
+                'values': ["2"] # rejected
             })
         ]
 
@@ -98,7 +93,7 @@ class SCEPResource(object):
 
             assert message_digest
             msg = signer["signed_attrs"].dump(force=True)
-            assert msg[0] == b"\xa0", repr(msg[0])
+            assert msg[0] == 160
 
             # Verify signature
             try:
@@ -139,9 +134,9 @@ class SCEPResource(object):
             signed_certificate = asymmetric.load_certificate(buf)
             content = signed_certificate.asn1.dump()
 
-        except SCEPError, e:
+        except SCEPError as e:
             attr_list.append(cms.CMSAttribute({
-                'type': u"fail_info",
+                'type': "fail_info",
                 'values': ["%d" % e.code]
             }))
         else:
@@ -151,17 +146,17 @@ class SCEPResource(object):
             ##################################
 
             degenerate = cms.ContentInfo({
-                'content_type': u"signed_data",
+                'content_type': "signed_data",
                 'content': cms.SignedData({
-                    'version': u"v1",
+                    'version': "v1",
                     'certificates': [signed_certificate.asn1],
                     'digest_algorithms': [cms.DigestAlgorithm({
-                        'algorithm': u"md5"
+                        'algorithm': "md5"
                     })],
                     'encap_content_info': {
-                        'content_type': u"data",
+                        'content_type': "data",
                         'content':  cms.ContentInfo({
-                            'content_type': u"signed_data",
+                            'content_type': "signed_data",
                             'content': None
                         }).dump()
                     },
@@ -180,7 +175,7 @@ class SCEPResource(object):
 
             ri = cms.RecipientInfo({
                 'ktri': cms.KeyTransRecipientInfo({
-                    'version': u"v0",
+                    'version': "v0",
                     'rid': cms.RecipientIdentifier({
                         'issuer_and_serial_number': cms.IssuerAndSerialNumber({
                             'issuer': current_certificate.chosen["tbs_certificate"]["issuer"],
@@ -188,7 +183,7 @@ class SCEPResource(object):
                         }),
                     }),
                     'key_encryption_algorithm': {
-                        'algorithm': u"rsa"
+                        'algorithm': "rsa"
                     },
                     'encrypted_key': asymmetric.rsa_pkcs1v15_encrypt(
                         asymmetric.load_certificate(current_certificate.chosen.dump()), key)
@@ -196,14 +191,14 @@ class SCEPResource(object):
             })
 
             encrypted_container = cms.ContentInfo({
-                'content_type': u"enveloped_data",
+                'content_type': "enveloped_data",
                 'content': cms.EnvelopedData({
-                    'version': u"v1",
+                    'version': "v1",
                     'recipient_infos': [ri],
                     'encrypted_content_info': {
-                        'content_type': u"data",
+                        'content_type': "data",
                         'content_encryption_algorithm': {
-                            'algorithm': u"des",
+                            'algorithm': "des",
                             'parameters': iv
                         },
                         'encrypted_content': encrypted_content
@@ -213,16 +208,16 @@ class SCEPResource(object):
 
             attr_list = [
                 cms.CMSAttribute({
-                    'type': u"message_digest",
+                    'type': "message_digest",
                     'values': [hashlib.sha1(encrypted_container).digest()]
                 }),
                 cms.CMSAttribute({
-                    'type': u"message_type",
-                    'values': [u"3"]
+                    'type': "message_type",
+                    'values': ["3"]
                 }),
                 cms.CMSAttribute({
-                    'type': u"pki_status",
-                    'values': [u"0"] # ok
+                    'type': "pki_status",
+                    'values': ["0"] # ok
                 })
             ]
         finally:
@@ -233,26 +228,26 @@ class SCEPResource(object):
 
             attrs = cms.CMSAttributes(attr_list + [
                 cms.CMSAttribute({
-                    'type': u"recipient_nonce",
+                    'type': "recipient_nonce",
                     'values': [sender_nonce]
                 }),
                 cms.CMSAttribute({
-                    'type': u"trans_id",
+                    'type': "trans_id",
                     'values': [transaction_id]
                 })
             ])
 
             signer = cms.SignerInfo({
                 "signed_attrs": attrs,
-                'version': u"v1",
+                'version': "v1",
                 'sid': cms.SignerIdentifier({
                     'issuer_and_serial_number': cms.IssuerAndSerialNumber({
-                        'issuer': server_certificate.asn1["tbs_certificate"]["issuer"],
-                        'serial_number': server_certificate.asn1["tbs_certificate"]["serial_number"],
+                        'issuer': authority.certificate.issuer,
+                        'serial_number': authority.certificate.serial_number,
                     }),
                 }),
-                'digest_algorithm': algos.DigestAlgorithm({'algorithm': u"sha1"}),
-                'signature_algorithm': algos.SignedDigestAlgorithm({'algorithm': u"rsassa_pkcs1v15"}),
+                'digest_algorithm': algos.DigestAlgorithm({'algorithm': "sha1"}),
+                'signature_algorithm': algos.SignedDigestAlgorithm({'algorithm': "rsassa_pkcs1v15"}),
                 'signature': asymmetric.rsa_pkcs1v15_sign(
                     authority.private_key,
                     b"\x31" + attrs.dump()[1:],
@@ -262,15 +257,15 @@ class SCEPResource(object):
 
             resp.append_header("Content-Type", "application/x-pki-message")
             resp.body = cms.ContentInfo({
-                'content_type': u"signed_data",
+                'content_type': "signed_data",
                 'content': cms.SignedData({
-                    'version': u"v1",
-                    'certificates': [x509.Certificate.load(server_certificate.asn1.dump())], # wat
+                    'version': "v1",
+                    'certificates': [authority.certificate],
                     'digest_algorithms': [cms.DigestAlgorithm({
-                        'algorithm': u"sha1"
+                        'algorithm': "sha1"
                     })],
                     'encap_content_info': {
-                        'content_type': u"data",
+                        'content_type': "data",
                         'content': encrypted_container
                     },
                     'signer_infos': [signer]

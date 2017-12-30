@@ -12,9 +12,9 @@ class User(object):
         self.given_name = given_name
         self.surname = surname
 
-    def __unicode__(self):
+    def __repr__(self):
         if self.given_name and self.surname:
-            return u"%s %s <%s>" % (self.given_name, self.surname, self.mail)
+            return "%s %s <%s>" % (self.given_name, self.surname, self.mail)
         else:
             return self.mail
 
@@ -25,24 +25,21 @@ class User(object):
         assert isinstance(other, User), "%s is not instance of User" % repr(other)
         return self.mail == other.mail
 
-    def __repr__(self):
-        return unicode(self).encode("utf-8")
-
     def is_admin(self):
         if not hasattr(self, "_is_admin"):
             self._is_admin = self.objects.is_admin(self)
         return self._is_admin
 
-    class DoesNotExist(StandardError):
+    class DoesNotExist(Exception):
         pass
 
 
 class PosixUserManager(object):
     def get(self, username):
         _, _, _, _, gecos, _, _ = pwd.getpwnam(username)
-        gecos = gecos.decode("utf-8").split(",")
+        gecos = gecos.split(",")
         full_name = gecos[0]
-        mail = u"%s@%s" % (username, const.DOMAIN)
+        mail = "%s@%s" % (username, const.DOMAIN)
         if full_name and " " in full_name:
             given_name, surname = full_name.split(" ", 1)
             return User(username, mail, given_name, surname)
@@ -76,7 +73,7 @@ class DirectoryConnection(object):
             raise ValueError("Ticket cache at %s not initialized, unable to "
                 "authenticate with computer account against LDAP server!" % config.LDAP_GSSAPI_CRED_CACHE)
         os.environ["KRB5CCNAME"] = config.LDAP_GSSAPI_CRED_CACHE
-        self.conn = ldap.initialize(config.LDAP_ACCOUNTS_URI)
+        self.conn = ldap.initialize(config.LDAP_ACCOUNTS_URI, bytes_mode=False)
         self.conn.set_option(ldap.OPT_REFERRALS, 0)
         click.echo("Connecing to %s using Kerberos ticket cache from %s" %
             (config.LDAP_ACCOUNTS_URI, config.LDAP_GSSAPI_CRED_CACHE))
@@ -93,7 +90,7 @@ class ActiveDirectoryUserManager(object):
         with DirectoryConnection() as conn:
             ft = config.LDAP_USER_FILTER % username
             attribs = "cn", "givenName", "sn", "mail", "userPrincipalName"
-            r = conn.search_s(config.LDAP_BASE, 2, ft.encode("utf-8"), attribs)
+            r = conn.search_s(config.LDAP_BASE, 2, ft, attribs)
             for dn, entry in r:
                 if not dn:
                     continue
@@ -102,35 +99,35 @@ class ActiveDirectoryUserManager(object):
                     surname, = entry.get("sn")
                 else:
                     cn, = entry.get("cn")
-                    if " " in cn:
-                        given_name, surname = cn.split(" ", 1)
+                    if b" " in cn:
+                        given_name, surname = cn.split(b" ", 1)
                     else:
-                        given_name, surname = cn, ""
+                        given_name, surname = cn, b""
 
-                mail, = entry.get("mail") or entry.get("userPrincipalName") or (username + "@" + const.DOMAIN,)
-                return User(username.decode("utf-8"), mail.decode("utf-8"),
+                mail, = entry.get("mail") or entry.get("userPrincipalName") or ((username + "@" + const.DOMAIN).encode("ascii"),)
+                return User(username, mail.decode("ascii"),
                     given_name.decode("utf-8"), surname.decode("utf-8"))
             raise User.DoesNotExist("User %s does not exist" % username)
 
     def filter(self, ft):
         with DirectoryConnection() as conn:
             attribs = "givenName", "surname", "samaccountname", "cn", "mail", "userPrincipalName"
-            r = conn.search_s(config.LDAP_BASE, 2, ft.encode("utf-8"), attribs)
+            r = conn.search_s(config.LDAP_BASE, 2, ft, attribs)
             for dn,entry in r:
                 if not dn:
                     continue
                 username, = entry.get("sAMAccountName")
                 cn, = entry.get("cn")
-                mail, = entry.get("mail") or entry.get("userPrincipalName") or (username + "@" + const.DOMAIN,)
+                mail, = entry.get("mail") or entry.get("userPrincipalName") or (username + b"@" + const.DOMAIN.encode("ascii"),)
                 if entry.get("givenName") and entry.get("sn"):
                     given_name, = entry.get("givenName")
                     surname, = entry.get("sn")
                 else:
                     cn, = entry.get("cn")
-                    if " " in cn:
-                        given_name, surname = cn.split(" ", 1)
+                    if b" " in cn:
+                        given_name, surname = cn.split(b" ", 1)
                     else:
-                        given_name, surname = cn, ""
+                        given_name, surname = cn, b""
                 yield User(username.decode("utf-8"), mail.decode("utf-8"),
                     given_name.decode("utf-8"), surname.decode("utf-8"))
 
@@ -149,7 +146,7 @@ class ActiveDirectoryUserManager(object):
     def is_admin(self, user):
         with DirectoryConnection() as conn:
             ft = config.LDAP_ADMIN_FILTER % user.name
-            r = conn.search_s(config.LDAP_BASE, 2, ft.encode("utf-8"), ["cn"])
+            r = conn.search_s(config.LDAP_BASE, 2, ft, ["cn"])
             for dn, entry in r:
                 if not dn:
                     continue

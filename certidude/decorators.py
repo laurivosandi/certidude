@@ -5,7 +5,7 @@ import logging
 import os
 import types
 from datetime import date, time, datetime, timedelta
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 logger = logging.getLogger("api")
 
@@ -33,7 +33,7 @@ def csrf_protection(func):
                 return func(self, req, resp, *args, **kwargs)
 
         # Kaboom!
-        logger.warning(u"Prevented clickbait from '%s' with user agent '%s'",
+        logger.warning("Prevented clickbait from '%s' with user agent '%s'",
             referrer or "-", req.user_agent)
         raise falcon.HTTPForbidden("Forbidden",
             "No suitable UA or referrer provided, cross-site scripting disabled")
@@ -68,7 +68,7 @@ def serialize(func):
     import falcon
     def wrapped(instance, req, resp, **kwargs):
         if not req.client_accepts("application/json"):
-            logger.debug(u"Client did not accept application/json")
+            logger.debug("Client did not accept application/json")
             raise falcon.HTTPUnsupportedMediaType(
                 "Client did not accept application/json")
         resp.set_header("Cache-Control", "no-cache, no-store, must-revalidate")

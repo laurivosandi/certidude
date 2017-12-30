@@ -1,43 +1,48 @@
+
+'use strict';
+
+const KEYWORDS = [
+    ["Android", "android"],
+    ["iPhone", "iphone"],
+    ["iPad", "ipad"],
+    ["Ubuntu", "ubuntu"],
+    ["Fedora", "fedora"],
+    ["Linux", "linux"],
+    ["Macintosh", "mac"],
+];
+
 jQuery.timeago.settings.allowFuture = true;
 
 function normalizeCommonName(j) {
     return j.replace("@", "--").split(".").join("-"); // dafuq ?!
 }
 
-function setTag(cn, key, value, indicator) {
-    $(indicator).addClass("busy");
-    $.ajax({
-        method: "POST",
-        url: "/api/signed/" + cn + "/tag/",
-        data: { value: value, key: key },
-        dataType: "text",
-        complete: function(xhr, status) {
-            console.info("Tag added successfully", xhr.status,  status);
-        },
-        success: function() {
-            $(indicator).removeClass("busy");
-        },
-        error: function(xhr, status, e) {
-            console.info("Submitting request failed with:", status, e);
-            alert(e);
-        }
-    });
+function onHashChanged() {
+    var query = {};
+    var a = location.hash.substring(1).split('&');
+    for (var i = 0; i < a.length; i++) {
+        var b = a[i].split('=');
+        query[decodeURIComponent(b[0])] = decodeURIComponent(b[1] || '');
+    }
+
+    console.info("Hash is now:", query);
+
+    loadAuthority();
 }
 
-function onTagClicked(event) {
-    var tag = event.target;
-    var cn = $(event.target).attr("data-cn");
-    var id = $(event.target).attr("title");
-    var value = $(event.target).html();
+function onTagClicked(tag) {
+    var cn = $(tag).attr("data-cn");
+    var id = $(tag).attr("title");
+    var value = $(tag).html();
     var updated = prompt("Enter new tag or clear to remove the tag", value);
     if (updated == "") {
-        $(event.target).addClass("busy");
+        $(event.target).addClass("disabled");
         $.ajax({
             method: "DELETE",
             url: "/api/signed/" + cn + "/tag/" + id + "/"
         });
     } else if (updated && updated != value) {
-        $(tag).addClass("busy");
+        $(tag).addClass("disabled");
         $.ajax({
             method: "PUT",
             url: "/api/signed/" + cn + "/tag/" + id + "/",
@@ -47,26 +52,39 @@ function onTagClicked(event) {
                 console.info("Tag added successfully", xhr.status,  status);
             },
             success: function() {
-                $(tag).removeClass("busy");
             },
             error: function(xhr, status, e) {
                 console.info("Submitting request failed with:", status, e);
                 alert(e);
             }
         });
-
     }
 }
 
-function onNewTagClicked(event) {
-    var menu = event.target;
+function onNewTagClicked(menu) {
     var cn = $(menu).attr("data-cn");
-    var key = $(menu).val();
-    $(menu).val("");
+    var key = $(menu).attr("data-key");
     var value = prompt("Enter new " + key + " tag for " + cn);
     if (!value) return;
     if (value.length == 0) return;
-    setTag(cn, key, value, event.target);
+    var $container = $(".tags[data-cn='" + cn + "']");
+    $container.addClass("disabled");
+    $.ajax({
+        method: "POST",
+        url: "/api/signed/" + cn + "/tag/",
+        data: { value: value, key: key },
+        dataType: "text",
+        complete: function(xhr, status) {
+            console.info("Tag added successfully", xhr.status,  status);
+        },
+        success: function() {
+            $container.removeClass("disabled");
+        },
+        error: function(xhr, status, e) {
+            console.info("Submitting request failed with:", status, e);
+            alert(e);
+        }
+    });
 }
 
 function onTagFilterChanged() {
@@ -75,14 +93,16 @@ function onTagFilterChanged() {
 }
 
 function onLogEntry (e) {
-    var entry = JSON.parse(e.data);
-    if ($("#log_level_" + entry.severity).prop("checked")) {
-        console.info("Received log entry:", entry);
-        $("#log_entries").prepend(nunjucks.render("views/logentry.html", {
+    if (e.data) {
+        e = JSON.parse(e.data);
+    }
+
+    if ($("#log-level-" + e.severity).prop("checked")) {
+        $("#log-entries").prepend(env.render("views/logentry.html", {
             entry: {
-                created: new Date(entry.created).toLocaleString(),
-                message: entry.message,
-                severity: entry.severity
+                created: new Date(e.created).toLocaleString(),
+                message: e.message,
+                severity: e.severity
             }
         }));
     }
@@ -98,7 +118,7 @@ function onRequestSubmitted(e) {
             console.info("Going to prepend:", request);
             onRequestDeleted(e); // Delete any existing ones just in case
             $("#pending_requests").prepend(
-                nunjucks.render('views/request.html', { request: request }));
+                env.render('views/request.html', { request: request }));
             $("#pending_requests time").timeago();
         },
         error: function(response) {
@@ -113,6 +133,7 @@ function onRequestDeleted(e) {
 }
 
 function onLeaseUpdate(e) {
+    var slug = normalizeCommonName(e.data);
     console.log("Lease updated:", e.data);
     $.ajax({
         method: "GET",
@@ -121,11 +142,11 @@ function onLeaseUpdate(e) {
         success: function(lease, status, xhr) {
             console.info("Retrieved lease update details:", lease);
             lease.age = (new Date() - new Date(lease.last_seen)) / 1000.0
-            var $status = $("#signed_certificates [data-cn='" + e.data + "'] .status");
-            $status.html(nunjucks.render('views/status.html', {
+            var $lease = $("#certificate-" + slug + " .lease");
+            $lease.html(env.render('views/lease.html', {
                 certificate: {
                     lease: lease }}));
-            $("time", $status).timeago();
+            $("time", $lease).timeago();
 
         },
         error: function(response) {
@@ -149,7 +170,7 @@ function onRequestSigned(e) {
         success: function(certificate, status, xhr) {
             console.info("Retrieved certificate:", certificate);
             $("#signed_certificates").prepend(
-                nunjucks.render('views/signed.html', { certificate: certificate }));
+                env.render('views/signed.html', { certificate: certificate, session: session }));
             $("#signed_certificates time").timeago(); // TODO: optimize?
         },
         error: function(response) {
@@ -165,15 +186,15 @@ function onCertificateRevoked(e) {
 
 function onTagUpdated(e) {
     var cn = e.data;
-    console.log("Tag updated", cn);
+    console.log("Tag updated event recevied", cn);
     $.ajax({
         method: "GET",
         url: "/api/signed/" + cn + "/tag/",
         dataType: "json",
         success:function(tags, status, xhr) {
             console.info("Updated", cn, "tags", tags);
-            $(".tags span[data-cn='" + cn + "']").html(
-                nunjucks.render('views/tags.html', {
+            $(".tags[data-cn='" + cn+"']").html(
+                env.render('views/tags.html', {
                     certificate: {
                         common_name: cn,
                         tags:tags }}));
@@ -191,7 +212,7 @@ function onAttributeUpdated(e) {
         success:function(attributes, status, xhr) {
             console.info("Updated", cn, "attributes", attributes);
             $(".attributes[data-cn='" + cn + "']").html(
-                nunjucks.render('views/attributes.html', {
+                env.render('views/attributes.html', {
                     certificate: {
                         common_name: cn,
                         attributes:attributes }}));
@@ -205,13 +226,42 @@ function onServerStarted() {
 }
 
 function onServerStopped() {
-    $("#container").hide();
-    $("#under_maintenance").show();
+    $("view").html('<div class="loader"></div><p>Server under maintenance</p>');
     console.info("Server stopped");
 
 }
 
-$(document).ready(function() {
+function onSendToken() {
+    $.ajax({
+        method: "POST",
+        url: "/api/token/",
+        data: { username: $("#token_username").val(), mail: $("#token_mail").val() },
+        dataType: "text",
+        complete: function(xhr, status) {
+            console.info("Token sent successfully", xhr.status, status);
+        },
+        success: function(data) {
+            var url = JSON.parse(data).url;
+            console.info("DATA:", url);
+            var code = new QRCode({
+                content: url,
+                width: 512,
+                height: 512,
+            });
+            document.getElementById("token_qrcode").innerHTML = code.svg();
+
+        },
+        error: function(xhr, status, e) {
+            console.info("Submitting request failed with:", status, e);
+            alert(e);
+        }
+    });
+
+
+
+}
+
+function loadAuthority() {
     console.info("Loading CA, to debug: curl " + window.location.href + " --negotiate -u : -H 'Accept: application/json'");
     $.ajax({
         method: "GET",
@@ -223,15 +273,18 @@ $(document).ready(function() {
             } else {
                 var msg = { title: "Error " + response.status, description: response.statusText }
             }
-            $("#container").html(nunjucks.render('views/error.html', { message: msg }));
+            $("#view").html(env.render('views/error.html', { message: msg }));
         },
         success: function(session, status, xhr) {
+            window.session = session;
+
+            console.info("Loaded:", session);
             $("#login").hide();
 
             /**
              * Render authority views
              **/
-            $("#container").html(nunjucks.render('views/authority.html', { session: session, window: window }));
+            $("#view").html(env.render('views/authority.html', { session: session, window: window }));
             $("time").timeago();
             if (session.authority) {
                 $("#log input").each(function(i, e) {
@@ -251,7 +304,7 @@ $(document).ready(function() {
                     console.log("Received server-sent event:", event);
                 }
 
-                source.addEventListener("log-entry", onLogEntry);
+
                 source.addEventListener("lease-update", onLeaseUpdate);
                 source.addEventListener("request-deleted", onRequestDeleted);
                 source.addEventListener("request-submitted", onRequestSubmitted);
@@ -268,11 +321,38 @@ $(document).ready(function() {
                 $("#section-revoked").show();
                 $("#section-signed").show();
                 $("#section-requests").show();
+                $("#section-token").show();
+
+
             }
 
             $("nav#menu li").click(function(e) {
                 $("section").hide();
                 $("section#" + $(e.target).attr("data-section")).show();
+            });
+
+
+
+            $("#enroll").click(function() {
+                var keys = forge.pki.rsa.generateKeyPair(1024);
+
+                $.ajax({
+                    method: "POST",
+                    url: "/api/token/",
+                    data: "username=" + session.user.name,
+                    complete: function(xhr, status) {
+                        console.info("Token generated successfully:", xhr, status);
+
+                    },
+                    error: function(xhr, status, e) {
+                        console.info("Token generation failed:", status, e);
+                        alert(e);
+                    }
+                });
+
+
+
+                var privateKeyBuffer = forge.pki.privateKeyToPem(keys.privateKey);
             });
 
             /**
@@ -288,6 +368,9 @@ $(document).ready(function() {
                     }
                 });
             });
+
+
+
 
             /**
              * Bind key up event of search bar
@@ -331,27 +414,44 @@ $(document).ready(function() {
              * Fetch log entries
              */
             if (session.features.logging) {
-                $("#section-log").show();
-                $.ajax({
-                    method: "GET",
-                    url: "/api/log/",
-                    dataType: "json",
-                    success:function(entries, status, xhr) {
-                        console.info("Got", entries.length, "log entries");
-                        for (var j = 0; j < entries.length; j++) {
-                            if ($("#log_level_" + entries[j].severity).prop("checked")) {
-                                $("#log_entries").append(nunjucks.render("views/logentry.html", {
-                                    entry: {
-                                        created: new Date(entries[j].created).toLocaleString("et-EE"),
-                                        message: entries[j].message,
-                                        severity: entries[j].severity
-                                    }
-                                }));
-                            }
+                $("nav .nav-link.log").removeClass("disabled").click(function() {
+                    $("#view-dashboard").hide();
+                    $("#view-log").show();
+                    $.ajax({
+                        method: "GET",
+                        url: "/api/log/",
+                        dataType: "json",
+                        success: function(entries, status, xhr) {
+                            console.info("Got", entries.length, "log entries");
+                            console.info("j=", entries.length-1);
+                            for (var j = entries.length-1; j--; ) {
+                                onLogEntry(entries[j]);
+                            };
+                            source.addEventListener("log-entry", onLogEntry);
                         }
-                    }
+                    });
                 });
             }
         }
     });
+}
+
+function datetimeFilter(s) {
+    return new Date(s);
+}
+
+function serialFilter(s) {
+    return s.substring(0,8) + " " +
+        s.substring(8,12) + " " +
+        s.substring(12,16) + " " +
+        s.substring(16,28) + " " +
+        s.substring(28,32) + " " +
+        s.substring(32);
+}
+
+$(document).ready(function() {
+    window.env = new nunjucks.Environment();
+    env.addFilter("datetime", datetimeFilter);
+    env.addFilter("serial", serialFilter);
+    onHashChanged();
 });

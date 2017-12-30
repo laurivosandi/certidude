@@ -3,7 +3,7 @@
 import click
 import re
 import os
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 SCRIPTS = {}
 

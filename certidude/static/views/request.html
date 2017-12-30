@@ -1,40 +1,65 @@
-<li id="request-{{ request.common_name | replace('@', '--') | replace('.', '-') }}" class="filterable">
+<p>
+<div id="request-{{ request.common_name | replace('@', '--') | replace('.', '-') }}" class="card">
+  <div class="card-header">
+    {% if certificate.server %}
+      <i class="fa fa-server"></i>
+    {% else %}
+      <i class="fa fa-laptop"></i>
+    {% endif %}
+    {{ request.common_name }}
+  </div>
+  <div class="card-block">
+    <p class="mb-1">
+      Submitted
+      <time class="timeago" datetime="{{ request.submitted }}">Request was submitted {{ request.submitted }}</time>
+      from
+      {% if request.hostname %}{{request.hostname}} ({{request.address}}){% else %}{{request.address}}{% endif %}
+    </p>
+    <div class="btn-group">
+      <button type="button" class="btn btn-secondary" data-toggle="collapse" data-target="#details-{{ request.sha256sum }}"><i class="fa fa-list"></i> Details</button>
+      <button type="button" class="btn btn-danger"
+        data-loading-text="<i class='fa fa-circle-o-notch fa-spin'></i> Rejecting..."
+        onclick="javascript:$(this).button('loading');$.ajax({url:'/api/request/{{request.common_name}}/?sha256sum={{ request.sha256sum }}',type:'delete'});">
+        <i class="fa fa-trash"></i> Reject</button>
+      <button type="button" class="btn btn-success"
+        data-loading-text="<i class='fa fa-circle-o-notch fa-spin'></i> Processing Order"
+        onclick="javascript:$(this).button('loading');$.ajax({url:'/api/request/{{request.common_name}}/?sha256sum={{ request.sha256sum }}',type:'post'});">
+        <i class="fa fa-thumbs-up"></i> Sign</button>
+      <button type="button" class="btn btn-success dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+        <span class="sr-only">Toggle Dropdown</span>
+      </button>
+      <div class="dropdown-menu">
+        {% for p in session.authority.signature.profiles %}
+          <a class="dropdown-item" href="/api/request/?organizational_unit={{ p.organizational_unit }}&lifetime={{ p.lifetime }}&flags={{ p.flags }}">
+            {% if p.organizational_unit %}
+            {{ p.organizational_unit }} ({{ p.flags }}){% else %}
+            {{ p.flags | capitalize }}{% endif %}, expires in {{ p.lifetime }} days</a>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="collapse" id="details-{{ request.sha256sum }}">
+      <p>Use following to fetch the signing request:</p>
+      <div class="bd-example">
+        <pre><code class="language-sh" data-lang="sh">wget <a href="/api/request/{{ request.common_name }}/">http://{{ window.location.hostname }}/api/request/{{ request.common_name }}/</a>
+curl http://{{ window.location.hostname }}/api/request/{{ request.common_name }}/ \
+  | openssl req -text -noout</code></pre>
+      </div>
 
-<a class="button icon download" href="/api/request/{{request.common_name}}/">Fetch</a>
-<button class="icon sign" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/request/{{request.common_name}}/?sha256sum={{ request.sha256sum }}',type:'post'});">Sign</button>
-<button class="icon revoke" onClick="javascript:$(this).addClass('busy');$.ajax({url:'/api/request/{{request.common_name}}/?sha256sum={{ request.sha256sum }}',type:'delete'});">Delete</button>
+      <div style="overflow: auto; max-width: 100%;">
+        <table class="table" id="signed_certificates">
+          <tbody>
+            <tr><th>Common name</th><td>{{ request.common_name }}</td></tr>
+            <tr><th>Submitted</th><td>{{ request.submitted | datetime }}
+            {% if request.address %}from {{ request.address }}
+            {% if request.hostname %} ({{ request.hostname }}){% endif %}{% endif %}</td></tr>
+            <tr><th>MD5</th><td>{{ request.md5sum }}</td></tr>
+            <tr><th>SHA1</th><td>{{ request.sha1sum }}</td></tr>
+            <tr><th>SHA256</th><td>{{ request.sha256sum }}</td></tr>
+          </tbody>
+        </table>
+      </div>
 
-
-<div class="monospace">
-{% if request.server %}
-{% include 'img/iconmonstr-server-1.svg' %}
-{% else %}
-{% include 'img/iconmonstr-certificate-15.svg' %}
-{% endif %}
-
-{{request.common_name}} from {{request.address}}
+    </div>
+  </div>
 </div>
-
-{% if request.email_address %}
-<div class="email">{% include 'img/iconmonstr-email-2.svg' %} {{ request.email_address }}</div>
-{% endif %}
-
-<div class="monospace">
-{% include 'img/iconmonstr-key-3.svg' %}
-<span title="SHA-256 of certificate signing request">
-{{ request.sha256sum }}
-</span>
-{{ request.key_length }}-bit
-{{ request.key_type }}
-</div>
-
-{% set key_usage = request.key_usage %}
-{% if key_usage %}
-<div>
-{% include 'img/iconmonstr-flag-3.svg' %}
-{{request.key_usage}}
-</div>
-{% endif %}
-
-</li>
-
+</p>

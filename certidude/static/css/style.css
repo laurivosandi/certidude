@@ -1,3 +1,19 @@
+
+.loader-container {
+    margin: 20% auto 0 auto;
+    text-align: center;
+}
+
+.loader {
+    border: 16px solid #f3f3f3; /* Light grey */
+    border-top: 16px solid #3498db; /* Blue */
+    border-radius: 50%;
+    width: 120px;
+    height: 120px;
+    animation: spin 2s linear infinite;
+    display: inline-block;
+}
+
 @font-face {
   font-family: 'PT Sans Narrow';
   font-style: normal;
@@ -19,231 +35,55 @@
   src: local('Gentium Basic'), local('GentiumBasic'), url('../fonts/gentium-basic.woff2') format('woff2');
 }
 
-svg {
-    position: relative;
-    top: 0.5em;
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
 }
 
-img {
-    max-width: 100%;
-    max-height: 100%;
+body, input {
 }
 
-#pending_requests .notify {
-    display: none;
-}
-
-#pending_requests .notify:only-child {
-    display: block;
-}
-
-
-button, .button, input[type='search'], input[type='text'] {
-    border: 1pt solid #ccc;
-    border-radius: 6px;
-}
-
-button, .button {
-    color: #000;
-    float: right;
-    background-color: #eee;
-    margin: 2px;
-    padding: 6px 12px;
-    background-position: 6px;
-    box-sizing: border-box;
-}
-
-input[type='search'], input[type='text'] {
-    padding: 4px 4px 4px 36px;
-    background-position: 6px;
-    width: 100%;
-}
-
-button:disabled, .button:disabled {
-    color: #888;
-}
-
-.monospace {
-    font-family: 'Ubuntu Mono', courier, monospace;
-}
-
-footer {
-    display: block;
-    text-align: center;
-}
-
-a {
-    text-decoration: none;
-    color: #44c;
-}
-
-html,body {
-    margin: 0;
-    padding: 0 0 1em 0;
-}
-
-body {
-    background: #fff;
-}
-
-.comment {
-    color: #aaf;
-}
-
-table th, table td {
-    border: 1px solid #ccc;
-    padding: 2px;
-}
-
-h1, h2, th {
-    font-family: 'Gentium Basic';
-}
-
-h1 {
-    text-align: center;
-    font-size: 22pt;
-}
-
-h2 {
-    font-size: 18pt;
-}
-
-h2 svg {
-    position: relative;
-    top: 16px;
-}
-
-p, td, footer, li, button, input, select {
-    font-family: 'PT Sans Narrow';
-    font-size: 14pt;
+body, input {
 }
 
 pre {
+    font-family: 'Ubuntu Mono';
+    background: #333;
     overflow: auto;
-    border: 1px solid #000;
-    background: #444;
-    color: #fff;
-    font-size: 12pt;
-    padding: 4px;
-    border-radius: 6px;
-    margin: 0 0;
+    border: 1px solid #292929;
+    border-radius: 4px;
+    color: #ddd;
+    padding: 6px 10px;
+}
+
+pre code a {
+    color: #eef;
+}
+
+h1, h2 {
 }
 
 
-.container {
-    max-width: 960px;
-    padding: 0 1em;
-    margin: 0 auto;
+#view {
+    margin: 5em auto 5em auto;
+
 }
 
-#signed ul,
-#requests ul,
-#log ul {
-    list-style: none;
-    margin: 1em 0;
-    padding: 0;
+footer div {
+    text-align: center;
 }
 
-#signed li,
-#requests li,
-#log li {
-    margin: 4px 0;
-    padding: 4px 0;
-    clear: both;
-    border-top: 1px dashed #ccc;
+svg {
+    position: relative;
 }
 
-#menu {
-    background-color: #444;
-}
-
-#menu li {
-    color: #fff;
-    border: none;
-    display: inline;
-    margin: 1mm 5mm 1mm 0;
-    line-height: 200%;
+.badge {
     cursor: pointer;
 }
 
-.icon{
-    background-size: 24px;
-    background-position: 8px 5px;
-    padding-left: 36px;
-    background-repeat: no-repeat;
-    display: block;
-    vertical-align: text-bottom;
-    text-decoration: none;
+.disabled {
+    pointer-events: none;
+    opacity: 0.4;
+    cursor: not-allowed;
 }
 
-#log_entries li span.icon {
-    background-size: 24px;
-    padding-left: 42px;
-    padding-top: 2px;
-    padding-bottom: 2px;
-}
-
-.tags .tag,
-.attributes .attribute {
-    display: inline;
-    background-size: 24px;
-    background-position: 0 4px;
-    padding-top: 4px;
-    padding-bottom: 4px;
-    padding-right: 1em;
-    line-height: 200%;
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.attribute {
-    opacity: 0.25;
-}
-
-.attribute:hover {
-    opacity: 1;
-}
-
-
-select {
-   -webkit-appearance: none;
-   -moz-appearance: none;
-   appearance: none;
-   background: none;
-   border: none;
-   box-sizing: border-box;
-
-}
-
-.icon.tag,
-.icon.attribute { background-image: url("../img/iconmonstr-tag-3.svg"); }
-
-.icon.critical { background-image: url("../img/iconmonstr-error-4.svg"); }
-.icon.error { background-image: url("../img/iconmonstr-error-4.svg"); }
-.icon.warning { background-image: url("../img/iconmonstr-warning-8.svg"); }
-.icon.info { background-image: url("../img/iconmonstr-info-8.svg"); }
-
-.icon.revoke { background-image: url("../img/iconmonstr-x-mark-8.svg"); }
-.icon.download { background-image: url("../img/iconmonstr-download-12.svg"); }
-.icon.sign { background-image: url("../img/iconmonstr-pen-14.svg"); }
-.icon.search { background-image: url("../img/iconmonstr-magnifier-4.svg"); }
-
-.icon.phone { background-image: url("../img/iconmonstr-mobile-phone-7.svg"); }
-.icon.location { background-image: url("../img/iconmonstr-compass-7.svg"); }
-.icon.room { background-image: url("../img/iconmonstr-home-7.svg"); }
-.icon.serial { background-image: url("../img/iconmonstr-barcode-4.svg"); }
-
-.icon.wireless { background-image: url("../img/iconmonstr-wireless-6.svg"); }
-.icon.password { background-image: url("../img/iconmonstr-lock-3.svg"); }
-
-.icon.upload { background-image: url("../img/iconmonstr-upload-17.svg"); }
-
-.icon.dist,
-.icon.kernel { background-image: url("../img/iconmonstr-linux-os-1.svg"); }
-.icon.if { background-image: url("../img/iconmonstr-sitemap-5.svg"); }
-.icon.cpu,
-.icon.mem,
-.icon.ram { background-image: url("../img/iconmonstr-cpu-1.svg"); }
-
-/* Make sure this is the last one */
-.icon.busy{background-image:url("https://software.opensuse.org/assets/ajax-loader-ea46060b6c9f42822a3d58d075c83ea2.gif");}

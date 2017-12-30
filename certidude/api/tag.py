@@ -12,10 +12,10 @@ class TagResource(object):
     @login_required
     @authorize_admin
     def on_get(self, req, resp, cn):
-        path, buf, cert = authority.get_signed(cn)
+        path, buf, cert, signed, expires = authority.get_signed(cn)
         tags = []
         try:
-            for tag in getxattr(path, "user.xdg.tags").split(","):
+            for tag in getxattr(path, "user.xdg.tags").decode("utf-8").split(","):
                 if "=" in tag:
                     k, v = tag.split("=", 1)
                 else:
@@ -30,7 +30,7 @@ class TagResource(object):
     @login_required
     @authorize_admin
     def on_post(self, req, resp, cn):
-        path, buf, cert = authority.get_signed(cn)
+        path, buf, cert, signed, expires = authority.get_signed(cn)
         key, value = req.get_param("key", required=True), req.get_param("value", required=True)
         try:
             tags = set(getxattr(path, "user.xdg.tags").decode("utf-8").split(","))
@@ -41,7 +41,7 @@ class TagResource(object):
         else:
             tags.add("%s=%s" % (key,value))
         setxattr(path, "user.xdg.tags", ",".join(tags).encode("utf-8"))
-        logger.debug(u"Tag %s=%s set for %s" % (key, value, cn))
+        logger.debug("Tag %s=%s set for %s" % (key, value, cn))
         push.publish("tag-update", cn)
 
 
@@ -50,7 +50,7 @@ class TagDetailResource(object):
     @login_required
     @authorize_admin
     def on_put(self, req, resp, cn, tag):
-        path, buf, cert = authority.get_signed(cn)
+        path, buf, cert, signed, expires = authority.get_signed(cn)
         value = req.get_param("value", required=True)
         try:
             tags = set(getxattr(path, "user.xdg.tags").decode("utf-8").split(","))
@@ -65,19 +65,19 @@ class TagDetailResource(object):
         else:
             tags.add(value)
         setxattr(path, "user.xdg.tags", ",".join(tags).encode("utf-8"))
-        logger.debug(u"Tag %s set to %s for %s" % (tag, value, cn))
+        logger.debug("Tag %s set to %s for %s" % (tag, value, cn))
         push.publish("tag-update", cn)
 
     @csrf_protection
     @login_required
     @authorize_admin
     def on_delete(self, req, resp, cn, tag):
-        path, buf, cert = authority.get_signed(cn)
-        tags = set(getxattr(path, "user.xdg.tags").split(","))
+        path, buf, cert, signed, expires = authority.get_signed(cn)
+        tags = set(getxattr(path, "user.xdg.tags").decode("utf-8").split(","))
         tags.remove(tag)
         if not tags:
             removexattr(path, "user.xdg.tags")
         else:
             setxattr(path, "user.xdg.tags", ",".join(tags))
-        logger.debug(u"Tag %s removed for %s" % (tag, cn))
+        logger.debug("Tag %s removed for %s" % (tag, cn))
         push.publish("tag-update", cn)

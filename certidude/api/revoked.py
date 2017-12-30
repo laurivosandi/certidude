@@ -18,25 +18,25 @@ class RevocationListResource(object):
             resp.set_header("Content-Type", "application/x-pkcs7-crl")
             resp.append_header(
                 "Content-Disposition",
-                ("attachment; filename=%s.crl" % const.HOSTNAME).encode("ascii"))
+                ("attachment; filename=%s.crl" % const.HOSTNAME))
             # Convert PEM to DER
-            logger.debug(u"Serving revocation list (DER) to %s", req.context.get("remote_addr"))
+            logger.debug("Serving revocation list (DER) to %s", req.context.get("remote_addr"))
             resp.body = export_crl(pem=False)
         elif req.client_accepts("application/x-pem-file"):
             if req.get_param_as_bool("wait"):
                 url = config.LONG_POLL_SUBSCRIBE % "crl"
                 resp.status = falcon.HTTP_SEE_OTHER
-                resp.set_header("Location", url.encode("ascii"))
-                logger.debug(u"Redirecting to CRL request to %s", url)
+                resp.set_header("Location", url)
+                logger.debug("Redirecting to CRL request to %s", url)
                 resp.body = "Redirecting to %s" % url
             else:
                 resp.set_header("Content-Type", "application/x-pem-file")
                 resp.append_header(
                     "Content-Disposition",
-                    ("attachment; filename=%s-crl.pem" % const.HOSTNAME).encode("ascii"))
-                logger.debug(u"Serving revocation list (PEM) to %s", req.context.get("remote_addr"))
+                    ("attachment; filename=%s-crl.pem" % const.HOSTNAME))
+                logger.debug("Serving revocation list (PEM) to %s", req.context.get("remote_addr"))
                 resp.body = export_crl()
         else:
-            logger.debug(u"Client %s asked revocation list in unsupported format" % req.context.get("remote_addr"))
+            logger.debug("Client %s asked revocation list in unsupported format" % req.context.get("remote_addr"))
             raise falcon.HTTPUnsupportedMediaType(
                 "Client did not accept application/x-pkcs7-crl or application/x-pem-file")

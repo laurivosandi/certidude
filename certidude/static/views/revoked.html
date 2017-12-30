@@ -1,0 +1,71 @@
+<div id="certificate-{{ certificate.common_name | replace('@', '--') | replace('.', '-') }}" class="card">
+  <div class="card-body">
+    <div class="card-header">
+      {% if certificate.server %}
+        <i class="fa fa-server"></i>
+      {% else %}
+        <i class="fa fa-laptop"></i>
+      {% endif %}
+      {{ certificate.common_name }}
+    </div>
+    <div class="card-block">
+      <p>
+        Serial number {{ certificate.serial | serial }}.
+      </p>
+      <p>
+        Revoked
+        <time class="timeago" datetime="{{ certificate.revoked }}">Certificate revoked {{ certificate.revoked }}</time>.
+        Valid from {{ certificate.signed | datetime }} to {{ certificate.expired | datetime }}.
+      </p>
+
+      <div class="btn-group">
+        <button type="button" class="btn btn-secondary" data-toggle="collapse" data-target="#details-{{ certificate.sha256sum }}"><i class="fa fa-list"></i> Details</button>
+        <div class="btn-group">
+          <a href="/api/signed/{{ certificate.common_name }}/" class="btn btn-secondary hidden-xs-down"><i class="fa fa-download"></i> Download</a>
+        </div>
+      </div>
+      <div class="collapse" id="details-{{ certificate.sha256sum }}">
+        <p>To fetch certificate:</p>
+
+        <div class="bd-example">
+          <pre><code class="language-sh" data-lang="sh">wget <a href="/api/revoked/{{ certificate.serial }}/">http://{{ window.location.hostname }}/api/revoked/{{ certificate.serial }}/</a>
+curl http://{{ window.location.hostname }}/api/revoked/{{ certificate.serial }}/ \
+  | openssl x509 -text -noout</code></pre>
+        </div>
+
+        <p>To perform online certificate status request</p>
+        <pre><code class="language-bash" data-lang="bash">curl http://{{ window.location.hostname }}/api/certificate/ > session.pem
+openssl ocsp -issuer session.pem -CAfile session.pem \
+  -url http://{{ window.location.hostname }}/api/ocsp/ \
+  -serial 0x{{ certificate.serial }}</span></code></pre>
+
+        <p>
+          <table class="table" id="signed_certificates">
+            <tbody>
+              <tr><th>Common name</th><td>{{ certificate.common_name }}</td></tr>
+              <tr><th>Organizational unit</th><td>{{ certificate.organizational_unit }}</td></tr>
+              <tr><th>Serial number</th><td>{{ certificate.serial }}</td></tr>
+              <tr><th>Signed</th><td>{{ certificate.signed | datetime  }}
+                {% if certificate.signer %}, by {{ certificate.signer }}{% endif %}</td></tr>
+              <tr><th>Expired</th><td>{{ certificate.expired | datetime  }}</td></tr>
+              {% if certificate.lease %}
+              <tr><th>Lease</th><td><a href="http://{{ certificate.lease.inner_address }}">{{ certificate.lease.inner_address }}</a> at {{ certificate.lease.last_seen | datetime  }}
+                from <a href="https://geoiptool.com/en/?ip={{ certificate.lease.outer_address }}" target="_blank">{{ certificate.lease.outer_address }}</a>
+              </td></tr>
+              {% endif %}
+
+              <!--
+              <tr><th>MD5</th><td>{{ certificate.md5sum }}</td></tr>
+              <tr><th>SHA1</th><td>{{ certificate.sha1sum }}</td></tr>
+              -->
+              <tr><th>SHA256</th><td>{{ certificate.sha256sum }}</td></tr>
+            </tbody>
+          </table>
+        </p>
+
+
+      </div>
+    </div>
+  </div>
+</div>
+<br/>

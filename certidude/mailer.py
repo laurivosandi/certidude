@@ -8,11 +8,11 @@ from jinja2 import Environment, PackageLoader
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
-from urlparse import urlparse
+from urllib.parse import urlparse
 
 env = Environment(loader=PackageLoader("certidude", "templates/mail"))
 
-def send(template, to=None, include_admins=True, attachments=(), **context):
+def send(template, to=None, secondary=None, include_admins=True, attachments=(), **context):
     from certidude import authority, config
 
     recipients = ()
@@ -20,6 +20,9 @@ def send(template, to=None, include_admins=True, attachments=(), **context):
         recipients = tuple(User.objects.filter_admins())
     if to:
         recipients = (to,) + recipients
+    if secondary:
+        recipients = (secondary,) + recipients
+
 
     click.echo("Sending e-mail %s to %s" % (template, recipients))
 
@@ -27,12 +30,12 @@ def send(template, to=None, include_admins=True, attachments=(), **context):
     html = markdown(text)
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject.encode("utf-8")
+    msg["Subject"] = subject
     msg["From"] = "%s <%s>" % (config.MAILER_NAME, config.MAILER_ADDRESS)
-    msg["To"] = ", ".join([unicode(j) for j in recipients]).encode("utf-8")
+    msg["To"] = ", ".join([str(j) for j in recipients])
 
-    part1 = MIMEText(text.encode("utf-8"), "plain", "utf-8")
-    part2 = MIMEText(html.encode("utf-8"), "html", "utf-8")
+    part1 = MIMEText(text, "plain", "utf-8")
+    part2 = MIMEText(html, "html", "utf-8")
 
     msg.attach(part1)
     msg.attach(part2)
@@ -46,4 +49,4 @@ def send(template, to=None, include_admins=True, attachments=(), **context):
     if config.MAILER_ADDRESS:
         click.echo("Sending to: %s" % msg["to"])
         conn = smtplib.SMTP("localhost")
-        conn.sendmail(config.MAILER_ADDRESS, [u.mail for u in recipients], msg.as_string())
+        conn.sendmail(config.MAILER_ADDRESS, [str(u) for u in recipients], msg.as_string())

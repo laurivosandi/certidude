@@ -4,3 +4,6 @@ certbuilder
 crlbuilder
 csrbuilder
 oscrypto
+requests
+jinja2
+ipsecparse
