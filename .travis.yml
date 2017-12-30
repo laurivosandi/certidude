@@ -1,24 +1,22 @@
 sudo: required
-language: python
+language: generic
 dist: trusty
-python:
-  - "3.4"
+env:
+  - COVERAGE_FILE=/tmp/.coverage
 after_success:
   - codecov
-virtualenv:
-  system_site_packages: true
 install:
   - sudo mkdir -p /etc/systemd/system # Until Travis is stuck with 14.04
-  - sudo -E pip install -r requirements.txt
-  - sudo -E pip install codecov pytest-cov requests-kerberos
-  - sudo -E pip install -e .
+  - sudo easy_install3 pip
+  - sudo pip3 install -r requirements.txt
+  - sudo pip3 install codecov pytest-cov requests-kerberos
+  - sudo pip3 install -e .
 script:
   - sudo find /home/ -type d -exec chmod 755 {} \; # Allow certidude serve to read templates
-  - sudo chmod 777 . # Allow forked processes to write .coverage files
-  - sudo -E coverage run --parallel-mode --source certidude -m py.test tests
-  - sudo -E coverage combine
-  - sudo -E coverage report
-  - sudo -E coverage xml -i
+  - sudo coverage run --parallel-mode --source certidude -m py.test tests
+  - sudo coverage combine
+  - sudo coverage report
+  - sudo coverage xml -i
 cache:
   directories:
     - $HOME/.cache/pip
@@ -27,6 +25,7 @@ addons:
   apt:
     packages:
     - software-properties-common
+    - python3-setuptools
     - python3-click
     - python3-mysql.connector
     - python3-pyxattr
