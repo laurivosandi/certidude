@@ -451,8 +451,10 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
                     click.echo("Re-running systemd generators for OpenVPN...")
                     os.system("systemctl daemon-reload")
                 if not os.path.exists("/etc/systemd/system/openvpn-reconnect.service"):
-                    with open("/etc/systemd/system/openvpn-reconnect.service", "wb") as fh:
+                    with open("/etc/systemd/system/openvpn-reconnect.service.part", "w") as fh:
                         fh.write(env.get_template("client/openvpn-reconnect.service").render(context))
+                    os.rename("/etc/systemd/system/openvpn-reconnect.service.part",
+                        "/etc/systemd/system/openvpn-reconnect.service")
                     click.echo("Created /etc/systemd/system/openvpn-reconnect.service")
                 click.echo("Starting OpenVPN...")
                 os.system("service openvpn start")
