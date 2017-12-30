@@ -9,9 +9,9 @@ virtualenv:
   system_site_packages: true
 install:
   - sudo mkdir -p /etc/systemd/system # Until Travis is stuck with 14.04
-  - sudo pip3 install -r requirements.txt
-  - sudo pip3 install codecov pytest-cov requests-kerberos
-  - sudo pip3 install -e .
+  - sudo pip install -r requirements.txt
+  - sudo pip install codecov pytest-cov requests-kerberos
+  - sudo pip install -e .
 script:
   - sudo find /home/ -type d -exec chmod 755 {} \; # Allow certidude serve to read templates
   - sudo chmod 777 . # Allow forked processes to write .coverage files
@@ -27,7 +27,6 @@ addons:
   apt:
     packages:
     - software-properties-common
-    - python3-pip
     - python3-click
     - python3-mysql.connector
     - python3-pyxattr
