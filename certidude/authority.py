@@ -43,10 +43,22 @@ def self_enroll():
     from certidude import const
     common_name = const.FQDN
     directory = os.path.join("/var/lib/certidude", const.FQDN)
-    # Sign certificate used for HTTPS
-    public_key, private_key = asymmetric.generate_pair('rsa', bit_size=2048)
-    with open(os.path.join(directory, "self_key.pem"), 'wb') as fh:
-        fh.write(asymmetric.dump_private_key(private_key, None))
+    self_key_path = os.path.join(directory, "self_key.pem")
+
+    try:
+        path, buf, cert, signed, expires = get_signed(common_name)
+        public_key = asymmetric.load_public_key(path)
+        private_key = asymmetric.load_private_key(self_key_path)
+    except FileNotFoundError: # certificate or private key not found
+        with open(self_key_path, 'wb') as fh:
+            public_key, private_key = asymmetric.generate_pair('rsa', bit_size=2048)
+            fh.write(asymmetric.dump_private_key(private_key, None))
+    else:
+        now = datetime.utcnow()
+        if now - timedelta(days=1) < expires:
+            click.echo("Certificate %s still valid, delete to self-enroll again" % path)
+            return
+
     builder = CSRBuilder({"common_name": common_name}, public_key)
     request = builder.build(private_key)
     with open(os.path.join(directory, "requests", common_name + ".pem"), "wb") as fh:
