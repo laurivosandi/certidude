@@ -11,7 +11,7 @@ from asn1crypto.csr import CertificationRequest
 from base64 import b64decode
 from certidude import config, authority, push, errors
 from certidude.auth import login_required, login_optional, authorize_admin
-from certidude.decorators import csrf_protection, MyEncoder
+from certidude.decorators import csrf_protection, MyEncoder, serialize
 from certidude.firewall import whitelist_subnets, whitelist_content_types
 from datetime import datetime
 from oscrypto import asymmetric
@@ -38,8 +38,14 @@ class RequestListResource(object):
         reasons = []
         body = req.stream.read(req.content_length)
 
-        header, _, der_bytes = pem.unarmor(body)
-        csr = CertificationRequest.load(der_bytes)
+        try:
+            header, _, der_bytes = pem.unarmor(body)
+            csr = CertificationRequest.load(der_bytes)
+        except ValueError:
+            raise falcon.HTTPBadRequest(
+                "Bad request",
+                "Malformed certificate signing request")
+
         common_name = csr["certification_request_info"]["subject"].native["common_name"]
 
         """
@@ -164,6 +170,9 @@ class RequestListResource(object):
             # Request was accepted, but not processed
             resp.status = falcon.HTTP_202
             resp.body = ". ".join(reasons)
+            if req.client_accepts("application/json"):
+                resp.body = json.dumps({"title":"Accepted", "description":resp.body},
+                    cls=MyEncoder)
 
 
 class RequestDetailResource(object):

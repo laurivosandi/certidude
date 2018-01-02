@@ -67,13 +67,15 @@ def serialize(func):
     """
     import falcon
     def wrapped(instance, req, resp, **kwargs):
-        if not req.client_accepts("application/json"):
-            logger.debug("Client did not accept application/json")
-            raise falcon.HTTPUnsupportedMediaType(
-                "Client did not accept application/json")
-        resp.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
-        resp.set_header("Pragma", "no-cache")
-        resp.set_header("Expires", "0")
-        resp.body = json.dumps(func(instance, req, resp, **kwargs), cls=MyEncoder)
+        retval = func(instance, req, resp, **kwargs)
+        if not resp.body and not resp.location:
+            if not req.client_accepts("application/json"):
+                logger.debug("Client did not accept application/json")
+                raise falcon.HTTPUnsupportedMediaType(
+                    "Client did not accept application/json")
+            resp.set_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            resp.set_header("Pragma", "no-cache")
+            resp.set_header("Expires", "0")
+            resp.body = json.dumps(retval, cls=MyEncoder)
     return wrapped
 

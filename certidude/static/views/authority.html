@@ -5,34 +5,34 @@
           <button type="button" class="close" data-dismiss="modal">&times;</button>
           <h4 class="modal-title">Request submission</h4>
         </div>
-        <div class="modal-body">
+        <form action="/api/request/" method="post">
+          <div class="modal-body">
+            <h5>Certidude client</h5>
 
-          <h5>Certidude client</h5>
-
-          <p>Submit a certificate signing request from Mac OS X, Ubuntu or Fedora:</p>
-          <div class="highlight">
-            <pre><code>easy_install pip;
+            <p>Submit a certificate signing request from Mac OS X, Ubuntu or Fedora:</p>
+            <div class="highlight">
+              <pre><code>easy_install pip;
 pip3 install certidude;
 certidude bootstrap {{session.authority.common_name}}
-</code></pre>
-          </div>
+  </code></pre>
+            </div>
 
-          <h5>UNIX & UNIX-like</h5>
+            <h5>UNIX & UNIX-like</h5>
 
-          <p>On other UNIX-like machines generate key pair and submit the signing request using OpenSSL and cURL:</p>
-          <div class="highlight">
-            <pre class="code"><code>NAME=$(hostname);
+            <p>On other UNIX-like machines generate key pair and submit the signing request using OpenSSL and cURL:</p>
+            <div class="highlight">
+              <pre class="code"><code>NAME=$(hostname);
 openssl genrsa -out client_key.pem 2048;
 openssl req -new -sha256 -key client_key.pem -out client_req.pem -subj "/CN=$NAME";
 curl -f -L -H "Content-type: application/pkcs10" --data-binary @client_req.pem \
   http://{{ window.location.hostname }}/api/request/?wait=yes > client_cert.pem</code></pre>
-          </div>
+            </div>
 
-          <h5>OpenWrt/LEDE</h5>
+            <h5>OpenWrt/LEDE</h5>
 
-          <p>On OpenWrt/LEDE router to convert it into VPN gateway:</p>
-          <div class="highlight">
-            <pre class="code"><code>mkdir -p /var/lib/certidude/{{ window.location.hostname }}; \
+            <p>On OpenWrt/LEDE router to convert it into VPN gateway:</p>
+            <div class="highlight">
+              <pre class="code"><code>mkdir -p /var/lib/certidude/{{ window.location.hostname }}; \
 grep -c certidude /etc/sysupgrade.conf || echo /var/lib/certidude >> /etc/sysupgrade.conf; \
 curl -f http://{{ window.location.hostname }}/api/certificate/ -o /var/lib/certidude/{{ window.location.hostname }}/ca_cert.pem; \
 test -e /var/lib/certidude/{{ window.location.hostname }}/client_key.pem || openssl genrsa -out /var/lib/certidude/{{ window.location.hostname }}/client_key.pem 2048; \
@@ -43,25 +43,25 @@ curl -f -L -H "Content-type: application/pkcs10" \
   --data-binary @/var/lib/certidude/{{ window.location.hostname }}/client_req.pem \
   -o /var/lib/certidude/{{ window.location.hostname }}/client_cert.pem \
   http://{{ window.location.hostname }}/api/request/?wait=yes</code></pre>
+            </div>
+
+            <h5>SCEP</h5>
+            <p>Use following as the enrollment URL: http://{{ window.location.hostname }}/cgi-bin/pkiclient.exe</p>
+
+            <h5>Copy & paste</h5>
+
+            <p>Use whatever tools you have available on your platform to generate
+            keypair and just paste ASCII armored PEM file contents here and hit submit:</p>
+
+            <textarea id="request_body" style="width:100%; min-height: 10em;" placeholder="-----BEGIN CERTIFICATE REQUEST-----"></textarea>
           </div>
-
-          <h5>SCEP</h5>
-          <p>Use following as the enrollment URL: http://{{ window.location.hostname }}/cgi-bin/pkiclient.exe</p>
-
-          <h5>Copy & paste</h5>
-
-          <p>Use whatever tools you have available on your platform to generate
-          keypair and just paste ASCII armored PEM file contents here and hit submit:</p>
-
-          <textarea id="request_body" style="width:100%; min-height: 4em;"
-              placeholder="-----BEGIN CERTIFICATE REQUEST-----\n...\n-----END CERTIFICATE REQUEST-----"></textarea>
-        </div>
-        <div class="modal-footer">
-          <div class="btn-group">
-            <button type="button" class="btn btn-success"><i class="fa fa-upload"></i> Submit</button>
-            <button type="button" class="btn" data-dismiss="modal"><i class="fa fa-ban"></i> Close</button>
+          <div class="modal-footer">
+            <div class="btn-group">
+              <button type="button" onclick="onSubmitRequest();" class="btn btn-primary"><i class="fa fa-upload"></i> Submit</button>
+              <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fa fa-ban"></i> Close</button>
+            </div>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   </div>

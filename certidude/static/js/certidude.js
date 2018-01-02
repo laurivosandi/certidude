@@ -220,6 +220,27 @@ function onAttributeUpdated(e) {
     })
 }
 
+function onSubmitRequest() {
+    $.ajax({
+        method: "POST",
+        url: "/api/request/",
+        headers: {
+            "Accept": "application/json; charset=utf-8",
+            "Content-Type": "application/pkcs10"
+        },
+        data: $("#request_body").val(),
+
+        success:function(attributes, status, xhr) {
+            // Close the modal
+            $("[data-dismiss=modal]").trigger({ type: "click" });
+        },
+        error: function(xhr, status, e) {
+            console.info("Submitting request failed with:", status, e);
+            alert(e);
+        }
+    })
+}
+
 function onServerStarted() {
     console.info("Server started");
     location.reload();
