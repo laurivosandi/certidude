@@ -199,6 +199,7 @@ def authorize_server(func):
         for extension in cert["tbs_certificate"]["extensions"]:
             if extension["extn_id"].native == "extended_key_usage":
                 if "server_auth" in extension["extn_value"].native:
+                    req.context["machine"] = cert.subject.native["common_name"]
                     return func(resource, req, resp, *args, **kwargs)
         logger.info("TLS authenticated machine '%s' not authorized to access administrative API", cert.subject.native["common_name"])
         raise falcon.HTTPForbidden("Forbidden", "Machine not authorized to perform the operation")

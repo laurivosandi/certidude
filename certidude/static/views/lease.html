@@ -2,5 +2,7 @@
 Last seen
 <time class="timeago" datetime="{{ certificate.lease.last_seen }}">{{ certificate.lease.last_seen }}</time>
 at
-<a href="http://{{ certificate.lease.inner_address }}">{{ certificate.lease.inner_address }}</a>.
+<a href="http://{{ certificate.lease.inner_address }}">{{ certificate.lease.inner_address }}</a>{% if certificate.lease.outer_address %}
+from
+<a target="{{ certificate.lease.outer_address }}" href="http://geoiplookup.net/ip/{{ certificate.lease.outer_address }}">{{ certificate.lease.outer_address }}</a>{% endif %}.
 

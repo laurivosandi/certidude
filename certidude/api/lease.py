@@ -2,6 +2,7 @@
 import click
 import falcon
 import logging
+import os
 import xattr
 from datetime import datetime
 from certidude import config, authority, push
@@ -31,15 +32,23 @@ class LeaseDetailResource(object):
 class LeaseResource(object):
     @authorize_server
     def on_post(self, req, resp):
-        common_name = req.get_param("client", required=True)
-        path, buf, cert, signed, expires = authority.get_signed(common_name) # TODO: catch exceptions
+        client_common_name = req.get_param("client", required=True)
+        path, buf, cert, signed, expires = authority.get_signed(client_common_name) # TODO: catch exceptions
         if req.get_param("serial") and cert.serial_number != req.get_param_as_int("serial"): # OCSP-ish solution for OpenVPN, not exposed for StrongSwan
             raise falcon.HTTPForbidden("Forbidden", "Invalid serial number supplied")
+        now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
         xattr.setxattr(path, "user.lease.outer_address", req.get_param("outer_address", required=True).encode("ascii"))
         xattr.setxattr(path, "user.lease.inner_address", req.get_param("inner_address", required=True).encode("ascii"))
-        xattr.setxattr(path, "user.lease.last_seen", datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
-        push.publish("lease-update", common_name)
+        xattr.setxattr(path, "user.lease.last_seen", now)
+        push.publish("lease-update", client_common_name)
+
+        server_common_name = req.context.get("machine")
+        path = os.path.join(config.SIGNED_DIR, server_common_name + ".pem")
+        xattr.setxattr(path, "user.lease.outer_address", "")
+        xattr.setxattr(path, "user.lease.inner_address", "%s" % req.context.get("remote_addr"))
+        xattr.setxattr(path, "user.lease.last_seen", now)
+        push.publish("lease-update", server_common_name)
 
         # client-disconnect is pretty much unusable:
         # - Android Connect Client results "IP packet with unknown IP version=2" on gateway
