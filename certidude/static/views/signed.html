@@ -24,11 +24,17 @@
         Part of {{ certificate.organizational_unit }} organizational unit.
       {% endif %}
     </p>
+    <p>
     {% if session.authority.tagging %}
-      <p class="tags" data-cn="{{ certificate.common_name }}">
+      <span class="tags" data-cn="{{ certificate.common_name }}">
         {% include "views/tags.html" %}
-      </p>
+      </span>
     {% endif %}
+      <span class="attributes" data-cn="{{ certificate.common_name }}">
+        {% include "views/attributes.html" %}
+      </span>
+    </p>
+
     <div class="btn-group">
       <button type="button" class="btn btn-secondary" data-toggle="collapse" data-target="#details-{{ certificate.sha256sum }}"><i class="fa fa-list"></i> Details</button>
       <button type="button" class="btn btn-danger"
@@ -46,25 +52,24 @@
           onclick="javascript:$(this).button('loading');$.ajax({url:'/api/signed/{{certificate.common_name}}/?sha256sum={{ certificate.sha256sum }}&reason=9',type:'delete'});">Revoke due to withdrawn privilege</a>
       </div>
     </div>
-    <div class="collapse" id="details-{{ certificate.sha256sum }}">
-      <p>
-      <div class="btn-group">
-        {% if session.authority.tagging %}
-          <button type="button" class="btn btn-default" onclick="onNewTagClicked(this);" data-key="other" data-cn="{{ certificate.common_name }}">
-           <i class="fa fa-tag"></i> Tag</button>
-          <button type="button" class="btn btn-default dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-            <span class="sr-only">Toggle Dropdown</span>
-          </button>
-          <div class="dropdown-menu">
-            {% for tag_category in session.authority.tagging %}
-            <a class="dropdown-item" href="#" data-key="{{ tag_category.name }}" data-cn="{{ certificate.common_name }}"
-              onclick="onNewTagClicked(this);">{{ tag_category.title }}</a>
-            {% endfor %}
-          </div>
-        {% endif %}
-      </div>
-      </p>
 
+    <div class="btn-group">
+      {% if session.authority.tagging %}
+        <button type="button" class="btn btn-default" onclick="onNewTagClicked(this);" data-key="other" data-cn="{{ certificate.common_name }}">
+         <i class="fa fa-tag"></i> Tag</button>
+        <button type="button" class="btn btn-default dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+          <span class="sr-only">Toggle Dropdown</span>
+        </button>
+        <div class="dropdown-menu">
+          {% for tag_category in session.authority.tagging %}
+          <a class="dropdown-item" href="#" data-key="{{ tag_category.name }}" data-cn="{{ certificate.common_name }}"
+            onclick="onNewTagClicked(this);">{{ tag_category.title }}</a>
+          {% endfor %}
+        </div>
+      {% endif %}
+    </div>
+
+    <div class="collapse" id="details-{{ certificate.sha256sum }}">
       <p>To fetch certificate:</p>
 
       <div class="bd-example">
@@ -77,7 +82,7 @@ curl http://{{ window.location.hostname }}/api/signed/{{ certificate.common_name
       <pre><code class="language-bash" data-lang="bash">curl http://{{ window.location.hostname }}/api/certificate/ > session.pem
 openssl ocsp -issuer session.pem -CAfile session.pem \
   -url http://{{ window.location.hostname }}/api/ocsp/ \
-  -serial 0x{{ certificate.serial }}</span></code></pre>
+  -serial 0x{{ certificate.serial }}</code></pre>
 
       <p>To fetch script:</p>
       <pre><code class="language-bash" data-lang="bash">cd /var/lib/certidude/{{ window.location.hostname }}/

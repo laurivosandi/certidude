@@ -1,6 +1,8 @@
 
 import falcon
 import logging
+import click
+from asn1crypto import pem, x509
 
 logger = logging.getLogger("api")
 
@@ -50,6 +52,17 @@ def whitelist_subject(func):
         except IOError:
             raise falcon.HTTPNotFound()
         else:
+            # First attempt to authenticate client with certificate
+            buf = req.get_header("X-SSL-CERT")
+            if buf:
+                header, _, der_bytes = pem.unarmor(buf.replace("\t", "").encode("ascii"))
+                origin_cert = x509.Certificate.load(der_bytes)
+                if origin_cert.native == cert.native:
+                    click.echo("Subject authenticated using certificates")
+                    return func(self, req, resp, cn, *args, **kwargs)
+
+            # For backwards compatibility check source IP address
+            # TODO: make it disableable
             try:
                 inner_address = getxattr(path, "user.lease.inner_address").decode("ascii")
             except IOError:
@@ -58,6 +71,6 @@ def whitelist_subject(func):
                 if req.context.get("remote_addr") != ip_address(inner_address):
                     raise falcon.HTTPForbidden("Forbidden", "Remote address %s mismatch" % req.context.get("remote_addr"))
                 else:
-                   return func(self, req, resp, cn, *args, **kwargs)
+                    return func(self, req, resp, cn, *args, **kwargs)
     return wrapped
 

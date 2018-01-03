@@ -7,7 +7,8 @@ import sys
 KEY_SIZE = 1024 if os.getenv("TRAVIS") else 4096
 RUN_DIR = "/run/certidude"
 CONFIG_DIR = "/etc/certidude"
-CONFIG_PATH = os.path.join(CONFIG_DIR, "server.conf")
+SERVER_CONFIG_PATH = os.path.join(CONFIG_DIR, "server.conf")
+BUILDER_CONFIG_PATH = os.path.join(CONFIG_DIR, "builder.conf")
 CLIENT_CONFIG_PATH = os.path.join(CONFIG_DIR, "client.conf")
 SERVICES_CONFIG_PATH = os.path.join(CONFIG_DIR, "services.conf")
 SERVER_PID_PATH = os.path.join(RUN_DIR, "server.pid")

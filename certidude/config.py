@@ -12,7 +12,7 @@ from random import choice
 # Options that are parsed from config file are fetched here
 
 cp = configparser.RawConfigParser()
-cp.readfp(codecs.open(const.CONFIG_PATH, "r", "utf8"))
+cp.readfp(open(const.SERVER_CONFIG_PATH, "r"))
 
 AUTHENTICATION_BACKENDS = set([j for j in
     cp.get("authentication", "backends").split(" ") if j])   # kerberos, pam, ldap
@@ -99,7 +99,10 @@ TOKEN_SECRET = cp.get("token", "secret").encode("ascii")
 # TODO: Check if we don't have base or servers
 
 # The API call for looking up scripts uses following directory as root
-SCRIPT_DIR = os.path.join(os.path.dirname(__file__), "templates", "script")
-SCRIPT_DEFAULT = "default.sh"
+SCRIPT_DIR = cp.get("script", "path")
 
 PROFILES = OrderedDict([[i, [j.strip() for j in cp.get("profile", i).split(",")]] for i in cp.options("profile")])
+
+cp2 = configparser.RawConfigParser()
+cp2.readfp(open(const.BUILDER_CONFIG_PATH, "r"))
+IMAGE_BUILDER_PROFILES = [(j, cp2.get(j, "title"), cp2.get(j, "rename")) for j in cp2.sections()]

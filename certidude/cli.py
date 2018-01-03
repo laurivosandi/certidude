@@ -96,7 +96,7 @@ def setup_client(prefix="client_", dh=False):
 @click.option("-s", "--skip-self", default=False, is_flag=True, help="Skip self enroll")
 @click.option("-nw", "--no-wait", default=False, is_flag=True, help="Return immideately if server doesn't autosign")
 def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
-    if not skip_self and os.path.exists(const.CONFIG_PATH):
+    if not skip_self and os.path.exists(const.SERVER_CONFIG_PATH):
         click.echo("Self-enrolling authority's web interface certificate")
         from certidude import authority
         authority.self_enroll()
@@ -944,38 +944,42 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
 @click.option("--directory", help="Directory for authority files")
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
+@click.option("--skip-packages", is_flag=True, help="Don't attempt to install apt/pip/npm packages")
 @fqdn_required
-def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags, title):
+def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags, title, skip_packages):
     assert os.getuid() == 0 and os.getgid() == 0, "Authority can be set up only by root"
 
     import pwd
     from jinja2 import Environment, PackageLoader
     env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
 
-    click.echo("Installing packages...")
-    os.system("apt-get install -qq -y cython3 python3-dev python3-mimeparse \
-        python3-markdown python3-pyxattr python3-jinja2 python3-cffi \
-        software-properties-common libsasl2-modules-gssapi-mit npm nodejs \
-        libkrb5-dev libldap2-dev libsasl2-dev")
-    os.system("pip3 install -q --upgrade gssapi falcon humanize ipaddress simplepam")
-    os.system("pip3 install -q --pre --upgrade python-ldap")
-
-    if not os.path.exists("/usr/lib/nginx/modules/ngx_nchan_module.so"):
-        click.echo("Enabling nginx PPA")
-        os.system("add-apt-repository -y ppa:nginx/stable")
-        os.system("apt-get update -q")
-        os.system("apt-get install -y -q libnginx-mod-nchan")
+    if skip_packages:
+        click.echo("Not attempting to install packages from APT as requested...")
     else:
-        click.echo("PPA for nginx already enabled")
+        click.echo("Installing packages...")
+        os.system("apt-get install -qq -y cython3 python3-dev python3-mimeparse \
+            python3-markdown python3-pyxattr python3-jinja2 python3-cffi \
+            software-properties-common libsasl2-modules-gssapi-mit npm nodejs \
+            libkrb5-dev libldap2-dev libsasl2-dev gawk libncurses5-dev")
+        os.system("pip3 install -q --upgrade gssapi falcon humanize ipaddress simplepam")
+        os.system("pip3 install -q --pre --upgrade python-ldap")
 
-    if not os.path.exists("/usr/sbin/nginx"):
-        click.echo("Installing nginx from PPA")
-        os.system("apt-get install -y -q nginx")
-    else:
-        click.echo("Web server nginx already installed")
+        if not os.path.exists("/usr/lib/nginx/modules/ngx_nchan_module.so"):
+            click.echo("Enabling nginx PPA")
+            os.system("add-apt-repository -y ppa:nginx/stable")
+            os.system("apt-get update -q")
+            os.system("apt-get install -y -q libnginx-mod-nchan")
+        else:
+            click.echo("PPA for nginx already enabled")
 
-    if not os.path.exists("/usr/bin/node"):
-        os.symlink("/usr/bin/nodejs", "/usr/bin/node")
+        if not os.path.exists("/usr/sbin/nginx"):
+            click.echo("Installing nginx from PPA")
+            os.system("apt-get install -y -q nginx")
+        else:
+            click.echo("Web server nginx already installed")
+
+        if not os.path.exists("/usr/bin/node"):
+            os.symlink("/usr/bin/nodejs", "/usr/bin/node")
 
     # Generate secret for tokens
     token_secret = ''.join(random.choice(string.ascii_letters + string.digits + '!@#$%^&*()') for i in range(50))
@@ -1036,6 +1040,9 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     else:
         click.echo("Warning: /etc/krb5.keytab or /etc/samba/smb.conf not found, Kerberos unconfigured")
 
+    doc_path = os.path.join(os.path.realpath(os.path.dirname(os.path.dirname(__file__))), "doc")
+    script_dir = os.path.join(os.path.realpath(os.path.dirname(__file__)), "templates", "script")
+
     static_path = os.path.join(os.path.realpath(os.path.dirname(__file__)), "static")
     certidude_path = sys.argv[0]
 
@@ -1057,6 +1064,13 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     else:
         click.echo("Not systemd based OS, don't know how to set up initscripts")
 
+    if os.path.exists("/etc/certidude/builder.conf"):
+        click.echo("Image builder config /etc/certidude/builder.conf already exists, remove to regenerate")
+    else:
+        with open("/etc/certidude/builder.conf", "w") as fh:
+            fh.write(env.get_template("server/builder.conf").render(vars()))
+        click.echo("File /etc/certidude/builder.conf created")
+
     assert os.getuid() == 0 and os.getgid() == 0
     bootstrap_pid = os.fork()
     if not bootstrap_pid:
@@ -1069,7 +1083,10 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
                 os.makedirs(subdir)
 
         # Install JavaScript pacakges
-        os.system("npm install --silent -g nunjucks@2.5.2 nunjucks-date@1.2.0 node-forge bootstrap@4.0.0-alpha.6 jquery timeago tether font-awesome qrcode-svg")
+        if skip_packages:
+            click.echo("Not attempting to install packages from NPM as requested...")
+        else:
+            os.system("npm install --silent -g nunjucks@2.5.2 nunjucks-date@1.2.0 node-forge bootstrap@4.0.0-alpha.6 jquery timeago tether font-awesome qrcode-svg")
 
         # Compile nunjucks templates
         cmd = 'nunjucks-precompile --include ".html$" --include ".svg" %s > %s.part' % (static_path, bundle_js)
@@ -1109,14 +1126,14 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         if not os.path.exists(const.CONFIG_DIR):
             click.echo("Creating %s" % const.CONFIG_DIR)
             os.makedirs(const.CONFIG_DIR)
-        if os.path.exists(const.CONFIG_PATH):
-            click.echo("Configuration file %s already exists, remove to regenerate" % const.CONFIG_PATH)
+        if os.path.exists(const.SERVER_CONFIG_PATH):
+            click.echo("Configuration file %s already exists, remove to regenerate" % const.SERVER_CONFIG_PATH)
         else:
             os.umask(0o137)
             push_token = "".join([random.choice(string.ascii_letters + string.digits) for j in range(0,32)])
-            with open(const.CONFIG_PATH, "w") as fh:
+            with open(const.SERVER_CONFIG_PATH, "w") as fh:
                 fh.write(env.get_template("server/server.conf").render(vars()))
-            click.echo("Generated %s" % const.CONFIG_PATH)
+            click.echo("Generated %s" % const.SERVER_CONFIG_PATH)
 
         # Create directory with 755 permissions
         os.umask(0o022)
@@ -1183,7 +1200,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         from certidude import authority
         authority.self_enroll()
         assert os.getuid() == 0 and os.getgid() == 0, "Enroll contaminated environment"
-        click.echo("To enable e-mail notifications install Postfix as sattelite system and set mailer address in %s" % const.CONFIG_PATH)
+        click.echo("To enable e-mail notifications install Postfix as sattelite system and set mailer address in %s" % const.SERVER_CONFIG_PATH)
         click.echo()
         click.echo("Use following commands to inspect the newly created files:")
         click.echo()
@@ -1337,7 +1354,7 @@ def certidude_serve(port, listen, fork):
     if port == 80:
         click.echo("WARNING: Please run Certidude behind nginx, remote address is assumed to be forwarded by nginx!")
 
-    click.echo("Using configuration from: %s" % const.CONFIG_PATH)
+    click.echo("Using configuration from: %s" % const.SERVER_CONFIG_PATH)
 
     log_handlers = []
 

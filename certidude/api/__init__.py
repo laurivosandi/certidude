@@ -82,7 +82,7 @@ class SessionResource(object):
                 attributes = {}
                 for key in listxattr(path):
                     if key.startswith(b"user.machine."):
-                        attributes[key[13:]] = getxattr(path, key).decode("ascii")
+                        attributes[key[13:].decode("ascii")] = getxattr(path, key).decode("ascii")
 
                 # Extract lease information from filesystem
                 try:
@@ -131,6 +131,9 @@ class SessionResource(object):
             ),
             request_submission_allowed = config.REQUEST_SUBMISSION_ALLOWED,
             authority = dict(
+                builder = dict(
+                    profiles = config.IMAGE_BUILDER_PROFILES
+                ),
                 tagging = [dict(name=t[0], type=t[1], title=t[2]) for t in config.TAG_TYPES],
                 lease = dict(
                     offline = 600, # Seconds from last seen activity to consider lease offline, OpenVPN reneg-sec option
@@ -208,6 +211,7 @@ def certidude_app(log_handlers=[]):
     from .attrib import AttributeResource
     from .bootstrap import BootstrapResource
     from .token import TokenResource
+    from .builder import ImageBuilderResource
 
     app = falcon.API(middleware=NormalizeMiddleware())
     app.req_options.auto_parse_form_urlencoded = True
@@ -239,6 +243,9 @@ def certidude_app(log_handlers=[]):
 
     # Bootstrap resource
     app.add_route("/api/bootstrap/", BootstrapResource())
+
+    # LEDE image builder resource
+    app.add_route("/api/build/{profile}/{suggested_filename}", ImageBuilderResource())
 
     # Add CRL handler if we have any whitelisted subnets
     if config.CRL_SUBNETS:

@@ -1,5 +1,6 @@
 import falcon
 import logging
+import os
 from certidude import const, config, authority
 from certidude.decorators import serialize
 from jinja2 import Environment, FileSystemLoader
@@ -26,9 +27,10 @@ class ScriptResource():
         except AttributeError: # No tags
             pass
 
-        script = named_tags.get("script", config.SCRIPT_DEFAULT)
+        script = named_tags.get("script", "default.sh")
+        assert script in os.listdir(config.SCRIPT_DIR)
         resp.set_header("Content-Type", "text/x-shellscript")
-        resp.body = env.get_template(script).render(
+        resp.body = env.get_template(os.path.join(script)).render(
             authority_name=const.FQDN,
             common_name=cn,
             other_tags=other_tags,

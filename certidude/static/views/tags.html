@@ -2,5 +2,5 @@
   <span data-cn="{{ certificate.common_name }}"
     title="{{ tag.id }}"
     class="badge badge-default"
-    onClick="onTagClicked(this);">{{ tag.value }}</span>
+    onClick="onTagClicked(this);"><i class="fa fa-{{ tag.key }}"></i> {{ tag.value }}</span>
 {% endfor %}

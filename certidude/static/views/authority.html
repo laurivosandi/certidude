@@ -28,7 +28,7 @@ curl -f -L -H "Content-type: application/pkcs10" --data-binary @client_req.pem \
   http://{{ window.location.hostname }}/api/request/?wait=yes > client_cert.pem</code></pre>
             </div>
 
-            <h5>OpenWrt/LEDE</h5>
+            <h5>Vanilla OpenWrt/LEDE</h5>
 
             <p>On OpenWrt/LEDE router to convert it into VPN gateway:</p>
             <div class="highlight">
@@ -44,6 +44,16 @@ curl -f -L -H "Content-type: application/pkcs10" \
   -o /var/lib/certidude/{{ window.location.hostname }}/client_cert.pem \
   http://{{ window.location.hostname }}/api/request/?wait=yes</code></pre>
             </div>
+
+            {% if session.authority.builder %}
+            <h5>OpenWrt/LEDE image builder</h5>
+            <p>Hit a link to generate machine specific image. Note that this might take couple minutes to finish.</p>
+            <ul>
+            {% for name, title, filename in session.authority.builder.profiles %}
+                <li><a href="/api/build/{{ name }}/{{ filename }}">{{ title }}</a></li>
+            {% endfor %}
+            </ul>
+            {% endif %}
 
             <h5>SCEP</h5>
             <p>Use following as the enrollment URL: http://{{ window.location.hostname }}/cgi-bin/pkiclient.exe</p>

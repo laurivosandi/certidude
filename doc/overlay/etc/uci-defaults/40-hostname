@@ -1,0 +1,21 @@
+MODEL=$(cat /etc/board.json | jsonfilter -e '@["model"]["id"]')
+
+# Hostname prefix
+case $MODEL in
+    tl-*|archer-*)  VENDOR=tplink ;;
+    cf-*) VENDOR=comfast ;;
+    *) VENDOR=ap ;;
+esac
+
+# Network interface with relevant MAC address
+case $MODEL in
+    tl-wdr*) NIC=wlan1 ;;
+    archer-*)  NIC=eth1 ;;
+    cf-e380ac-v2) NIC=eth0 ;;
+    *) NIC=wlan0 ;;
+esac
+
+HOSTNAME=$VENDOR-$(cat /sys/class/net/$NIC/address | cut -d : -f 4- | sed -e 's/://g')
+uci set system.@system[0].hostname=$HOSTNAME
+uci set network.lan.hostname=$HOSTNAME
+
