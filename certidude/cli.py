@@ -1064,13 +1064,6 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     else:
         click.echo("Not systemd based OS, don't know how to set up initscripts")
 
-    if os.path.exists("/etc/certidude/builder.conf"):
-        click.echo("Image builder config /etc/certidude/builder.conf already exists, remove to regenerate")
-    else:
-        with open("/etc/certidude/builder.conf", "w") as fh:
-            fh.write(env.get_template("server/builder.conf").render(vars()))
-        click.echo("File /etc/certidude/builder.conf created")
-
     assert os.getuid() == 0 and os.getgid() == 0
     bootstrap_pid = os.fork()
     if not bootstrap_pid:
@@ -1080,6 +1073,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         for path in bundle_js, bundle_css:
             subdir = os.path.dirname(path)
             if not os.path.exists(subdir):
+                click.echo("Creating directory %s" % subdir)
                 os.makedirs(subdir)
 
         # Install JavaScript pacakges
@@ -1134,6 +1128,14 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
             with open(const.SERVER_CONFIG_PATH, "w") as fh:
                 fh.write(env.get_template("server/server.conf").render(vars()))
             click.echo("Generated %s" % const.SERVER_CONFIG_PATH)
+
+        # Create image builder config
+        if os.path.exists(const.BUILDER_CONFIG_PATH):
+            click.echo("Image builder config %s already exists, remove to regenerate" % const.BUILDER_CONFIG_PATH)
+        else:
+            with open(const.BUILDER_CONFIG_PATH, "w") as fh:
+                fh.write(env.get_template("server/builder.conf").render(vars()))
+            click.echo("File %s created" % const.BUILDER_CONFIG_PATH)
 
         # Create directory with 755 permissions
         os.umask(0o022)
