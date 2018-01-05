@@ -1,13 +1,8 @@
-
-import click
-import codecs
 import configparser
 import ipaddress
 import os
-import string
 from certidude import const
 from collections import OrderedDict
-from random import choice
 
 # Options that are parsed from config file are fetched here
 
