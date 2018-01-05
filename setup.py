@@ -19,8 +19,11 @@ setup(
     long_description=open("README.rst").read(),
     # Include here only stuff required to run certidude client
     install_requires=[
+        "asn1crypto",
         "click",
-        "configparser"
+        "configparser",
+        "certbuilder",
+        "csrbuilder",
     ],
     scripts=[
         "misc/certidude"

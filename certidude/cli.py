@@ -1,14 +1,11 @@
 # coding: utf-8
 
-import asyncore
 import click
 import hashlib
 import logging
 import os
 import random
-import re
 import signal
-import socket
 import string
 import subprocess
 import sys
@@ -17,13 +14,12 @@ from base64 import b64encode
 from certbuilder import CertificateBuilder, pem_armor_certificate
 from certidude import const
 from csrbuilder import CSRBuilder, pem_armor_csr
-from configparser import ConfigParser, NoOptionError, NoSectionError
-from certidude.common import apt, rpm, pip, drop_privileges, selinux_fixup
+from configparser import ConfigParser, NoOptionError
+from certidude.common import apt, rpm, drop_privileges, selinux_fixup
 from datetime import datetime, timedelta
 from glob import glob
 from ipaddress import ip_network
 from oscrypto import asymmetric
-from time import sleep
 
 
 logger = logging.getLogger(__name__)
@@ -1350,7 +1346,6 @@ def certidude_expire():
 @click.option("-l", "--listen", default="127.0.1.1", help="Listen address")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
 def certidude_serve(port, listen, fork):
-    import pwd
     from certidude import authority, const, push
 
     if port == 80:
