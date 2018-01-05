@@ -39,7 +39,7 @@ class SCEPBadCertId(SCEPError): code = 4
 class SCEPResource(object):
     @whitelist_subnets(config.SCEP_SUBNETS)
     def on_get(self, req, resp):
-        operation = req.get_param("operation")
+        operation = req.get_param("operation", required=True)
         if operation.lower() == "getcacert":
             resp.body = keys.parse_certificate(authority.certificate_buf).dump()
             resp.append_header("Content-Type", "application/x-x509-ca-cert")

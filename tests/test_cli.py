@@ -312,12 +312,6 @@ def test_cli_setup_authority():
     r = requests.get("http://ca.example.lan/api/revoked/")
     assert r.status_code == 200, r.text
 
-    # Check that SCEP and OCSP are disabled by default
-    r = requests.get("http://ca.example.lan/api/ocsp/")
-    assert r.status_code == 404, r.text
-    r = requests.get("http://ca.example.lan/api/scep/")
-    assert r.status_code == 404, r.text
-
     # Test command line interface
     result = runner.invoke(cli, ['list', '-srv'])
     assert not result.exception, result.output
@@ -1077,13 +1071,13 @@ def test_cli_setup_authority():
     ### Test that legacy features are disabled by default ###
     #########################################################
 
-    r = client().simulate_get("/api/scep/")
+    r = requests.get("http://ca.example.lan/api/scep/")
     assert r.status_code == 404
-    r = client().simulate_get("/api/ocsp/")
+    r = requests.get("http://ca.example.lan/api/ocsp/")
     assert r.status_code == 404
-    r = client().simulate_post("/api/scep/")
+    r = requests.post("http://ca.example.lan/api/scep/")
     assert r.status_code == 404
-    r = client().simulate_post("/api/ocsp/")
+    r = requests.post("http://ca.example.lan/api/ocsp/")
     assert r.status_code == 404
 
 
@@ -1114,6 +1108,9 @@ def test_cli_setup_authority():
         return
     else:
         os.waitpid(spn_pid, 0)
+
+    r = requests.get("http://ca.example.lan/api/")
+    assert r.status_code == 502, r.text
 
     # Make modifications to /etc/certidude/server.conf so
     # Certidude would auth against domain controller
@@ -1154,11 +1151,28 @@ def test_cli_setup_authority():
         assert not result.exception, result.output
         return
 
-    sleep(5) # Wait for serve to start up
+    # Wait for serve to start up
+    for j in range(0,10):
+        r = requests.get("http://ca.example.lan/api/")
+        if r.status_code != 502:
+            break
+        sleep(1)
+    assert r.status_code == 401
 
     # CRL-s disabled now
     r = requests.get("http://ca.example.lan/api/revoked/")
     assert r.status_code == 404, r.text
+
+    # OCSP and SCEP should be enabled now
+    r = requests.get("http://ca.example.lan/api/scep/")
+    assert r.status_code == 400
+    r = requests.get("http://ca.example.lan/api/ocsp/")
+    assert r.status_code == 400
+    r = requests.post("http://ca.example.lan/api/scep/")
+    assert r.status_code == 405
+    r = requests.post("http://ca.example.lan/api/ocsp/")
+    assert r.status_code == 400
+
 
     assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_cert.pem -cert /var/lib/certidude/ca.example.lan/signed/roadwarrior2.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp1.log") == 0
     assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_cert.pem -cert /var/lib/certidude/ca.example.lan/ca_cert.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp2.log") == 0

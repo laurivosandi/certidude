@@ -1,4 +1,5 @@
 import click
+import falcon
 import hashlib
 import os
 from asn1crypto.util import timezone
@@ -14,19 +15,22 @@ from oscrypto.errors import SignatureError
 class OCSPResource(object):
     @whitelist_subnets(config.OCSP_SUBNETS)
     def __call__(self, req, resp):
-        if req.method == "GET":
-            _, _, _, tail = req.path.split("/", 3)
-            body = b64decode(tail)
-        elif req.method == "POST":
-            body = req.stream.read(req.content_length or 0)
-        else:
-            raise falcon.HTTPMethodNotAllowed()
+        try:
+            if req.method == "GET":
+                _, _, _, tail = req.path.split("/", 3)
+                body = b64decode(tail)
+            elif req.method == "POST":
+                body = req.stream.read(req.content_length or 0)
+            else:
+                raise falcon.HTTPMethodNotAllowed()
+            ocsp_req = ocsp.OCSPRequest.load(body)
+        except ValueError:
+            raise falcon.HTTPBadRequest()
 
         fh = open(config.AUTHORITY_CERTIFICATE_PATH, "rb") # TODO: import from authority
         server_certificate = asymmetric.load_certificate(fh.read())
         fh.close()
 
-        ocsp_req = ocsp.OCSPRequest.load(body)
         now = datetime.now(timezone.utc)
         response_extensions = []
 
