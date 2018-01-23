@@ -1,6 +1,10 @@
 <p>
 <div id="certificate-{{ certificate.common_name | replace('@', '--') | replace('.', '-') }}" class="card">
   <div class="card-header">
+    {% if certificate.organizational_unit %}
+      <i class="fa fa-folder" aria-hidden="true"></i>
+    {{ certificate.organizational_unit }} /
+    {% endif %}
     {% if certificate.server %}
       <i class="fa fa-server"></i>
     {% else %}
@@ -17,12 +21,9 @@
       </span>
 
       Signed
-      <time class="timeago" datetime="{{ certificate.signed }}">Certificate was signed {{ certificate.signed }}</time>,
+      <time class="timeago" datetime="{{ certificate.signed }}">Certificate was signed {{ certificate.signed }}</time>{% if certificate.signer %} by {{ certificate.signer }}{% endif %},
       expires
       <time class="timeago" datetime="{{ certificate.expires }}">Certificate expires {{ certificate.expires }}</time>.
-      {% if certificate.organizational_unit %}
-        Part of {{ certificate.organizational_unit }} organizational unit.
-      {% endif %}
     </p>
     <p>
     {% if session.authority.tagging %}
@@ -91,10 +92,10 @@ curl --cert client_cert.pem https://{{ window.location.hostname }}:8443/api/sign
       <div style="overflow: auto; max-width: 100%;">
         <table class="table" id="signed_certificates">
           <tbody>
-            <tr><th>Common name</th><td>{{ certificate.common_name }}</td></tr>
-            <tr><th>Organizational unit</th><td>{% if certificate.organizational_unit %}{{ certificate.organizational_unit }}{% else %}-{% endif %}</td></tr>
+            <tr><th>Common&nbsp;name</th><td>{{ certificate.common_name }}</td></tr>
+            <tr><th>Organizational&nbsp;unit</th><td>{% if certificate.organizational_unit %}{{ certificate.organizational_unit }}{% else %}-{% endif %}</td></tr>
             <tr><th>Serial number</th><td style="word-wrap:break-word;">{{ certificate.serial | serial }}</td></tr>
-            <tr><th>Signed</th><td>{{ certificate.signed | datetime  }}{% if certificate.signer %}, by {{ certificate.signer }}{% endif %}</td></tr>
+            <tr><th>Signed</th><td>{{ certificate.signed | datetime  }}{% if certificate.signer %} by {{ certificate.signer }}{% endif %}</td></tr>
             <tr><th>Expires</th><td>{{ certificate.expires | datetime  }}</td></tr>
             {% if certificate.lease %}
             <tr><th>Lease</th><td><a href="http://{{ certificate.lease.inner_address }}">{{ certificate.lease.inner_address }}</a> at {{ certificate.lease.last_seen | datetime  }}

@@ -1312,7 +1312,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
 def certidude_sign(common_name, overwrite):
     from certidude import authority
     drop_privileges()
-    cert = authority.sign(common_name, overwrite)
+    cert = authority.sign(common_name, overwrite=overwrite)
 
 
 @click.command("revoke", help="Revoke certificate")

@@ -38,6 +38,7 @@ class SignedCertificateDetailResource(object):
                 common_name = cn,
                 signer = signer_username,
                 serial_number = "%x" % cert.serial_number,
+                organizational_unit = cert.subject.native.get("organizational_unit_name"),
                 signed = cert["tbs_certificate"]["validity"]["not_before"].native.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                 expires = cert["tbs_certificate"]["validity"]["not_after"].native.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                 sha256sum = hashlib.sha256(buf).hexdigest()))

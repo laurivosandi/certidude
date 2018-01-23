@@ -225,7 +225,10 @@ class RequestDetailResource(object):
         Sign a certificate signing request
         """
         try:
-            cert, buf = authority.sign(cn, ou=req.get_param("ou"), overwrite=True, signer=req.context.get("user").name)
+            cert, buf = authority.sign(cn,
+                profile=req.get_param("profile", default="default"),
+                overwrite=True,
+                signer=req.context.get("user").name)
             # Mailing and long poll publishing implemented in the function above
         except EnvironmentError: # no such CSR
             raise falcon.HTTPNotFound()

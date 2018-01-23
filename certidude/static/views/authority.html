@@ -28,22 +28,104 @@ curl -f -L -H "Content-type: application/pkcs10" --data-binary @client_req.pem \
   http://{{ window.location.hostname }}/api/request/?wait=yes > client_cert.pem</code></pre>
             </div>
 
-            <h5>Vanilla OpenWrt/LEDE</h5>
+            <h5>OpenVPN gateway on OpenWrt/LEDE router</h5>
 
-            <p>On OpenWrt/LEDE router to convert it into VPN gateway:</p>
+            <p>First enroll certificates:</p>
             <div class="highlight">
-              <pre class="code"><code>mkdir -p /var/lib/certidude/{{ window.location.hostname }}; \
-grep -c certidude /etc/sysupgrade.conf || echo /var/lib/certidude >> /etc/sysupgrade.conf; \
-curl -f http://{{ window.location.hostname }}/api/certificate/ -o /var/lib/certidude/{{ window.location.hostname }}/ca_cert.pem; \
-test -e /var/lib/certidude/{{ window.location.hostname }}/client_key.pem || openssl genrsa -out /var/lib/certidude/{{ window.location.hostname }}/client_key.pem 2048; \
-test -e /var/lib/certidude/{{ window.location.hostname }}/client_req.pem || read -p "Enter FQDN: " NAME; openssl req -new -sha256 \
-  -key /var/lib/certidude/{{ window.location.hostname }}/client_key.pem \
-  -out /var/lib/certidude/{{ window.location.hostname }}/client_req.pem -subj "/CN=$NAME"; \
+              <pre class="code"><code># Derive FQDN from WAN interface's reverse DNS record
+FQDN=$(nslookup $(uci get network.wan.ipaddr) |  grep "name =" | head -n1 | cut -d "=" -f 2 | xargs)
+
+mkdir -p /etc/certidude/authority/{{ window.location.hostname }}; \
+grep -c certidude /etc/sysupgrade.conf || echo /etc/certidude >> /etc/sysupgrade.conf; \
+curl -f http://{{ window.location.hostname }}/api/certificate/ -o /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem; \
+test -e /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem \
+ || openssl genrsa -out /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem 2048; \
+test -e /etc/certidude/authority/{{ window.location.hostname }}/server_req.pem \
+ || openssl req -new -sha256 \
+      -key /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem \
+      -out /etc/certidude/authority/{{ window.location.hostname }}/server_req.pem -subj "/CN=$FQDN"; \
 curl -f -L -H "Content-type: application/pkcs10" \
-  --data-binary @/var/lib/certidude/{{ window.location.hostname }}/client_req.pem \
-  -o /var/lib/certidude/{{ window.location.hostname }}/client_cert.pem \
+  --data-binary @/etc/certidude/authority/{{ window.location.hostname }}/server_req.pem \
+  -o /etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem \
   http://{{ window.location.hostname }}/api/request/?wait=yes</code></pre>
             </div>
+
+            <p>Then set up service:</p>
+            <div class="highlight">
+              <pre class="code"><code># Create VPN gateway up/down script for reporting client IP addresses to CA
+cat <<\EOF > /etc/certidude/updown
+#!/bin/sh
+CURL="curl -f --key /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem --cert /etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem --cacert /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem https://{{ window.location.hostname }}:8443/api/lease/"
+
+case $PLUTO_VERB in
+  up-client|down-client) $CURL --data "outer_address=$PLUTO_PEER&inner_address=$PLUTO_PEER_SOURCEIP&client=$PLUTO_PEER_ID" ;;
+  *) $CURL --data "client=$X509_0_CN&outer_address=$untrusted_ip&inner_address=$ifconfig_pool_remote_ip&serial=$tls_serial_0" ;;
+esac
+EOF
+
+chmod +x /etc/certidude/updown
+
+
+# Generate Diffie-Hellman parameters file for OpenVPN
+test -e /etc/certidude/dh.pem \
+ || openssl dhparam 2048 -out /etc/certidude/dh.pem
+
+# Create interface definition for tunnel
+uci set network.vpn=interface
+uci set network.vpn.name='vpn'
+uci set network.vpn.ifname=tun_s2c
+uci set network.vpn.proto='none'
+
+# Create zone definition for VPN interface
+uci set firewall.vpn=zone
+uci set firewall.vpn.name='vpn'
+uci set firewall.vpn.input='ACCEPT'
+uci set firewall.vpn.forward='ACCEPT'
+uci set firewall.vpn.output='ACCEPT'
+uci set firewall.vpn.network='vpn'
+
+# Allow UDP 1194 on WAN interface
+uci set firewall.openvpn=rule
+uci set firewall.openvpn.name='Allow OpenVPN'
+uci set firewall.openvpn.src='wan'
+uci set firewall.openvpn.dest_port=1194
+uci set firewall.openvpn.proto='udp'
+uci set firewall.openvpn.target='ACCEPT'
+
+# Forward traffic from VPN to LAN
+uci set firewall.c2s=forwarding
+uci set firewall.c2s.src='vpn'
+uci set firewall.c2s.dest='lan'
+
+# Permit DNS queries from VPN
+uci set dhcp.@dnsmasq[0].localservice='0'
+
+touch /etc/config/openvpn
+uci set openvpn.s2c=openvpn
+uci set openvpn.s2c.local=$(uci get network.wan.ipaddr)
+uci set openvpn.s2c.script_security=2
+uci set openvpn.s2c.client_connect='/etc/certidude/updown'
+uci set openvpn.s2c.tls_version_min='1.2'
+uci set openvpn.s2c.tls_cipher='TLS-DHE-RSA-WITH-AES-256-GCM-SHA384'
+uci set openvpn.s2c.cipher='AES-256-CBC'
+uci set openvpn.s2c.auth='SHA384'
+uci set openvpn.s2c.dev=tun_s2c
+uci set openvpn.s2c.server='10.179.43.0 255.255.255.0'
+uci set openvpn.s2c.key='/etc/certidude/authority/{{ window.location.hostname }}/server_key.pem'
+uci set openvpn.s2c.cert='/etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem'
+uci set openvpn.s2c.ca='/etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem'
+uci set openvpn.s2c.dh='/etc/certidude/dh.pem'
+uci set openvpn.s2c.enabled=1
+uci set openvpn.s2c.comp_lzo=yes
+uci add_list openvpn.s2c.push="route-metric 1000"
+uci add_list openvpn.s2c.push="route $(uci get network.lan.ipaddr) $(uci get network.lan.netmask)"
+uci add_list openvpn.s2c.push="dhcp-option DNS $(uci get network.lan.ipaddr)"
+uci add_list openvpn.s2c.push="dhcp-option DOMAIN $(uci get dhcp.@dnsmasq[0].domain)"
+
+/etc/init.d/openvpn restart
+/etc/init.d/firewall restart</code></pre>
+            </div>
+
 
             {% if session.authority.builder %}
             <h5>OpenWrt/LEDE image builder</h5>

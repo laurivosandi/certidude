@@ -33,6 +33,11 @@ class LeaseResource(object):
     @authorize_server
     def on_post(self, req, resp):
         client_common_name = req.get_param("client", required=True)
+        if "=" in client_common_name: # It's actually DN, resolve it to CN
+            _, client_common_name = client_common_name.split(" CN=", 1)
+            if "," in client_common_name:
+                client_common_name, _ = client_common_name.split(",", 1)
+
         path, buf, cert, signed, expires = authority.get_signed(client_common_name) # TODO: catch exceptions
         if req.get_param("serial") and cert.serial_number != req.get_param_as_int("serial"): # OCSP-ish solution for OpenVPN, not exposed for StrongSwan
             raise falcon.HTTPForbidden("Forbidden", "Invalid serial number supplied")

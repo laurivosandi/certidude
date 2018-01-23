@@ -118,7 +118,7 @@ function onRequestSubmitted(e) {
             console.info("Going to prepend:", request);
             onRequestDeleted(e); // Delete any existing ones just in case
             $("#pending_requests").prepend(
-                env.render('views/request.html', { request: request }));
+                env.render('views/request.html', { request: request, session: session }));
             $("#pending_requests time").timeago();
         },
         error: function(response) {

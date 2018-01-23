@@ -44,6 +44,7 @@ class SessionResource(object):
                 except IOError:
                     submission_hostname = None
                 yield dict(
+                    server = authority.server_flags(common_name),
                     submitted = submitted,
                     common_name = common_name,
                     address = submission_address,
@@ -103,6 +104,7 @@ class SessionResource(object):
 
                 yield dict(
                     serial = "%x" % cert.serial_number,
+                    organizational_unit = cert.subject.native.get("organizational_unit_name"),
                     common_name = common_name,
                     # TODO: key type, key length, key exponent, key modulo
                     signed = signed,
@@ -158,10 +160,8 @@ class SessionResource(object):
                 request_subnets = config.REQUEST_SUBNETS or None,
                 admin_subnets=config.ADMIN_SUBNETS or None,
                 signature = dict(
-                    server_certificate_lifetime=config.SERVER_CERTIFICATE_LIFETIME,
-                    client_certificate_lifetime=config.CLIENT_CERTIFICATE_LIFETIME,
                     revocation_list_lifetime=config.REVOCATION_LIST_LIFETIME,
-                    profiles = [dict(organizational_unit=ou, flags=f, lifetime=lt) for f, lt, ou in config.PROFILES.values()]
+                    profiles = [dict(name=k, server=v[0]=="server", lifetime=v[1], organizational_unit=v[2], title=v[3]) for k,v in config.PROFILES.items()]
                 )
             ) if req.context.get("user").is_admin() else None,
             features=dict(

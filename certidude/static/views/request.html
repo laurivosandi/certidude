@@ -30,10 +30,11 @@
       </button>
       <div class="dropdown-menu">
         {% for p in session.authority.signature.profiles %}
-          <a class="dropdown-item" href="/api/request/?organizational_unit={{ p.organizational_unit }}&lifetime={{ p.lifetime }}&flags={{ p.flags }}">
-            {% if p.organizational_unit %}
-            {{ p.organizational_unit }} ({{ p.flags }}){% else %}
-            {{ p.flags | capitalize }}{% endif %}, expires in {{ p.lifetime }} days</a>
+          <a class="dropdown-item{% if p.server and not request.server %} disabled{% endif %}"
+            {% if p.server and not request.server %}title="Resubmit with FQDN as common name"{% endif %}
+            href="#" onclick="javascript:$.ajax({url:'/api/request/{{request.common_name}}/?sha256sum={{ request.sha256sum }}&profile={{ p.name }}',type:'post'});">
+            {% if p.title %}{{ p.title }} ({% if p.server %}server{% else %}client{% endif %}){% else %}
+            {% if p.server %}Server{% else %}Client{% endif %}{% endif %}, expires in {{ p.lifetime }} days</a>
         {% endfor %}
       </div>
     </div>

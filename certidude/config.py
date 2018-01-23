@@ -60,8 +60,6 @@ USER_MULTIPLE_CERTIFICATES = {
     cp.get("authority", "user enrollment")]
 
 REQUEST_SUBMISSION_ALLOWED = cp.getboolean("authority", "request submission allowed")
-CLIENT_CERTIFICATE_LIFETIME = cp.getint("signature", "client certificate lifetime")
-SERVER_CERTIFICATE_LIFETIME = cp.getint("signature", "server certificate lifetime")
 AUTHORITY_CERTIFICATE_URL = cp.get("signature", "authority certificate url")
 AUTHORITY_CRL_URL = cp.get("signature", "revoked url")
 AUTHORITY_OCSP_URL = cp.get("signature", "responder url")

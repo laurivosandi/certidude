@@ -55,7 +55,7 @@ def self_enroll():
             fh.write(asymmetric.dump_private_key(private_key, None))
     else:
         now = datetime.utcnow()
-        if now - timedelta(days=1) < expires:
+        if now + timedelta(days=1) < expires:
             click.echo("Certificate %s still valid, delete to self-enroll again" % path)
             return
 
@@ -307,7 +307,7 @@ def delete_request(common_name):
         config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest(),
         headers={"User-Agent": "Certidude API"})
 
-def sign(common_name, skip_notify=False, skip_push=False, overwrite=False, ou=None, signer=None):
+def sign(common_name, skip_notify=False, skip_push=False, overwrite=False, profile="default", signer=None):
     """
     Sign certificate signing request by it's common name
     """
@@ -320,13 +320,15 @@ def sign(common_name, skip_notify=False, skip_push=False, overwrite=False, ou=No
 
 
     # Sign with function below
-    cert, buf = _sign(csr, csr_buf, skip_notify, skip_push, overwrite, ou, signer)
+    cert, buf = _sign(csr, csr_buf, skip_notify, skip_push, overwrite, profile, signer)
 
     os.unlink(req_path)
     return cert, buf
 
-def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, ou=None, signer=None):
+def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, profile="default", signer=None):
     # TODO: CRLDistributionPoints, OCSP URL, Certificate URL
+    if profile not in config.PROFILES:
+        raise ValueError("Invalid profile supplied '%s'" % profile)
 
     assert buf.startswith(b"-----BEGIN CERTIFICATE REQUEST-----")
     assert isinstance(csr, CertificationRequest)
@@ -367,8 +369,9 @@ def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, ou=None
 
     # Sign via signer process
     dn = {u'common_name': common_name }
-    if ou:
-        dn["organizational_unit"] = ou
+    profile_server_flags, lifetime, dn["organizational_unit_name"], _ = config.PROFILES[profile]
+    lifetime = int(lifetime)
+
     builder = CertificateBuilder(dn, csr_pubkey)
     builder.serial_number = random.randint(
         0x1000000000000000000000000000000000000000,
@@ -376,16 +379,14 @@ def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, ou=None
 
     now = datetime.utcnow()
     builder.begin_date = now - timedelta(minutes=5)
-    builder.end_date = now + timedelta(days=config.SERVER_CERTIFICATE_LIFETIME
-        if server_flags(common_name)
-        else config.CLIENT_CERTIFICATE_LIFETIME)
+    builder.end_date = now + timedelta(days=lifetime)
     builder.issuer = certificate
     builder.ca = False
     builder.key_usage = set(["digital_signature", "key_encipherment"])
 
-    # OpenVPN uses CN while StrongSwan uses SAN
-    if server_flags(common_name):
-        builder.subject_alt_domains = [common_name]
+    # If we have FQDN and profile suggests server flags, enable them
+    if server_flags(common_name) and profile_server_flags:
+        builder.subject_alt_domains = [common_name] # OpenVPN uses CN while StrongSwan uses SAN to match hostname of the server
         builder.extended_key_usage = set(["server_auth", "1.3.6.1.5.5.8.2.2", "client_auth"])
     else:
         builder.extended_key_usage = set(["client_auth"])
