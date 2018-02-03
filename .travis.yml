@@ -21,6 +21,4 @@ script:
   - sudo coverage combine
   - sudo coverage report
   - sudo coverage xml -i
-cache:
-  directories:
-    - $HOME/.cache/pip
+cache: pip
