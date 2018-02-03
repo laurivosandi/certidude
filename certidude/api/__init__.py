@@ -4,13 +4,10 @@ import falcon
 import mimetypes
 import logging
 import os
-import click
 import hashlib
-from datetime import datetime, timedelta
-from time import sleep
+from datetime import datetime
 from xattr import listxattr, getxattr
-from certidude import mailer
-from certidude.auth import login_required, authorize_admin
+from certidude.auth import login_required
 from certidude.user import User
 from certidude.decorators import serialize, csrf_protection
 from certidude import const, config
@@ -274,7 +271,7 @@ def certidude_app(log_handlers=[]):
         app.add_route("/api/log/", LogResource(uri))
     elif config.LOGGING_BACKEND == "syslog":
         from logging.handlers import SyslogHandler
-        log_handlers.append(SysLogHandler())
+        log_handlers.append(SyslogHandler())
         # Browsing syslog via HTTP is obviously not possible out of the box
     elif config.LOGGING_BACKEND:
         raise ValueError("Invalid logging.backend = %s" % config.LOGGING_BACKEND)
