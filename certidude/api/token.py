@@ -11,12 +11,15 @@ from time import time
 from certidude import mailer
 from certidude.decorators import serialize
 from certidude.user import User
-from certidude import config, authority
+from certidude import config
 from certidude.auth import login_required, authorize_admin
 
 logger = logging.getLogger(__name__)
 
 class TokenResource(object):
+    def __init__(self, authority):
+        self.authority = authority
+
     def on_put(self, req, resp):
         # Consume token
         now = time()
@@ -43,7 +46,7 @@ class TokenResource(object):
         common_name = csr["certification_request_info"]["subject"].native["common_name"]
         assert common_name == username or common_name.startswith(username + "@"), "Invalid common name %s" % common_name
         try:
-            _, resp.body = authority._sign(csr, body)
+            _, resp.body = self.authority._sign(csr, body)
             resp.set_header("Content-Type", "application/x-pem-file")
             logger.info("Autosigned %s as proven by token ownership", common_name)
         except FileExistsError:

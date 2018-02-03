@@ -225,7 +225,7 @@ def certidude_app(log_handlers=[]):
     app.add_route("/api/", SessionResource())
 
     if config.USER_ENROLLMENT_ALLOWED: # TODO: add token enable/disable flag for config
-        app.add_route("/api/token/", TokenResource())
+        app.add_route("/api/token/", TokenResource(authority))
 
     # Extended attributes for scripting etc.
     app.add_route("/api/signed/{cn}/attr/", AttributeResource(authority, namespace="machine"))
