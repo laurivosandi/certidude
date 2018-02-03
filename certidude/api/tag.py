@@ -1,4 +1,3 @@
-import falcon
 import logging
 from xattr import getxattr, removexattr, setxattr
 from certidude import push
