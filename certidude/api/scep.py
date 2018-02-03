@@ -1,11 +1,9 @@
-import click
 import hashlib
 import os
-from asn1crypto import cms, algos, x509
-from asn1crypto.core import ObjectIdentifier, SetOf, PrintableString
-from base64 import b64decode, b64encode
-from certbuilder import pem_armor_certificate
-from certidude import push, config
+from asn1crypto import cms, algos
+from asn1crypto.core import SetOf, PrintableString
+from base64 import b64decode
+from certidude import config
 from certidude.firewall import whitelist_subnets
 from oscrypto import keys, asymmetric, symmetric
 from oscrypto.errors import SignatureError
@@ -31,7 +29,7 @@ cms.CMSAttribute._oid_specs['recipient_nonce'] = cms.SetOfOctetString
 cms.CMSAttribute._oid_specs['trans_id'] = SetOfPrintableString
 
 class SCEPError(Exception): code = 25 # system failure
-class SCEPBadAlg(SCEPError): code = 0
+class SCEPBadAlgo(SCEPError): code = 0
 class SCEPBadMessageCheck(SCEPError): code = 1
 class SCEPBadRequest(SCEPError): code = 2
 class SCEPBadTime(SCEPError): code = 3
