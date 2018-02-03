@@ -1,6 +1,7 @@
 import click
 import falcon
 import hashlib
+import logging
 import os
 from asn1crypto.util import timezone
 from asn1crypto import cms, algos, x509, ocsp
@@ -12,6 +13,8 @@ from datetime import datetime, timedelta
 from oscrypto import keys, asymmetric, symmetric
 from oscrypto.errors import SignatureError
 from .utils import AuthorityHandler
+
+logger = logging.getLogger(__name__)
 
 class OCSPResource(AuthorityHandler):
     @whitelist_subnets(config.OCSP_SUBNETS)
