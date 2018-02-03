@@ -1,8 +1,6 @@
-import falcon
 import logging
 import os
 from certidude import const, config
-from certidude.decorators import serialize
 from jinja2 import Environment, FileSystemLoader
 from certidude.firewall import whitelist_subject
 from .utils import AuthorityHandler
