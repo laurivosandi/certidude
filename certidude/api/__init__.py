@@ -232,11 +232,11 @@ def certidude_app(log_handlers=[]):
     app.add_route("/api/signed/{cn}/script/", ScriptResource(authority))
 
     # API calls used by pushed events on the JS end
-    app.add_route("/api/signed/{cn}/tag/", TagResource())
+    app.add_route("/api/signed/{cn}/tag/", TagResource(authority))
     app.add_route("/api/signed/{cn}/lease/", LeaseDetailResource(authority))
 
     # API call used to delete existing tags
-    app.add_route("/api/signed/{cn}/tag/{tag}/", TagDetailResource())
+    app.add_route("/api/signed/{cn}/tag/{tag}/", TagDetailResource(authority))
 
     # Gateways can submit leases via this API call
     app.add_route("/api/lease/", LeaseResource(authority))

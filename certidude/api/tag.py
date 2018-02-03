@@ -1,18 +1,21 @@
 import falcon
 import logging
 from xattr import getxattr, removexattr, setxattr
-from certidude import authority, push
+from certidude import push
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize, csrf_protection
 
 logger = logging.getLogger(__name__)
 
 class TagResource(object):
+    def __init__(self, authority):
+        self.authority = authority
+
     @serialize
     @login_required
     @authorize_admin
     def on_get(self, req, resp, cn):
-        path, buf, cert, signed, expires = authority.get_signed(cn)
+        path, buf, cert, signed, expires = self.authority.get_signed(cn)
         tags = []
         try:
             for tag in getxattr(path, "user.xdg.tags").decode("utf-8").split(","):
@@ -30,7 +33,7 @@ class TagResource(object):
     @login_required
     @authorize_admin
     def on_post(self, req, resp, cn):
-        path, buf, cert, signed, expires = authority.get_signed(cn)
+        path, buf, cert, signed, expires = self.authority.get_signed(cn)
         key, value = req.get_param("key", required=True), req.get_param("value", required=True)
         try:
             tags = set(getxattr(path, "user.xdg.tags").decode("utf-8").split(","))
@@ -46,11 +49,14 @@ class TagResource(object):
 
 
 class TagDetailResource(object):
+    def __init__(self, authority):
+        self.authority = authority
+
     @csrf_protection
     @login_required
     @authorize_admin
     def on_put(self, req, resp, cn, tag):
-        path, buf, cert, signed, expires = authority.get_signed(cn)
+        path, buf, cert, signed, expires = self.authority.get_signed(cn)
         value = req.get_param("value", required=True)
         try:
             tags = set(getxattr(path, "user.xdg.tags").decode("utf-8").split(","))
@@ -72,7 +78,7 @@ class TagDetailResource(object):
     @login_required
     @authorize_admin
     def on_delete(self, req, resp, cn, tag):
-        path, buf, cert, signed, expires = authority.get_signed(cn)
+        path, buf, cert, signed, expires = self.authority.get_signed(cn)
         tags = set(getxattr(path, "user.xdg.tags").decode("utf-8").split(","))
         tags.remove(tag)
         if not tags:
