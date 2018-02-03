@@ -250,7 +250,7 @@ def certidude_app(log_handlers=[]):
     # Add CRL handler if we have any whitelisted subnets
     if config.CRL_SUBNETS:
         from .revoked import RevocationListResource
-        app.add_route("/api/revoked/", RevocationListResource())
+        app.add_route("/api/revoked/", RevocationListResource(authority))
 
     # Add SCEP handler if we have any whitelisted subnets
     if config.SCEP_SUBNETS:
