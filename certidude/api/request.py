@@ -1,7 +1,6 @@
 import click
 import falcon
 import logging
-import ipaddress
 import json
 import os
 import hashlib
@@ -10,7 +9,7 @@ from asn1crypto.csr import CertificationRequest
 from base64 import b64decode
 from certidude import config, push, errors
 from certidude.auth import login_required, login_optional, authorize_admin
-from certidude.decorators import csrf_protection, MyEncoder, serialize
+from certidude.decorators import csrf_protection, MyEncoder
 from certidude.firewall import whitelist_subnets, whitelist_content_types
 from datetime import datetime
 from oscrypto import asymmetric
