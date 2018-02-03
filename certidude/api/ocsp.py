@@ -1,17 +1,13 @@
-import click
 import falcon
-import hashlib
 import logging
 import os
 from asn1crypto.util import timezone
-from asn1crypto import cms, algos, x509, ocsp
-from base64 import b64decode, b64encode
-from certbuilder import pem_armor_certificate
-from certidude import push, config
+from asn1crypto import ocsp
+from base64 import b64decode
+from certidude import config
 from certidude.firewall import whitelist_subnets
-from datetime import datetime, timedelta
-from oscrypto import keys, asymmetric, symmetric
-from oscrypto.errors import SignatureError
+from datetime import datetime
+from oscrypto import asymmetric
 from .utils import AuthorityHandler
 
 logger = logging.getLogger(__name__)
