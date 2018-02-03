@@ -3,7 +3,6 @@ import falcon
 import logging
 import json
 import hashlib
-from certidude import authority
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import csrf_protection
 from xattr import getxattr
@@ -11,11 +10,14 @@ from xattr import getxattr
 logger = logging.getLogger(__name__)
 
 class SignedCertificateDetailResource(object):
+    def __init__(self, authority):
+        self.authority = authority
+
     def on_get(self, req, resp, cn):
 
         preferred_type = req.client_prefers(("application/json", "application/x-pem-file"))
         try:
-            path, buf, cert, signed, expires = authority.get_signed(cn)
+            path, buf, cert, signed, expires = self.authority.get_signed(cn)
         except EnvironmentError:
             logger.warning("Failed to serve non-existant certificate %s to %s",
                 cn, req.context.get("remote_addr"))
@@ -55,5 +57,5 @@ class SignedCertificateDetailResource(object):
     def on_delete(self, req, resp, cn):
         logger.info("Revoked certificate %s by %s from %s",
             cn, req.context.get("user"), req.context.get("remote_addr"))
-        authority.revoke(cn)
+        self.authority.revoke(cn)
 

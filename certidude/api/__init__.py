@@ -219,7 +219,7 @@ def certidude_app(log_handlers=[]):
 
     # Certificate authority API calls
     app.add_route("/api/certificate/", CertificateAuthorityResource())
-    app.add_route("/api/signed/{cn}/", SignedCertificateDetailResource())
+    app.add_route("/api/signed/{cn}/", SignedCertificateDetailResource(authority))
     app.add_route("/api/request/{cn}/", RequestDetailResource(authority))
     app.add_route("/api/request/", RequestListResource(authority))
     app.add_route("/api/", SessionResource())
