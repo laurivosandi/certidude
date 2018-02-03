@@ -262,7 +262,7 @@ def certidude_app(log_handlers=[]):
 
     if config.OCSP_SUBNETS:
         from .ocsp import OCSPResource
-        app.add_sink(OCSPResource(), prefix="/api/ocsp")
+        app.add_sink(OCSPResource(authority), prefix="/api/ocsp")
 
     # Set up log handlers
     if config.LOGGING_BACKEND == "sql":
