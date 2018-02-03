@@ -1,7 +1,7 @@
 import falcon
 import logging
 import os
-from certidude import const, config, authority
+from certidude import const, config
 from certidude.decorators import serialize
 from jinja2 import Environment, FileSystemLoader
 from certidude.firewall import whitelist_subject
@@ -10,9 +10,12 @@ logger = logging.getLogger(__name__)
 env = Environment(loader=FileSystemLoader(config.SCRIPT_DIR), trim_blocks=True)
 
 class ScriptResource():
+    def __init__(self, authority):
+        self.authority = authority
+
     @whitelist_subject
     def on_get(self, req, resp, cn):
-        path, buf, cert, attribs = authority.get_attributes(cn)
+        path, buf, cert, attribs = self.authority.get_attributes(cn)
         # TODO: are keys unique?
         named_tags = {}
         other_tags = []
