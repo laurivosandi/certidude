@@ -1,9 +1,6 @@
-import click
 import falcon
 import logging
 import hashlib
-import random
-import string
 from asn1crypto import pem
 from asn1crypto.csr import CertificationRequest
 from datetime import datetime
