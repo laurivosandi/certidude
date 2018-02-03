@@ -1,6 +1,4 @@
 import logging
-from certidude.decorators import serialize
-from certidude.config import cp
 from certidude import config, const
 from jinja2 import Template
 from .utils import AuthorityHandler
