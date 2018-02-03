@@ -1,18 +1,18 @@
-import click
 import falcon
-import hashlib
+import logging
 import os
 from asn1crypto.util import timezone
-from asn1crypto import cms, algos, x509, ocsp
-from base64 import b64decode, b64encode
-from certbuilder import pem_armor_certificate
-from certidude import authority, push, config
-from certidude.firewall import whitelist_subnets
-from datetime import datetime, timedelta
-from oscrypto import keys, asymmetric, symmetric
-from oscrypto.errors import SignatureError
+from asn1crypto import ocsp
+from base64 import b64decode
+from certidude import config
+from datetime import datetime
+from oscrypto import asymmetric
+from .utils import AuthorityHandler
+from .utils.firewall import whitelist_subnets
 
-class OCSPResource(object):
+logger = logging.getLogger(__name__)
+
+class OCSPResource(AuthorityHandler):
     @whitelist_subnets(config.OCSP_SUBNETS)
     def __call__(self, req, resp):
         try:
@@ -55,14 +55,14 @@ class OCSPResource(object):
                 link_target = os.readlink(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % serial))
                 assert link_target.startswith("../")
                 assert link_target.endswith(".pem")
-                path, buf, cert, signed, expires = authority.get_signed(link_target[3:-4])
+                path, buf, cert, signed, expires = self.authority.get_signed(link_target[3:-4])
                 if serial != cert.serial_number:
                     logger.error("Certificate store integrity check failed, %s refers to certificate with serial %x" % (link_target, cert.serial_number))
                     raise EnvironmentError("Integrity check failed")
                 status = ocsp.CertStatus(name='good', value=None)
             except EnvironmentError:
                 try:
-                    path, buf, cert, signed, expires, revoked = authority.get_revoked(serial)
+                    path, buf, cert, signed, expires, revoked = self.authority.get_revoked(serial)
                     status = ocsp.CertStatus(
                         name='revoked',
                         value={
@@ -102,7 +102,7 @@ class OCSPResource(object):
                     'certs': [server_certificate.asn1],
                     'signature_algorithm': {'algorithm': "sha1_rsa"},
                     'signature': asymmetric.rsa_pkcs1v15_sign(
-                        authority.private_key,
+                        self.authority.private_key,
                         response_data.dump(),
                         "sha1"
                     )

@@ -9,9 +9,9 @@ script:
   - sudo apt install software-properties-common python3-setuptools python3-mysql.connector python3-pyxattr
   - sudo mkdir -p /etc/systemd/system # Until Travis is stuck with 14.04
   - sudo easy_install3 pip
-  - sudo pip3 install -r requirements.txt
-  - sudo pip3 install codecov pytest-cov requests-kerberos
-  - sudo pip3 install -e .
+  - sudo -H pip3 install -r requirements.txt
+  - sudo -H pip3 install codecov pytest-cov requests-kerberos
+  - sudo -H pip3 install -e .
   - echo ca | sudo tee /etc/hostname
   - echo 127.0.0.1 localhost | sudo tee /etc/hosts
   - echo 127.0.1.1 ca.example.lan ca | sudo tee -a /etc/hosts
@@ -21,6 +21,4 @@ script:
   - sudo coverage combine
   - sudo coverage report
   - sudo coverage xml -i
-cache:
-  directories:
-    - $HOME/.cache/pip
+cache: pip

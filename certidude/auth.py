@@ -9,7 +9,6 @@ import re
 import socket
 from base64 import b64decode
 from certidude.user import User
-from certidude.firewall import whitelist_subnets
 from certidude import config, const
 
 logger = logging.getLogger("api")

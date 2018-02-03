@@ -1,7 +1,6 @@
 
 import falcon
 import logging
-import click
 from asn1crypto import pem, x509
 
 logger = logging.getLogger("api")
@@ -10,8 +9,6 @@ def whitelist_subnets(subnets):
     """
     Validate source IP address of API call against subnet list
     """
-    import falcon
-
     def wrapper(func):
         def wrapped(self, req, resp, *args, **kwargs):
             # Check for administration subnet whitelist
@@ -30,8 +27,6 @@ def whitelist_subnets(subnets):
     return wrapper
 
 def whitelist_content_types(*content_types):
-    import falcon
-
     def wrapper(func):
         def wrapped(self, req, resp, *args, **kwargs):
             for content_type in content_types:
@@ -58,7 +53,7 @@ def whitelist_subject(func):
                 header, _, der_bytes = pem.unarmor(buf.replace("\t", "").encode("ascii"))
                 origin_cert = x509.Certificate.load(der_bytes)
                 if origin_cert.native == cert.native:
-                    click.echo("Subject authenticated using certificates")
+                    logger.debug("Subject authenticated using certificates")
                     return func(self, req, resp, cn, *args, **kwargs)
 
             # For backwards compatibility check source IP address
@@ -73,4 +68,3 @@ def whitelist_subject(func):
                 else:
                     return func(self, req, resp, cn, *args, **kwargs)
     return wrapped
-

@@ -1,5 +1,4 @@
 
-from certidude import config
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize
 from certidude.relational import RelationalMixin

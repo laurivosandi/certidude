@@ -4,16 +4,14 @@ import falcon
 import mimetypes
 import logging
 import os
-import click
 import hashlib
-from datetime import datetime, timedelta
-from time import sleep
+from datetime import datetime
 from xattr import listxattr, getxattr
-from certidude import authority, mailer
-from certidude.auth import login_required, authorize_admin
+from certidude.auth import login_required
 from certidude.user import User
 from certidude.decorators import serialize, csrf_protection
 from certidude import const, config
+from .utils import AuthorityHandler
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +25,7 @@ class CertificateAuthorityResource(object):
             const.HOSTNAME.encode("ascii"))
 
 
-class SessionResource(object):
+class SessionResource(AuthorityHandler):
     @csrf_protection
     @serialize
     @login_required
@@ -44,7 +42,7 @@ class SessionResource(object):
                 except IOError:
                     submission_hostname = None
                 yield dict(
-                    server = authority.server_flags(common_name),
+                    server = self.authority.server_flags(common_name),
                     submitted = submitted,
                     common_name = common_name,
                     address = submission_address,
@@ -142,7 +140,7 @@ class SessionResource(object):
                     dead = 604800 # Seconds from last activity to consider lease dead, X509 chain broken or machine discarded
                 ),
                 common_name = const.FQDN,
-                title = authority.certificate.subject.native["common_name"],
+                title = self.authority.certificate.subject.native["common_name"],
                 mailer = dict(
                     name = config.MAILER_NAME,
                     address = config.MAILER_ADDRESS
@@ -151,9 +149,9 @@ class SessionResource(object):
                 user_enrollment_allowed=config.USER_ENROLLMENT_ALLOWED,
                 user_multiple_certificates=config.USER_MULTIPLE_CERTIFICATES,
                 events = config.EVENT_SOURCE_SUBSCRIBE % config.EVENT_SOURCE_TOKEN,
-                requests=serialize_requests(authority.list_requests),
-                signed=serialize_certificates(authority.list_signed),
-                revoked=serialize_revoked(authority.list_revoked),
+                requests=serialize_requests(self.authority.list_requests),
+                signed=serialize_certificates(self.authority.list_signed),
+                revoked=serialize_revoked(self.authority.list_revoked),
                 admin_users = User.objects.filter_admins(),
                 user_subnets = config.USER_SUBNETS or None,
                 autosign_subnets = config.AUTOSIGN_SUBNETS or None,
@@ -202,7 +200,7 @@ class NormalizeMiddleware(object):
         req.context["remote_addr"] = ipaddress.ip_address(req.access_route[0])
 
 def certidude_app(log_handlers=[]):
-    from certidude import config
+    from certidude import authority, config
     from .signed import SignedCertificateDetailResource
     from .request import RequestListResource, RequestDetailResource
     from .lease import LeaseResource, LeaseDetailResource
@@ -219,30 +217,30 @@ def certidude_app(log_handlers=[]):
 
     # Certificate authority API calls
     app.add_route("/api/certificate/", CertificateAuthorityResource())
-    app.add_route("/api/signed/{cn}/", SignedCertificateDetailResource())
-    app.add_route("/api/request/{cn}/", RequestDetailResource())
-    app.add_route("/api/request/", RequestListResource())
-    app.add_route("/api/", SessionResource())
+    app.add_route("/api/signed/{cn}/", SignedCertificateDetailResource(authority))
+    app.add_route("/api/request/{cn}/", RequestDetailResource(authority))
+    app.add_route("/api/request/", RequestListResource(authority))
+    app.add_route("/api/", SessionResource(authority))
 
     if config.USER_ENROLLMENT_ALLOWED: # TODO: add token enable/disable flag for config
-        app.add_route("/api/token/", TokenResource())
+        app.add_route("/api/token/", TokenResource(authority))
 
     # Extended attributes for scripting etc.
-    app.add_route("/api/signed/{cn}/attr/", AttributeResource(namespace="machine"))
-    app.add_route("/api/signed/{cn}/script/", ScriptResource())
+    app.add_route("/api/signed/{cn}/attr/", AttributeResource(authority, namespace="machine"))
+    app.add_route("/api/signed/{cn}/script/", ScriptResource(authority))
 
     # API calls used by pushed events on the JS end
-    app.add_route("/api/signed/{cn}/tag/", TagResource())
-    app.add_route("/api/signed/{cn}/lease/", LeaseDetailResource())
+    app.add_route("/api/signed/{cn}/tag/", TagResource(authority))
+    app.add_route("/api/signed/{cn}/lease/", LeaseDetailResource(authority))
 
     # API call used to delete existing tags
-    app.add_route("/api/signed/{cn}/tag/{tag}/", TagDetailResource())
+    app.add_route("/api/signed/{cn}/tag/{tag}/", TagDetailResource(authority))
 
     # Gateways can submit leases via this API call
-    app.add_route("/api/lease/", LeaseResource())
+    app.add_route("/api/lease/", LeaseResource(authority))
 
     # Bootstrap resource
-    app.add_route("/api/bootstrap/", BootstrapResource())
+    app.add_route("/api/bootstrap/", BootstrapResource(authority))
 
     # LEDE image builder resource
     app.add_route("/api/build/{profile}/{suggested_filename}", ImageBuilderResource())
@@ -250,19 +248,19 @@ def certidude_app(log_handlers=[]):
     # Add CRL handler if we have any whitelisted subnets
     if config.CRL_SUBNETS:
         from .revoked import RevocationListResource
-        app.add_route("/api/revoked/", RevocationListResource())
+        app.add_route("/api/revoked/", RevocationListResource(authority))
 
     # Add SCEP handler if we have any whitelisted subnets
     if config.SCEP_SUBNETS:
         from .scep import SCEPResource
-        app.add_route("/api/scep/", SCEPResource())
+        app.add_route("/api/scep/", SCEPResource(authority))
 
     # Add sink for serving static files
     app.add_sink(StaticResource(os.path.join(__file__, "..", "..", "static")))
 
     if config.OCSP_SUBNETS:
         from .ocsp import OCSPResource
-        app.add_sink(OCSPResource(), prefix="/api/ocsp")
+        app.add_sink(OCSPResource(authority), prefix="/api/ocsp")
 
     # Set up log handlers
     if config.LOGGING_BACKEND == "sql":
@@ -273,7 +271,7 @@ def certidude_app(log_handlers=[]):
         app.add_route("/api/log/", LogResource(uri))
     elif config.LOGGING_BACKEND == "syslog":
         from logging.handlers import SyslogHandler
-        log_handlers.append(SysLogHandler())
+        log_handlers.append(SyslogHandler())
         # Browsing syslog via HTTP is obviously not possible out of the box
     elif config.LOGGING_BACKEND:
         raise ValueError("Invalid logging.backend = %s" % config.LOGGING_BACKEND)
