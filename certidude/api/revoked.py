@@ -5,13 +5,11 @@ import json
 import logging
 from certidude import const, config
 from certidude.firewall import whitelist_subnets
+from .utils import AuthorityHandler
 
 logger = logging.getLogger(__name__)
 
-class RevocationListResource(object):
-    def __init__(self, authority):
-        self.authority = authority
-
+class RevocationListResource(AuthorityHandler):
     @whitelist_subnets(config.CRL_SUBNETS)
     def on_get(self, req, resp):
         # Primarily offer DER encoded CRL as per RFC5280

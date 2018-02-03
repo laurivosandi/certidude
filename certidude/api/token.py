@@ -13,13 +13,11 @@ from certidude.decorators import serialize
 from certidude.user import User
 from certidude import config
 from certidude.auth import login_required, authorize_admin
+from .utils import AuthorityHandler
 
 logger = logging.getLogger(__name__)
 
-class TokenResource(object):
-    def __init__(self, authority):
-        self.authority = authority
-
+class TokenResource(AuthorityHandler):
     def on_put(self, req, resp):
         # Consume token
         now = time()

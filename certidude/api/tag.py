@@ -4,13 +4,11 @@ from xattr import getxattr, removexattr, setxattr
 from certidude import push
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize, csrf_protection
+from .utils import AuthorityHandler
 
 logger = logging.getLogger(__name__)
 
-class TagResource(object):
-    def __init__(self, authority):
-        self.authority = authority
-
+class TagResource(AuthorityHandler):
     @serialize
     @login_required
     @authorize_admin

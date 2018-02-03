@@ -9,6 +9,7 @@ from certidude import push, config
 from certidude.firewall import whitelist_subnets
 from oscrypto import keys, asymmetric, symmetric
 from oscrypto.errors import SignatureError
+from .utils import AuthorityHandler
 
 # Monkey patch asn1crypto
 
@@ -36,10 +37,7 @@ class SCEPBadRequest(SCEPError): code = 2
 class SCEPBadTime(SCEPError): code = 3
 class SCEPBadCertId(SCEPError): code = 4
 
-class SCEPResource(object):
-    def __init__(self, authority):
-        self.authority = authority
-
+class SCEPResource(AuthorityHandler):
     @whitelist_subnets(config.SCEP_SUBNETS)
     def on_get(self, req, resp):
         operation = req.get_param("operation", required=True)

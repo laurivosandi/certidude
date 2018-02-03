@@ -16,6 +16,7 @@ from datetime import datetime
 from oscrypto import asymmetric
 from oscrypto.errors import SignatureError
 from xattr import getxattr
+from .utils import AuthorityHandler
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +27,7 @@ curl -f -L -H "Content-type: application/pkcs10" --data-binary @test.csr \
   http://ca.example.lan/api/request/?wait=yes
 """
 
-class RequestListResource(object):
-    def __init__(self, authority):
-        self.authority = authority
-
+class RequestListResource(AuthorityHandler):
     @login_optional
     @whitelist_subnets(config.REQUEST_SUBNETS)
     @whitelist_content_types("application/pkcs10")
@@ -177,10 +175,7 @@ class RequestListResource(object):
                     cls=MyEncoder)
 
 
-class RequestDetailResource(object):
-    def __init__(self, authority):
-        self.authority = authority
-
+class RequestDetailResource(AuthorityHandler):
     def on_get(self, req, resp, cn):
         """
         Fetch certificate signing request as PEM

@@ -6,13 +6,11 @@ import hashlib
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import csrf_protection
 from xattr import getxattr
+from .utils import AuthorityHandler
 
 logger = logging.getLogger(__name__)
 
-class SignedCertificateDetailResource(object):
-    def __init__(self, authority):
-        self.authority = authority
-
+class SignedCertificateDetailResource(AuthorityHandler):
     def on_get(self, req, resp, cn):
 
         preferred_type = req.client_prefers(("application/json", "application/x-pem-file"))

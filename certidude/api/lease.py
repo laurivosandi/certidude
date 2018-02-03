@@ -8,15 +8,13 @@ from datetime import datetime
 from certidude import config, push
 from certidude.auth import login_required, authorize_admin, authorize_server
 from certidude.decorators import serialize
+from .utils import AuthorityHandler
 
 logger = logging.getLogger(__name__)
 
 # TODO: lease namespacing (?)
 
-class LeaseDetailResource(object):
-    def __init__(self, authority):
-        self.authority = authority
-
+class LeaseDetailResource(AuthorityHandler):
     @serialize
     @login_required
     @authorize_admin
@@ -32,10 +30,7 @@ class LeaseDetailResource(object):
             raise falcon.HTTPNotFound()
 
 
-class LeaseResource(object):
-    def __init__(self, authority):
-        self.authority = authority
-
+class LeaseResource(AuthorityHandler):
     @authorize_server
     def on_post(self, req, resp):
         client_common_name = req.get_param("client", required=True)

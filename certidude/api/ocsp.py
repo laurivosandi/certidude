@@ -11,11 +11,9 @@ from certidude.firewall import whitelist_subnets
 from datetime import datetime, timedelta
 from oscrypto import keys, asymmetric, symmetric
 from oscrypto.errors import SignatureError
+from .utils import AuthorityHandler
 
-class OCSPResource(object):
-    def __init__(self, authority):
-        self.authority = authority
-
+class OCSPResource(AuthorityHandler):
     @whitelist_subnets(config.OCSP_SUBNETS)
     def __call__(self, req, resp):
         try:
