@@ -5,10 +5,10 @@ from asn1crypto.util import timezone
 from asn1crypto import ocsp
 from base64 import b64decode
 from certidude import config
-from certidude.firewall import whitelist_subnets
 from datetime import datetime
 from oscrypto import asymmetric
 from .utils import AuthorityHandler
+from .utils.firewall import whitelist_subnets
 
 logger = logging.getLogger(__name__)
 

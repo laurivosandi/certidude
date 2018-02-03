@@ -4,10 +4,10 @@ from asn1crypto import cms, algos
 from asn1crypto.core import SetOf, PrintableString
 from base64 import b64decode
 from certidude import config
-from certidude.firewall import whitelist_subnets
 from oscrypto import keys, asymmetric, symmetric
 from oscrypto.errors import SignatureError
 from .utils import AuthorityHandler
+from .utils.firewall import whitelist_subnets
 
 # Monkey patch asn1crypto
 

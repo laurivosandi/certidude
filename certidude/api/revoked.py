@@ -1,8 +1,8 @@
 import falcon
 import logging
 from certidude import const, config
-from certidude.firewall import whitelist_subnets
 from .utils import AuthorityHandler
+from .utils.firewall import whitelist_subnets
 
 logger = logging.getLogger(__name__)
 

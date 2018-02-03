@@ -2,8 +2,8 @@ import logging
 import os
 from certidude import const, config
 from jinja2 import Environment, FileSystemLoader
-from certidude.firewall import whitelist_subject
 from .utils import AuthorityHandler
+from .utils.firewall import whitelist_subject
 
 logger = logging.getLogger(__name__)
 env = Environment(loader=FileSystemLoader(config.SCRIPT_DIR), trim_blocks=True)
