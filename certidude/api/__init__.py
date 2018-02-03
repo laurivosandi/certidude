@@ -9,7 +9,7 @@ import hashlib
 from datetime import datetime, timedelta
 from time import sleep
 from xattr import listxattr, getxattr
-from certidude import authority, mailer
+from certidude import mailer
 from certidude.auth import login_required, authorize_admin
 from certidude.user import User
 from certidude.decorators import serialize, csrf_protection
@@ -202,7 +202,7 @@ class NormalizeMiddleware(object):
         req.context["remote_addr"] = ipaddress.ip_address(req.access_route[0])
 
 def certidude_app(log_handlers=[]):
-    from certidude import config
+    from certidude import authority, config
     from .signed import SignedCertificateDetailResource
     from .request import RequestListResource, RequestDetailResource
     from .lease import LeaseResource, LeaseDetailResource
@@ -242,7 +242,7 @@ def certidude_app(log_handlers=[]):
     app.add_route("/api/lease/", LeaseResource())
 
     # Bootstrap resource
-    app.add_route("/api/bootstrap/", BootstrapResource())
+    app.add_route("/api/bootstrap/", BootstrapResource(authority))
 
     # LEDE image builder resource
     app.add_route("/api/build/{profile}/{suggested_filename}", ImageBuilderResource())
