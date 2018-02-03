@@ -228,7 +228,7 @@ def certidude_app(log_handlers=[]):
         app.add_route("/api/token/", TokenResource())
 
     # Extended attributes for scripting etc.
-    app.add_route("/api/signed/{cn}/attr/", AttributeResource(namespace="machine"))
+    app.add_route("/api/signed/{cn}/attr/", AttributeResource(authority, namespace="machine"))
     app.add_route("/api/signed/{cn}/script/", ScriptResource())
 
     # API calls used by pushed events on the JS end

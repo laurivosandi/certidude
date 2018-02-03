@@ -4,7 +4,7 @@ import logging
 import re
 from xattr import setxattr, listxattr, removexattr
 from datetime import datetime
-from certidude import config, authority, push
+from certidude import push
 from certidude.decorators import serialize, csrf_protection
 from certidude.firewall import whitelist_subject
 from certidude.auth import login_required, login_optional, authorize_admin
@@ -13,7 +13,8 @@ from ipaddress import ip_address
 logger = logging.getLogger(__name__)
 
 class AttributeResource(object):
-    def __init__(self, namespace):
+    def __init__(self, authority, namespace):
+        self.authority = authority
         self.namespace = namespace
 
     @serialize
@@ -27,7 +28,7 @@ class AttributeResource(object):
         Results made available only to lease IP address.
         """
         try:
-            path, buf, cert, attribs = authority.get_attributes(cn, namespace=self.namespace)
+            path, buf, cert, attribs = self.authority.get_attributes(cn, namespace=self.namespace)
         except IOError:
             raise falcon.HTTPNotFound()
         else:
@@ -38,7 +39,7 @@ class AttributeResource(object):
     def on_post(self, req, resp, cn):
         namespace = ("user.%s." % self.namespace).encode("ascii")
         try:
-            path, buf, cert, signed, expires = authority.get_signed(cn)
+            path, buf, cert, signed, expires = self.authority.get_signed(cn)
         except IOError:
             raise falcon.HTTPNotFound()
         else:
