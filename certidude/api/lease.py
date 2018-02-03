@@ -1,5 +1,3 @@
-
-import click
 import falcon
 import logging
 import os
