@@ -14,6 +14,7 @@ from certidude.auth import login_required, authorize_admin
 from certidude.user import User
 from certidude.decorators import serialize, csrf_protection
 from certidude import const, config
+from .utils import AuthorityHandler
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +28,7 @@ class CertificateAuthorityResource(object):
             const.HOSTNAME.encode("ascii"))
 
 
-class SessionResource(object):
+class SessionResource(AuthorityHandler):
     @csrf_protection
     @serialize
     @login_required
@@ -44,7 +45,7 @@ class SessionResource(object):
                 except IOError:
                     submission_hostname = None
                 yield dict(
-                    server = authority.server_flags(common_name),
+                    server = self.authority.server_flags(common_name),
                     submitted = submitted,
                     common_name = common_name,
                     address = submission_address,
@@ -142,7 +143,7 @@ class SessionResource(object):
                     dead = 604800 # Seconds from last activity to consider lease dead, X509 chain broken or machine discarded
                 ),
                 common_name = const.FQDN,
-                title = authority.certificate.subject.native["common_name"],
+                title = self.authority.certificate.subject.native["common_name"],
                 mailer = dict(
                     name = config.MAILER_NAME,
                     address = config.MAILER_ADDRESS
@@ -151,9 +152,9 @@ class SessionResource(object):
                 user_enrollment_allowed=config.USER_ENROLLMENT_ALLOWED,
                 user_multiple_certificates=config.USER_MULTIPLE_CERTIFICATES,
                 events = config.EVENT_SOURCE_SUBSCRIBE % config.EVENT_SOURCE_TOKEN,
-                requests=serialize_requests(authority.list_requests),
-                signed=serialize_certificates(authority.list_signed),
-                revoked=serialize_revoked(authority.list_revoked),
+                requests=serialize_requests(self.authority.list_requests),
+                signed=serialize_certificates(self.authority.list_signed),
+                revoked=serialize_revoked(self.authority.list_revoked),
                 admin_users = User.objects.filter_admins(),
                 user_subnets = config.USER_SUBNETS or None,
                 autosign_subnets = config.AUTOSIGN_SUBNETS or None,
@@ -222,7 +223,7 @@ def certidude_app(log_handlers=[]):
     app.add_route("/api/signed/{cn}/", SignedCertificateDetailResource(authority))
     app.add_route("/api/request/{cn}/", RequestDetailResource(authority))
     app.add_route("/api/request/", RequestListResource(authority))
-    app.add_route("/api/", SessionResource())
+    app.add_route("/api/", SessionResource(authority))
 
     if config.USER_ENROLLMENT_ALLOWED: # TODO: add token enable/disable flag for config
         app.add_route("/api/token/", TokenResource(authority))
