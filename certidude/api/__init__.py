@@ -255,7 +255,7 @@ def certidude_app(log_handlers=[]):
     # Add SCEP handler if we have any whitelisted subnets
     if config.SCEP_SUBNETS:
         from .scep import SCEPResource
-        app.add_route("/api/scep/", SCEPResource())
+        app.add_route("/api/scep/", SCEPResource(authority))
 
     # Add sink for serving static files
     app.add_sink(StaticResource(os.path.join(__file__, "..", "..", "static")))
