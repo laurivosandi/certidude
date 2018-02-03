@@ -1,7 +1,4 @@
-
-import click
 import falcon
-import json
 import logging
 from certidude import const, config
 from certidude.firewall import whitelist_subnets
