@@ -1,14 +1,11 @@
-import click
 import falcon
 import logging
 import re
 from xattr import setxattr, listxattr, removexattr
-from datetime import datetime
 from certidude import push
 from certidude.decorators import serialize, csrf_protection
 from certidude.firewall import whitelist_subject
-from certidude.auth import login_required, login_optional, authorize_admin
-from ipaddress import ip_address
+from certidude.auth import login_required, authorize_admin
 
 logger = logging.getLogger(__name__)
 
