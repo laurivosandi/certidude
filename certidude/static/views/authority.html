@@ -17,6 +17,47 @@ certidude bootstrap {{session.authority.common_name}}
   </code></pre>
             </div>
 
+            <h5>Windows 10</h5>
+
+            <p>On Windows execute following PowerShell script</p>
+
+            <div class="highlight">
+              <pre class="code"><code>$hostname = $env:computername.ToLower()
+$templ = @"
+[Version]
+Signature="$Windows NT$
+
+[NewRequest]
+Subject = "CN=$hostname"
+Exportable = FALSE
+KeyLength = 2048
+KeySpec = 1
+KeyUsage = 0xA0
+MachineKeySet = True
+ProviderName = "Microsoft RSA SChannel Cryptographic Provider"
+ProviderType = 12
+RequestType = PKCS10
+"@
+
+$templ | Out-File req.inf
+
+# Fetch CA certificate and install it
+Invoke-WebRequest -Uri http://{{ window.location.hostname }}/api/certificate -OutFile ca_cert.pem
+Import-Certificate -FilePath ca_cert.pem -CertStoreLocation Cert:\LocalMachine\Root
+
+# Generate keypair and submit CSR
+C:\Windows\system32\certreq.exe -new -f -q req.inf client_csr.pem
+Invoke-WebRequest -TimeoutSec 900 -Uri http://{{ window.location.hostname }}/api/request/?wait=1 -InFile client_csr.pem -ContentType application/pkcs10 -Method POST  -MaximumRedirection 3 -OutFile client_cert.pem
+
+# Import certificate
+Import-Certificate -FilePath client_cert.pem -CertStoreLocation Cert:\LocalMachine\My
+
+# Set up IPSec VPN tunnel
+Remove-VpnConnection -AllUserConnection -Force k-space
+Add-VpnConnection -Name k-space -ServerAddress guests.k-space.ee -SplitTunneling -PassThru -TunnelType ikev2 -AllUserConnection -AuthenticationMethod MachineCertificate
+Set-VpnConnectionIPsecConfiguration -ConnectionName k-space -AuthenticationTransformConstants SHA256128 -CipherTransformConstants AES256 -EncryptionMethod AES256 -IntegrityCheckMethod SHA384 -PfsGroup PFS24 -DHGroup Group24 -PassThru -AllUserConnection -Force</code></pre>
+            </div>
+
             <h5>UNIX & UNIX-like</h5>
 
             <p>On other UNIX-like machines generate key pair and submit the signing request using OpenSSL and cURL:</p>
