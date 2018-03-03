@@ -5,7 +5,7 @@ import json
 import hashlib
 from certidude.auth import login_required, authorize_admin
 from certidude.decorators import csrf_protection
-from xattr import getxattr
+from xattr import listxattr, getxattr
 from .utils import AuthorityHandler
 
 logger = logging.getLogger(__name__)
@@ -34,14 +34,28 @@ class SignedCertificateDetailResource(AuthorityHandler):
                 signer_username = getxattr(path, "user.signature.username").decode("ascii")
             except IOError:
                 signer_username = None
+
+            attributes = {}
+            for key in listxattr(path):
+                if key.startswith(b"user.machine."):
+                    attributes[key[13:].decode("ascii")] = getxattr(path, key).decode("ascii")
+
+            # TODO: dedup
             resp.body = json.dumps(dict(
                 common_name = cn,
                 signer = signer_username,
-                serial_number = "%x" % cert.serial_number,
+                serial = "%x" % cert.serial_number,
                 organizational_unit = cert.subject.native.get("organizational_unit_name"),
                 signed = cert["tbs_certificate"]["validity"]["not_before"].native.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                 expires = cert["tbs_certificate"]["validity"]["not_after"].native.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-                sha256sum = hashlib.sha256(buf).hexdigest()))
+                sha256sum = hashlib.sha256(buf).hexdigest(),
+                attributes = attributes or None,
+                lease = None,
+                extensions = dict([
+                    (e["extn_id"].native, e["extn_value"].native)
+                    for e in cert["tbs_certificate"]["extensions"]
+                    if e["extn_value"] in ("extended_key_usage",)])
+            ))
             logger.debug("Served certificate %s to %s as application/json",
                 cn, req.context.get("remote_addr"))
         else:

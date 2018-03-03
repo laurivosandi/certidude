@@ -100,6 +100,7 @@ class SessionResource(AuthorityHandler):
                 except IOError:
                     signer_username = None
 
+                # TODO: dedup
                 yield dict(
                     serial = "%x" % cert.serial_number,
                     organizational_unit = cert.subject.native.get("organizational_unit_name"),

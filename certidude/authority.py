@@ -68,7 +68,7 @@ def self_enroll():
         from certidude import authority
         from certidude.common import drop_privileges
         drop_privileges()
-        authority.sign(common_name, skip_push=True, overwrite=True)
+        authority.sign(common_name, skip_push=True, overwrite=True, profile="srv")
         sys.exit(0)
     else:
         os.waitpid(pid, 0)
@@ -307,7 +307,7 @@ def delete_request(common_name):
         config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest(),
         headers={"User-Agent": "Certidude API"})
 
-def sign(common_name, skip_notify=False, skip_push=False, overwrite=False, profile="default", signer=None):
+def sign(common_name, skip_notify=False, skip_push=False, overwrite=False, profile=None, signer=None):
     """
     Sign certificate signing request by it's common name
     """
@@ -325,12 +325,12 @@ def sign(common_name, skip_notify=False, skip_push=False, overwrite=False, profi
     os.unlink(req_path)
     return cert, buf
 
-def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, profile="default", signer=None):
+def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, profile=None, signer=None):
     # TODO: CRLDistributionPoints, OCSP URL, Certificate URL
     if profile not in config.PROFILES:
         raise ValueError("Invalid profile supplied '%s'" % profile)
 
-    assert buf.startswith(b"-----BEGIN CERTIFICATE REQUEST-----")
+    assert buf.startswith(b"-----BEGIN ")
     assert isinstance(csr, CertificationRequest)
     csr_pubkey = asymmetric.load_public_key(csr["certification_request_info"]["subject_pk_info"])
     common_name = csr["certification_request_info"]["subject"].native["common_name"]

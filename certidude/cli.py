@@ -956,7 +956,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         os.system("apt-get install -qq -y cython3 python3-dev python3-mimeparse \
             python3-markdown python3-pyxattr python3-jinja2 python3-cffi \
             software-properties-common libsasl2-modules-gssapi-mit npm nodejs \
-            libkrb5-dev libldap2-dev libsasl2-dev gawk libncurses5-dev")
+            libkrb5-dev libldap2-dev libsasl2-dev gawk libncurses5-dev rsync")
         os.system("pip3 install -q --upgrade gssapi falcon humanize ipaddress simplepam")
         os.system("pip3 install -q --pre --upgrade python-ldap")
 
@@ -1308,11 +1308,12 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
 
 @click.command("sign", help="Sign certificate")
 @click.argument("common_name")
+@click.option("--profile", "-p", default=None, help="Profile")
 @click.option("--overwrite", "-o", default=False, is_flag=True, help="Revoke valid certificate with same CN")
-def certidude_sign(common_name, overwrite):
+def certidude_sign(common_name, overwrite, profile):
     from certidude import authority
     drop_privileges()
-    cert = authority.sign(common_name, overwrite=overwrite)
+    cert = authority.sign(common_name, overwrite=overwrite, profile=profile)
 
 
 @click.command("revoke", help="Revoke certificate")
