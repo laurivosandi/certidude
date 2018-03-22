@@ -269,6 +269,10 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
             click.echo("No common name specified for %s, not requesting a certificate" % authority_name)
             continue
 
+        # If deriving common name from *current* hostname is preferred
+        if common_name == "$HOSTNAME":
+            common_name = const.HOSTNAME
+
         ################################
         ### Generate keypair and CSR ###
         ################################
