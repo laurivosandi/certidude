@@ -7,7 +7,7 @@ On vanilla OpenWrt/LEDE box install software packages:
 ```bash
 opkg update
 opkg install curl openssl-util
-opkg install strongswan-full kmod-crypto-echainiv
+opkg install strongswan-full kmod-crypto-echainiv kmod-crypto-gcm
 ```
 
 When using image builder specify these packages via PACKAGES environment variable.
