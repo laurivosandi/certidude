@@ -24,6 +24,7 @@ setup(
         "configparser",
         "certbuilder",
         "csrbuilder",
+        "jinja2",
     ],
     scripts=[
         "misc/certidude"
