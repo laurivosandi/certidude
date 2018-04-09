@@ -10,7 +10,7 @@ from xattr import listxattr, getxattr
 from certidude.auth import login_required
 from certidude.user import User
 from certidude.decorators import serialize, csrf_protection
-from certidude import const, config
+from certidude import const, config, authority
 from .utils import AuthorityHandler
 
 logger = logging.getLogger(__name__)
@@ -140,8 +140,11 @@ class SessionResource(AuthorityHandler):
                     offline = 600, # Seconds from last seen activity to consider lease offline, OpenVPN reneg-sec option
                     dead = 604800 # Seconds from last activity to consider lease dead, X509 chain broken or machine discarded
                 ),
-                common_name = const.FQDN,
-                title = self.authority.certificate.subject.native["common_name"],
+                certificate = dict(
+                    algorithm = authority.public_key.algorithm,
+                    common_name = self.authority.certificate.subject.native["common_name"],
+                    blob = self.authority.certificate_buf.decode("ascii"),
+                ),
                 mailer = dict(
                     name = config.MAILER_NAME,
                     address = config.MAILER_ADDRESS
@@ -164,6 +167,7 @@ class SessionResource(AuthorityHandler):
                 )
             ) if req.context.get("user").is_admin() else None,
             features=dict(
+                token=bool(config.TOKEN_URL),
                 tagging=True,
                 leases=True,
                 logging=config.LOGGING_BACKEND))

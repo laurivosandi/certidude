@@ -5,12 +5,13 @@
 
 # TODO: renewal
 
+AUTHORITY=certidude.@authority[0]
+
 [ $ACTION == "ifup" ] || exit 0
-[ $INTERFACE == "wan" ] || exit 0
+[ $INTERFACE == "$(uci get $AUTHORITY.trigger)" ] || exit 0
 
 # TODO: iterate over all authorities
 
-AUTHORITY=certidude.@authority[0]
 URL=$(uci get $AUTHORITY.url)
 GATEWAY=$(uci get $AUTHORITY.gateway)
 
@@ -40,8 +41,9 @@ logger -t certidude -s "Time is now: $(date)"
 # If certificate file is there assume everything's set up
 if [ -f $CERTIFICATE_PATH ]; then
     SERIAL=$(openssl x509 -in $CERTIFICATE_PATH -noout -serial | cut -d "=" -f 2 | tr [A-F] [a-f])
-    logger -t certidude -s "Certificate with serial $SERIAL already exists, attempting to bring up IPsec tunnel..."
-    ipsec up client-to-site
+    logger -t certidude -s "Certificate with serial $SERIAL already exists in $CERTIFICATE_PATH, attempting to bring up VPN tunnel..."
+    /etc/init.d/openvpn start
+    /etc/init.d/ipsec start
     exit 0
 fi
 
@@ -60,7 +62,7 @@ fi
 if [ ! -f $KEY_PATH ]; then
     KEY_TEMP=$(mktemp -u)
 
-    logger -t certidude -s "Generating RSA key for IPsec..."
+    logger -t certidude -s "Generating RSA key for VPN..."
     if [ -d $GREEN_LED ]; then
         echo 250 | tee $GREEN_LED/delay_*
     fi
@@ -167,31 +169,10 @@ fi
 
 logger -t certidude -s "Certificate md5sum: $(md5sum -b $CERTIFICATE_TEMP)"
 
-
-
-
-###################################
-### Generate /etc/ipsec.secrets ###
-###################################
-
-SECRETS_TEMP=$(mktemp -u)
-
-for filename in /etc/ipsec.d/private/*.pem; do
-    echo ": RSA $filename" >> $SECRETS_TEMP
-done
-
 uci commit
 
-mv $SECRETS_TEMP /etc/ipsec.secrets
-mv $IPSEC_TEMP /etc/ipsec.conf
 mv $CERTIFICATE_TEMP $CERTIFICATE_PATH
 
-# Enable services
-/etc/init.d/ipsec enable
-
 # Restart services
-/etc/init.d/ipsec restart
-
-sleep 2
-
-ipsec up client-to-site
+/etc/init.d/ipsec start
+/etc/init.d/openvpn start

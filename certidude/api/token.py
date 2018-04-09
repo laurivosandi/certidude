@@ -41,7 +41,8 @@ class TokenResource(AuthorityHandler):
         common_name = csr["certification_request_info"]["subject"].native["common_name"]
         assert common_name == username or common_name.startswith(username + "@"), "Invalid common name %s" % common_name
         try:
-            _, resp.body = self.authority._sign(csr, body, profile="default")
+            _, resp.body = self.authority._sign(csr, body, profile="default",
+                overwrite=config.TOKEN_OVERWRITE_PERMITTED)
             resp.set_header("Content-Type", "application/x-pem-file")
             logger.info("Autosigned %s as proven by token ownership", common_name)
         except FileExistsError:

@@ -287,7 +287,17 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
         if not os.path.exists(request_path):
             key_partial = key_path + ".part"
             request_partial = request_path + ".part"
-            public_key, private_key = asymmetric.generate_pair('rsa', bit_size=2048)
+
+            certificate = x509.Certificate.load(certificate_der_bytes)
+            public_key = asymmetric.load_public_key(certificate["tbs_certificate"]["subject_public_key_info"])
+
+            if public_key.algorithm == "ec":
+                self_public_key, private_key = asymmetric.generate_pair("ec", curve=public_key.curve)
+            elif public_key.algorithm == "rsa":
+                self_public_key, private_key = asymmetric.generate_pair("rsa", bit_size=public_key.bit_size)
+            else:
+                NotImplemented
+
             builder = CSRBuilder({"common_name": common_name}, public_key)
             request = builder.build(private_key)
             with open(key_partial, 'wb') as f:
@@ -945,8 +955,9 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
 @click.option("--skip-packages", is_flag=True, help="Don't attempt to install apt/pip/npm packages")
+@click.option("--elliptic-curve", "-e", is_flag=True, help="Generate EC instead of RSA keypair")
 @fqdn_required
-def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags, title, skip_packages):
+def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags, title, skip_packages, elliptic_curve):
     assert os.getuid() == 0 and os.getgid() == 0, "Authority can be set up only by root"
 
     import pwd
@@ -1160,9 +1171,12 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
 
         # Generate and sign CA key
         if not os.path.exists(ca_key):
-            click.echo("Generating %d-bit RSA key for CA ..." % const.KEY_SIZE)
-
-            public_key, private_key = asymmetric.generate_pair('rsa', bit_size=const.KEY_SIZE)
+            if elliptic_curve:
+                click.echo("Generating %s EC key for CA ..." % const.CURVE_NAME)
+                public_key, private_key = asymmetric.generate_pair("ec", curve=const.CURVE_NAME)
+            else:
+                click.echo("Generating %d-bit RSA key for CA ..." % const.KEY_SIZE)
+                public_key, private_key = asymmetric.generate_pair("rsa", bit_size=const.KEY_SIZE)
 
             names = (
                 ("country_name", country),

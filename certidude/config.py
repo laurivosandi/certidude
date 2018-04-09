@@ -99,3 +99,6 @@ PROFILES = OrderedDict([[i, [j.strip() for j in cp.get("profile", i).split(",")]
 cp2 = configparser.RawConfigParser()
 cp2.readfp(open(const.BUILDER_CONFIG_PATH, "r"))
 IMAGE_BUILDER_PROFILES = [(j, cp2.get(j, "title"), cp2.get(j, "rename")) for j in cp2.sections()]
+
+
+TOKEN_OVERWRITE_PERMITTED=True

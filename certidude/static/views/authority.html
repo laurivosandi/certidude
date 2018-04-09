@@ -13,7 +13,7 @@
             <div class="highlight">
               <pre><code>easy_install pip;
 pip3 install certidude;
-certidude bootstrap {{session.authority.common_name}}
+certidude bootstrap {{ window.location.hostname }}
   </code></pre>
             </div>
 
@@ -30,14 +30,16 @@ Signature="$Windows NT$
 [NewRequest]
 Subject = "CN=$hostname"
 Exportable = FALSE
-KeyLength = 2048
 KeySpec = 1
 KeyUsage = 0xA0
 MachineKeySet = True
-ProviderName = "Microsoft RSA SChannel Cryptographic Provider"
 ProviderType = 12
 RequestType = PKCS10
-"@
+{% if session.authority.certificate.algorithm == "ec" %}ProviderName = "Microsoft Software Key Storage Provider"
+KeyAlgorithm = ECDSA_P384
+{% else %}ProviderName = "Microsoft RSA SChannel Cryptographic Provider"
+KeyLength = 2048
+{% endif %}"@
 
 $templ | Out-File req.inf
 
@@ -54,8 +56,23 @@ Import-Certificate -FilePath client_cert.pem -CertStoreLocation Cert:\LocalMachi
 
 # Set up IPSec VPN tunnel
 Remove-VpnConnection -AllUserConnection -Force k-space
-Add-VpnConnection -Name k-space -ServerAddress guests.k-space.ee -SplitTunneling -PassThru -TunnelType ikev2 -AllUserConnection -AuthenticationMethod MachineCertificate
-Set-VpnConnectionIPsecConfiguration -ConnectionName k-space -AuthenticationTransformConstants SHA256128 -CipherTransformConstants AES256 -EncryptionMethod AES256 -IntegrityCheckMethod SHA384 -PfsGroup PFS24 -DHGroup Group24 -PassThru -AllUserConnection -Force</code></pre>
+Add-VpnConnection `
+  -Name k-space `
+  -ServerAddress guests.k-space.ee `
+  -AuthenticationMethod MachineCertificate `
+  -SplitTunneling `
+  -TunnelType ikev2 `
+  -PassThru -AllUserConnection
+
+# Security hardening
+Set-VpnConnectionIPsecConfiguration  `
+  -ConnectionName k-space `
+  -AuthenticationTransformConstants GCMAES128 `
+  -CipherTransformConstants GCMAES128 `
+  -EncryptionMethod AES128 `
+  -IntegrityCheckMethod none `
+  -PfsGroup {% if session.authority.certificate.algorithm == "ec" %}ECP384 -DHGroup ECP384{% else %}PFS2048 -DHGroup Group14{% endif %} `
+  -PassThru -AllUserConnection -Force</code></pre>
             </div>
 
             <h5>UNIX & UNIX-like</h5>
@@ -63,58 +80,110 @@ Set-VpnConnectionIPsecConfiguration -ConnectionName k-space -AuthenticationTrans
             <p>On other UNIX-like machines generate key pair and submit the signing request using OpenSSL and cURL:</p>
             <div class="highlight">
               <pre class="code"><code>NAME=$(hostname);
-openssl genrsa -out client_key.pem 2048;
-openssl req -new -sha256 -key client_key.pem -out client_req.pem -subj "/CN=$NAME";
+{% if session.authority.certificate.algorithm == "ec" %}openssl ecparam -name secp384r1 -genkey -noout -out client_key.pem{% else %}openssl genrsa -out client_key.pem 2048;{% endif %}
+openssl req -new -sha384 -key client_key.pem -out client_req.pem -subj "/CN=$NAME";
 curl -f -L -H "Content-type: application/pkcs10" --data-binary @client_req.pem \
   http://{{ window.location.hostname }}/api/request/?wait=yes > client_cert.pem</code></pre>
             </div>
 
-            <h5>OpenVPN gateway on OpenWrt/LEDE router</h5>
+            <h5>StrongSwan as client</h5>
+
+            <p>First enroll certificates:</p>
+            <div class="highlight">
+              <pre class="code"><code>
+FQDN=$(cat /etc/hostname)
+curl -f http://{{ window.location.hostname }}/api/certificate/ -o /etc/ipsec.d/cacerts/ca.pem; \
+test -e /etc/ipsec.d/private/client.pem \
+ || openssl ecparam -name secp384r1 -genkey -noout -out /etc/ipsec.d/private/client.pem; \
+test -e /etc/ipsec.d/reqs/client.pem \
+ || openssl req -new -sha384 \
+      -key /etc/ipsec.d/private/client.pem \
+      -out /etc/ipsec.d/reqs/client.pem -subj "/CN=$FQDN"; \
+curl -f -L -H "Content-type: application/pkcs10" \
+  --data-binary @/etc/ipsec.d/reqs/client.pem \
+  -o /etc/ipsec.d/certs/client.pem \
+  http://{{ window.location.hostname }}/api/request/?wait=yes</code></pre>
+            </div>
+
+            <p>Then configure StrongSwan</p>
+            <div class="highlight">
+              <pre class="code"><code>
+cat > /etc/ipsec.conf << EOF
+conn c2s
+    auto=start
+    right=router.k-space.ee
+    dpdaction=restart
+    closeaction=restart
+    left=%defaultroute
+    rightsubnet=0.0.0.0/0
+    keyingtries=%forever
+    rightid=%any
+    leftsourceip=%config
+    leftcert=client.pem
+    ike=aes128-sha384-{% if session.authority.certificate.algorithm == "ec" %}ecp384{% else %}modp2048{% endif %}!
+    esp=aes128gcm16!
+
+EOF
+
+echo ": {% if session.authority.certificate.algorithm == "ec" %}ECDSA{% else %}RSA{% endif %} client.pem" > /etc/ipsec.secrets
+
+ipsec restart</code></pre>
+            </div>
+
+            <h5>OpenWrt/LEDE as VPN gateway</h5>
 
             <p>First enroll certificates:</p>
             <div class="highlight">
               <pre class="code"><code># Derive FQDN from WAN interface's reverse DNS record
 FQDN=$(nslookup $(uci get network.wan.ipaddr) |  grep "name =" | head -n1 | cut -d "=" -f 2 | xargs)
 
-mkdir -p /etc/certidude/authority/{{ window.location.hostname }}; \
-grep -c certidude /etc/sysupgrade.conf || echo /etc/certidude >> /etc/sysupgrade.conf; \
-curl -f http://{{ window.location.hostname }}/api/certificate/ -o /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem; \
+mkdir -p /etc/certidude/authority/{{ window.location.hostname }}
+grep -c certidude /etc/sysupgrade.conf || echo /etc/certidude >> /etc/sysupgrade.conf
+cat << EOF > /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem
+{{ session.authority.certificate.blob }}
+EOF
 test -e /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem \
- || openssl genrsa -out /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem 2048; \
+ || openssl {% if session.authority.certificate.algorithm == "ec" %}ecparam -name secp384r1 -genkey -noout -out /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem{% else %}genrsa -out /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem 2048{% endif %}
 test -e /etc/certidude/authority/{{ window.location.hostname }}/server_req.pem \
- || openssl req -new -sha256 \
+ || openssl req -new -sha384 \
       -key /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem \
-      -out /etc/certidude/authority/{{ window.location.hostname }}/server_req.pem -subj "/CN=$FQDN"; \
+      -out /etc/certidude/authority/{{ window.location.hostname }}/server_req.pem -subj "/CN=$FQDN"
+cat /etc/certidude/authority/{{ window.location.hostname }}/server_req.pem
 curl -f -L -H "Content-type: application/pkcs10" \
   --data-binary @/etc/certidude/authority/{{ window.location.hostname }}/server_req.pem \
   -o /etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem \
-  http://{{ window.location.hostname }}/api/request/?wait=yes</code></pre>
-            </div>
+  http://{{ window.location.hostname }}/api/request/?wait=yes
 
-            <p>Then set up service:</p>
-            <div class="highlight">
-              <pre class="code"><code># Create VPN gateway up/down script for reporting client IP addresses to CA
-cat <<\EOF > /etc/certidude/updown
+# Create VPN gateway up/down script for reporting client IP addresses to CA
+cat <<\EOF > /etc/certidude/authority/{{ window.location.hostname }}/updown
 #!/bin/sh
-CURL="curl -f --key /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem --cert /etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem --cacert /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem https://{{ window.location.hostname }}:8443/api/lease/"
+
+CURL="curl -m 3 -f --key /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem --cert /etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem --cacert /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem https://{{ window.location.hostname }}:8443/api/lease/"
 
 case $PLUTO_VERB in
-  up-client|down-client) $CURL --data "outer_address=$PLUTO_PEER&inner_address=$PLUTO_PEER_SOURCEIP&client=$PLUTO_PEER_ID" ;;
-  *) $CURL --data "client=$X509_0_CN&outer_address=$untrusted_ip&inner_address=$ifconfig_pool_remote_ip&serial=$tls_serial_0" ;;
+  up-client) $CURL --data-urlencode "outer_address=$PLUTO_PEER" --data-urlencode "inner_address=$PLUTO_PEER_SOURCEIP" --data-urlencode "client=$PLUTO_PEER_ID" ;;
+  *) ;;
+esac
+
+case $script_type in
+  client-connect) $CURL --data-urlencode client=$X509_0_CN --data-urlencode serial=$tls_serial_0 --data-urlencode outer_address=$untrusted_ip --data-urlencode inner_address=$ifconfig_pool_remote_ip  ;;
+  *) ;;
 esac
 EOF
 
-chmod +x /etc/certidude/updown
+chmod +x /etc/certidude/authority/{{ window.location.hostname }}/updown</code></pre>
+            </div>
 
-
-# Generate Diffie-Hellman parameters file for OpenVPN
+            <p>Then either set up OpenVPN service:</p>
+            <div class="highlight">
+              <pre class="code"><code># Generate Diffie-Hellman parameters file for OpenVPN
 test -e /etc/certidude/dh.pem \
  || openssl dhparam 2048 -out /etc/certidude/dh.pem
 
 # Create interface definition for tunnel
 uci set network.vpn=interface
 uci set network.vpn.name='vpn'
-uci set network.vpn.ifname=tun_s2c
+uci set network.vpn.ifname=tun_s2c_udp tun_s2c_tcp
 uci set network.vpn.proto='none'
 
 # Create zone definition for VPN interface
@@ -133,6 +202,14 @@ uci set firewall.openvpn.dest_port=1194
 uci set firewall.openvpn.proto='udp'
 uci set firewall.openvpn.target='ACCEPT'
 
+# Allow TCP 443 on WAN interface
+uci set firewall.openvpn=rule
+uci set firewall.openvpn.name='Allow OpenVPN over TCP'
+uci set firewall.openvpn.src='wan'
+uci set firewall.openvpn.dest_port=443
+uci set firewall.openvpn.proto='tcp'
+uci set firewall.openvpn.target='ACCEPT'
+
 # Forward traffic from VPN to LAN
 uci set firewall.c2s=forwarding
 uci set firewall.c2s.src='vpn'
@@ -142,31 +219,83 @@ uci set firewall.c2s.dest='lan'
 uci set dhcp.@dnsmasq[0].localservice='0'
 
 touch /etc/config/openvpn
-uci set openvpn.s2c=openvpn
-uci set openvpn.s2c.local=$(uci get network.wan.ipaddr)
-uci set openvpn.s2c.script_security=2
-uci set openvpn.s2c.client_connect='/etc/certidude/updown'
-uci set openvpn.s2c.tls_version_min='1.2'
-uci set openvpn.s2c.tls_cipher='TLS-DHE-RSA-WITH-AES-256-GCM-SHA384'
-uci set openvpn.s2c.cipher='AES-256-CBC'
-uci set openvpn.s2c.auth='SHA384'
-uci set openvpn.s2c.dev=tun_s2c
-uci set openvpn.s2c.server='10.179.43.0 255.255.255.0'
-uci set openvpn.s2c.key='/etc/certidude/authority/{{ window.location.hostname }}/server_key.pem'
-uci set openvpn.s2c.cert='/etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem'
-uci set openvpn.s2c.ca='/etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem'
-uci set openvpn.s2c.dh='/etc/certidude/dh.pem'
-uci set openvpn.s2c.enabled=1
-uci set openvpn.s2c.comp_lzo=yes
-uci add_list openvpn.s2c.push="route-metric 1000"
-uci add_list openvpn.s2c.push="route $(uci get network.lan.ipaddr) $(uci get network.lan.netmask)"
-uci add_list openvpn.s2c.push="dhcp-option DNS $(uci get network.lan.ipaddr)"
-uci add_list openvpn.s2c.push="dhcp-option DOMAIN $(uci get dhcp.@dnsmasq[0].domain)"
+
+# Configure OpenVPN over TCP
+uci set openvpn.s2c_tcp=openvpn
+uci set openvpn.s2c_tcp.local=$(uci get network.wan.ipaddr)
+uci set openvpn.s2c_tcp.server='10.179.43.0 255.255.255.128'
+uci set openvpn.s2c_tcp.proto='tcp-server'
+uci set openvpn.s2c_tcp.port='443'
+uci set openvpn.s2c_tcp.dev=tun_s2c_tcp
+
+# Configure OpenVPN over UDP
+uci set openvpn.s2c_udp=openvpn
+uci set openvpn.s2c_udp.local=$(uci get network.wan.ipaddr)
+uci set openvpn.s2c_udp.server='10.179.43.128 255.255.255.128'
+uci set openvpn.s2c_tcp.dev=tun_s2c_udp
+
+for section in s2c_tcp s2c_udp; do
+
+# Common paths
+uci set openvpn.$section.script_security=2
+uci set openvpn.$section.client_connect='/etc/certidude/updown'
+uci set openvpn.$section.key='/etc/certidude/authority/{{ window.location.hostname }}/server_key.pem'
+uci set openvpn.$section.cert='/etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem'
+uci set openvpn.$section.ca='/etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem'
+uci set openvpn.$section.dh='/etc/certidude/dh.pem'
+uci set openvpn.$section.enabled=1
+
+# DNS and routes
+uci add_list openvpn.$section.push="route-metric 1000"
+uci add_list openvpn.$section.push="route $(uci get network.lan.ipaddr) $(uci get network.lan.netmask)"
+uci add_list openvpn.$section.push="dhcp-option DNS $(uci get network.lan.ipaddr)"
+uci add_list openvpn.$section.push="dhcp-option DOMAIN $(uci get dhcp.@dnsmasq[0].domain)"
+
+# Security hardening
+uci set openvpn.$section.tls_version_min='1.2'
+uci set openvpn.$section.tls_cipher='TLS-{% if session.authority.certificate.algorithm == "ec" %}ECDHE-ECDSA{% else %}DHE-RSA{% endif %}-WITH-AES-128-GCM-SHA384'
+uci set openvpn.$section.cipher='AES-128-GCM'
+uci set openvpn.$section.auth='SHA384'
+
+done
 
 /etc/init.d/openvpn restart
 /etc/init.d/firewall restart</code></pre>
             </div>
 
+            <p>Alternatively or additionally set up StrongSwan:</p>
+            <div class="highlight">
+              <pre class="code"><code># Generate StrongSwan config
+cat > /etc/ipsec.conf << EOF
+config setup
+    strictcrlpolicy=yes
+    uniqueids = yes
+
+ca {{ window.location.hostname }}
+    auto=add
+    cacert = /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem
+    crluri = http://{{ window.location.hostname }}/api/revoked
+    ocspuri = http://{{ window.location.hostname }}/api/ocsp/
+
+conn s2c
+    auto=add
+    dpdaction=clear
+    closeaction=clear
+    leftdns=$(uci get network.lan.ipaddr)
+    rightsourceip=172.21.0.0/24
+    left=$(uci get network.wan.ipaddr)
+    leftsubnet=$(uci get network.lan.ipaddr | cut -d . -f 1-3).0/24
+    leftcert=/etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem
+    ike=aes128-sha384-{% if session.authority.certificate.algorithm == "ec" %}ecp384{% else %}modp2048{% endif %}!
+    esp=aes128gcm16!
+    leftupdown=/etc/certidude/{{ window.location.hostname }}/updown
+
+EOF
+
+echo ": {% if session.authority.certificate.algorithm == "ec" %}ECDSA{% else %}RSA{% endif %} /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem" > /etc/ipsec.secrets
+
+ipsec restart</code></pre>
+            </div>
 
             {% if session.authority.builder %}
             <h5>OpenWrt/LEDE image builder</h5>
@@ -337,28 +466,30 @@ forbidden
   </div>
   <div class="col-sm-6">
 
-  <h1>Tokens</h1>
-
-  <p>Tokens allow enrolling smartphones and third party devices.</p>
-  <ul>
-    <li>You can issue yourself a token to be used on a mobile device</li>
-    <li>Enter username to issue a token to issue a token for another user</li>
-    <li>Enter e-mail address to issue a token to guest users outside domain</li>
-  </ul>
-  <p>
-    <div class="input-group">
-        <input id="token_username" name="username" type="text" class="form-control" placeholder="Username" aria-describedby="sizing-addon2">
-        <input id="token_mail" name="mail" type="mail" class="form-control" placeholder="Optional e-mail" aria-describedby="sizing-addon2">
-        <span class="input-group-btn">
-            <button class="btn btn-secondary" type="button" onClick="onSendToken();"><i class="fa fa-send"></i> Send token</button>
-        </span>
-    </div>
-  </p>
-
-  <div id="token_qrcode"></div>
-
 
 {% if session.authority %}
+    {% if session.features.token %}
+      <h1>Tokens</h1>
+
+      <p>Tokens allow enrolling smartphones and third party devices.</p>
+      <ul>
+        <li>You can issue yourself a token to be used on a mobile device</li>
+        <li>Enter username to issue a token to issue a token for another user</li>
+        <li>Enter e-mail address to issue a token to guest users outside domain</li>
+      </ul>
+      <p>
+        <div class="input-group">
+            <input id="token_username" name="username" type="text" class="form-control" placeholder="Username" aria-describedby="sizing-addon2">
+            <input id="token_mail" name="mail" type="mail" class="form-control" placeholder="Optional e-mail" aria-describedby="sizing-addon2">
+            <span class="input-group-btn">
+                <button class="btn btn-secondary" type="button" onClick="onSendToken();"><i class="fa fa-send"></i> Send token</button>
+            </span>
+        </div>
+      </p>
+
+      <div id="token_qrcode"></div>
+    {% endif %}
+
     <h1>Pending requests</h1>
 
     <p>Use Certidude client to apply for a certificate.

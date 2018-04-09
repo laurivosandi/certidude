@@ -47,11 +47,16 @@ def self_enroll():
 
     try:
         path, buf, cert, signed, expires = get_signed(common_name)
-        public_key = asymmetric.load_public_key(path)
+        self_public_key = asymmetric.load_public_key(path)
         private_key = asymmetric.load_private_key(self_key_path)
     except FileNotFoundError: # certificate or private key not found
         with open(self_key_path, 'wb') as fh:
-            public_key, private_key = asymmetric.generate_pair('rsa', bit_size=2048)
+            if public_key.algorithm == "ec":
+                self_public_key, private_key = asymmetric.generate_pair("ec", curve=public_key.curve)
+            elif public_key.algorithm == "rsa":
+                self_public_key, private_key = asymmetric.generate_pair("rsa", bit_size=public_key.bit_size)
+            else:
+                NotImplemented
             fh.write(asymmetric.dump_private_key(private_key, None))
     else:
         now = datetime.utcnow()
@@ -59,7 +64,7 @@ def self_enroll():
             click.echo("Certificate %s still valid, delete to self-enroll again" % path)
             return
 
-    builder = CSRBuilder({"common_name": common_name}, public_key)
+    builder = CSRBuilder({"common_name": common_name}, self_public_key)
     request = builder.build(private_key)
     with open(os.path.join(directory, "requests", common_name + ".pem"), "wb") as fh:
         fh.write(pem_armor_csr(request))
@@ -389,6 +394,7 @@ def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, profile
         builder.subject_alt_domains = [common_name] # OpenVPN uses CN while StrongSwan uses SAN to match hostname of the server
         builder.extended_key_usage = set(["server_auth", "1.3.6.1.5.5.8.2.2", "client_auth"])
     else:
+        builder.subject_alt_domains = [common_name] # iOS demands SAN also for clients
         builder.extended_key_usage = set(["client_auth"])
 
     end_entity_cert = builder.build(private_key)

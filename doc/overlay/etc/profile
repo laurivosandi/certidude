@@ -14,18 +14,11 @@ export PS1='\u@\h:\w\$ '
 [ -x /usr/bin/ldd ] || ldd() { LD_TRACE_LOADED_OBJECTS=1 $*; }
 
 HOSTNAME=$(uci get system.@system[0].hostname)
-DOMAIN=$(uci -q get dhcp.@dnsmasq[0].domain)
 
-if [ $? -eq 0 ]; then
-    FQDN=$HOSTNAME.$DOMAIN
-else
-    FQDN=$HOSTNAME
-fi
-
-export PS1='\[\033[01;31m\]$FQDN\[\033[01;34m\] \W #\[\033[00m\] '
+export PS1='\[\033[01;31m\]$HOSTNAME\[\033[01;34m\] \W #\[\033[00m\] '
 case "$TERM" in
     xterm*|rxvt*)
-        echo -ne "\033]0;${USER}@${FQDN}:${PWD}\007"
+        echo -ne "\033]0;${USER}@${HOSTNAME}:${PWD}\007"
     ;;
     *)
     ;;
