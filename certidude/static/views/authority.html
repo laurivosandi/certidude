@@ -90,9 +90,12 @@ curl -f -L -H "Content-type: application/pkcs10" --data-binary @client_req.pem \
 
             <p>First enroll certificates:</p>
             <div class="highlight">
-              <pre class="code"><code>
-FQDN=$(cat /etc/hostname)
-curl -f http://{{ window.location.hostname }}/api/certificate/ -o /etc/ipsec.d/cacerts/ca.pem; \
+              <pre class="code"><code>opkg update
+opkg install curl strongswan-full strongswan-mod-kernel-libipsec kmod-crypto-echainiv kmod-crypto-gcm
+FQDN=$(uci get system.@system[0].hostname)
+cat << EOF > /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem
+{{ session.authority.certificate.blob }}
+EOF
 test -e /etc/ipsec.d/private/client.pem \
  || openssl ecparam -name secp384r1 -genkey -noout -out /etc/ipsec.d/private/client.pem; \
 test -e /etc/ipsec.d/reqs/client.pem \
@@ -107,8 +110,7 @@ curl -f -L -H "Content-type: application/pkcs10" \
 
             <p>Then configure StrongSwan</p>
             <div class="highlight">
-              <pre class="code"><code>
-cat > /etc/ipsec.conf << EOF
+              <pre class="code"><code>cat > /etc/ipsec.conf << EOF
 conn c2s
     auto=start
     right=router.k-space.ee
@@ -176,7 +178,10 @@ chmod +x /etc/certidude/authority/{{ window.location.hostname }}/updown</code></
 
             <p>Then either set up OpenVPN service:</p>
             <div class="highlight">
-              <pre class="code"><code># Generate Diffie-Hellman parameters file for OpenVPN
+              <pre class="code"><code>opkg update
+opkg install curl openssl-util openvpn-openssl
+
+# Generate Diffie-Hellman parameters file for OpenVPN
 test -e /etc/certidude/dh.pem \
  || openssl dhparam 2048 -out /etc/certidude/dh.pem
 
@@ -265,7 +270,10 @@ done
 
             <p>Alternatively or additionally set up StrongSwan:</p>
             <div class="highlight">
-              <pre class="code"><code># Generate StrongSwan config
+              <pre class="code"><code>opkg update
+opkg install curl openssl-util strongswan-full kmod-crypto-echainiv kmod-crypto-gcm
+
+# Generate StrongSwan config
 cat > /etc/ipsec.conf << EOF
 config setup
     strictcrlpolicy=yes

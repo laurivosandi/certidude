@@ -312,7 +312,7 @@ def delete_request(common_name):
         config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest(),
         headers={"User-Agent": "Certidude API"})
 
-def sign(common_name, skip_notify=False, skip_push=False, overwrite=False, profile=None, signer=None):
+def sign(common_name, skip_notify=False, skip_push=False, overwrite=False, profile="default", signer=None):
     """
     Sign certificate signing request by it's common name
     """
@@ -330,7 +330,7 @@ def sign(common_name, skip_notify=False, skip_push=False, overwrite=False, profi
     os.unlink(req_path)
     return cert, buf
 
-def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, profile=None, signer=None):
+def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, profile="default", signer=None):
     # TODO: CRLDistributionPoints, OCSP URL, Certificate URL
     if profile not in config.PROFILES:
         raise ValueError("Invalid profile supplied '%s'" % profile)

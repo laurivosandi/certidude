@@ -195,6 +195,9 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
         finally:
             if os.path.exists(authority_path):
                 click.echo("Found authority certificate in: %s" % authority_path)
+                with open(authority_path, "rb") as fh:
+                    header, _, certificate_der_bytes = pem.unarmor(fh.read())
+                    authority_certificate = x509.Certificate.load(certificate_der_bytes)
             else:
                 if not os.path.exists(os.path.dirname(authority_path)):
                     os.makedirs(os.path.dirname(authority_path))
@@ -203,7 +206,7 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
                     r = requests.get(authority_url,
                         headers={"Accept": "application/x-x509-ca-cert,application/x-pem-file"})
                     header, _, certificate_der_bytes = pem.unarmor(r.content)
-                    cert = x509.Certificate.load(certificate_der_bytes)
+                    authority_certificate = x509.Certificate.load(certificate_der_bytes)
                 except: # TODO: catch correct exceptions
                     raise
                 #    raise ValueError("Failed to parse PEM: %s" % r.text)
@@ -213,6 +216,10 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
                 click.echo("Writing authority certificate to: %s" % authority_path)
                 selinux_fixup(authority_partial)
                 os.rename(authority_partial, authority_path)
+
+            authority_public_key = asymmetric.load_public_key(
+                authority_certificate["tbs_certificate"]["subject_public_key_info"])
+
 
 
         # Attempt to install CA certificates system wide
@@ -288,17 +295,14 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
             key_partial = key_path + ".part"
             request_partial = request_path + ".part"
 
-            certificate = x509.Certificate.load(certificate_der_bytes)
-            public_key = asymmetric.load_public_key(certificate["tbs_certificate"]["subject_public_key_info"])
-
-            if public_key.algorithm == "ec":
-                self_public_key, private_key = asymmetric.generate_pair("ec", curve=public_key.curve)
-            elif public_key.algorithm == "rsa":
-                self_public_key, private_key = asymmetric.generate_pair("rsa", bit_size=public_key.bit_size)
+            if authority_public_key.algorithm == "ec":
+                self_public_key, private_key = asymmetric.generate_pair("ec", curve=authority_public_key.curve)
+            elif authority_public_key.algorithm == "rsa":
+                self_public_key, private_key = asymmetric.generate_pair("rsa", bit_size=authority_public_key.bit_size)
             else:
                 NotImplemented
 
-            builder = CSRBuilder({"common_name": common_name}, public_key)
+            builder = CSRBuilder({"common_name": common_name}, self_public_key)
             request = builder.build(private_key)
             with open(key_partial, 'wb') as f:
                 f.write(asymmetric.dump_private_key(private_key, None))
@@ -343,7 +347,7 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
                     asymmetric.rsa_pss_sign(
                         asymmetric.load_private_key(kh.read()),
                         cert_buf + rh.read(),
-                        "sha512"))
+                        "sha384"))
         except EnvironmentError: # Certificate missing, can't renew
             pass
         else:
@@ -1326,7 +1330,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
 
 @click.command("sign", help="Sign certificate")
 @click.argument("common_name")
-@click.option("--profile", "-p", default=None, help="Profile")
+@click.option("--profile", "-p", default="default", help="Profile")
 @click.option("--overwrite", "-o", default=False, is_flag=True, help="Revoke valid certificate with same CN")
 def certidude_sign(common_name, overwrite, profile):
     from certidude import authority

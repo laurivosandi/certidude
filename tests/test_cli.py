@@ -716,7 +716,7 @@ def test_cli_setup_authority():
 
     child_pid = os.fork()
     if not child_pid:
-        result = runner.invoke(cli, ["sign", "www.example.lan"])
+        result = runner.invoke(cli, ["sign", "www.example.lan", "--profile", "srv"])
         assert not result.exception, result.output
         assert "Publishing request-signed event 'www.example.lan' on http://localhost/ev/pub/" in result.output, result.output
         return
@@ -773,7 +773,7 @@ def test_cli_setup_authority():
     child_pid = os.fork()
     if not child_pid:
         assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/vpn.example.lan.pem")
-        result = runner.invoke(cli, ["sign", "vpn.example.lan"])
+        result = runner.invoke(cli, ["sign", "vpn.example.lan", "--profile", "srv"])
         assert not result.exception, result.output
         assert "overwrit" not in result.output, result.output
         assert "Publishing request-signed event 'vpn.example.lan' on http://localhost/ev/pub/" in result.output, result.output
@@ -996,7 +996,7 @@ def test_cli_setup_authority():
     child_pid = os.fork()
     if not child_pid:
         assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/ipsec.example.lan.pem")
-        result = runner.invoke(cli, ["sign", "ipsec.example.lan"])
+        result = runner.invoke(cli, ["sign", "ipsec.example.lan", "--profile", "srv"])
         assert not result.exception, result.output
         assert "overwrit" not in result.output, result.output
         assert "Publishing request-signed event 'ipsec.example.lan' on http://localhost/ev/pub/" in result.output, result.output
