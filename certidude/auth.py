@@ -14,7 +14,6 @@ from certidude import config, const
 logger = logging.getLogger("api")
 
 def authenticate(optional=False):
-    import falcon
     def wrapper(func):
         def kerberos_authenticate(resource, req, resp, *args, **kwargs):
             # Try pre-emptive authentication
