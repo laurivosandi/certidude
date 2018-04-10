@@ -18,7 +18,7 @@ script:
   - echo 127.0.1.1 ca.example.lan ca | sudo tee -a /etc/hosts
   - sudo hostname -F /etc/hostname
   - sudo find /home/ -type d -exec chmod 755 {} \; # Allow certidude serve to read templates
-  - sudo coverage run --parallel-mode --source certidude -m py.test tests
+  - sudo coverage run --parallel-mode --source certidude -m py.test tests --capture=sys
   - sudo coverage combine
   - sudo coverage report
   - sudo coverage xml -i
