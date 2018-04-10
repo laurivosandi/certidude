@@ -13,6 +13,7 @@ AUTHENTICATION_BACKENDS = set([j for j in
     cp.get("authentication", "backends").split(" ") if j])   # kerberos, pam, ldap
 AUTHORIZATION_BACKEND = cp.get("authorization", "backend")  # whitelist, ldap, posix
 ACCOUNTS_BACKEND = cp.get("accounts", "backend")             # posix, ldap
+MAIL_SUFFIX = cp.get("accounts", "mail suffix")
 
 KERBEROS_KEYTAB = cp.get("authentication", "kerberos keytab")
 LDAP_AUTHENTICATION_URI = cp.get("authentication", "ldap uri")
