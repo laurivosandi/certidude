@@ -41,9 +41,20 @@ class RequestListResource(AuthorityHandler):
             header, _, der_bytes = pem.unarmor(body)
             csr = CertificationRequest.load(der_bytes)
         except ValueError:
+            logger.info("Malformed certificate signing request submission from %s blocked", req.context.get("remote_addr"))
             raise falcon.HTTPBadRequest(
                 "Bad request",
                 "Malformed certificate signing request")
+        else:
+            req_public_key = asymmetric.load_public_key(csr["certification_request_info"]["subject_pk_info"])
+            if self.authority.public_key.algorithm != req_public_key.algorithm:
+                logger.info("Attempt to submit %s based request from %s blocked, only %s allowed" % (
+                    req_public_key.algorithm.upper(),
+                    req.context.get("remote_addr"),
+                    self.authority.public_key.algorithm.upper()))
+                raise falcon.HTTPBadRequest(
+                    "Bad request",
+                    "Incompatible asymmetric key algorithms")
 
         common_name = csr["certification_request_info"]["subject"].native["common_name"]
 
