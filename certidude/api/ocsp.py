@@ -100,8 +100,8 @@ class OCSPResource(AuthorityHandler):
                 'response': {
                     'tbs_response_data': response_data,
                     'certs': [server_certificate.asn1],
-                    'signature_algorithm': {'algorithm': "sha1_rsa"},
-                    'signature': asymmetric.rsa_pkcs1v15_sign(
+                    'signature_algorithm': {'algorithm': "sha1_ecdsa" if self.authority.public_key.algorithm == "ec" else "sha1_rsa" },
+                    'signature': (asymmetric.ecdsa_sign if self.authority.public_key.algorithm == "ec" else asymmetric.rsa_pkcs1v15_sign)(
                         self.authority.private_key,
                         response_data.dump(),
                         "sha1"
