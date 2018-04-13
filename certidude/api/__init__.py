@@ -167,6 +167,8 @@ class SessionResource(AuthorityHandler):
                 )
             ) if req.context.get("user").is_admin() else None,
             features=dict(
+                ocsp=bool(config.OCSP_SUBNETS),
+                crl=bool(config.CRL_SUBNETS),
                 token=bool(config.TOKEN_URL),
                 tagging=True,
                 leases=True,

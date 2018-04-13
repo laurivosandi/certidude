@@ -69,11 +69,21 @@ Set-VpnConnectionIPsecConfiguration  `
   -ConnectionName k-space `
   -AuthenticationTransformConstants GCMAES128 `
   -CipherTransformConstants GCMAES128 `
-  -EncryptionMethod AES128 `
-  -IntegrityCheckMethod none `
-  -PfsGroup {% if session.authority.certificate.algorithm == "ec" %}ECP384 -DHGroup ECP384{% else %}PFS2048 -DHGroup Group14{% endif %} `
+  -EncryptionMethod AES256 `
+  -IntegrityCheckMethod SHA384 `
+  -DHGroup {% if session.authority.certificate.algorithm == "ec" %}ECP384{% else %}Group14{% endif %} `
+  -PfsGroup {% if session.authority.certificate.algorithm == "ec" %}ECP384{% else %}PFS2048{% endif %} `
   -PassThru -AllUserConnection -Force</code></pre>
             </div>
+
+<!--
+AuthenticationTransformConstants - ESP integrity algorithm, one of: None MD596 SHA196 SHA256128 GCMAES128 GCMAES192 GCMAES256
+CipherTransformConstants - ESP symmetric cipher, one of: DES DES3 AES128 AES192 AES256 GCMAES128 GCMAES192 GCMAES256
+EncryptionMethod - IKE symmetric cipher, one of: DES DES3 AES128 AES192 AES256
+IntegrityCheckMethod - IKE hash algorithm, one of: MD5 SHA196 SHA256 SHA384
+DHGroup = IKE key exchange, one of: None Group1 Group2 Group14 ECP256 ECP384 Group24
+PfsGroup = one of: None PFS1 PFS2 PFS2048 ECP256 ECP384 PFSMM PFS24
+-->
 
             <h5>UNIX & UNIX-like</h5>
 
@@ -90,30 +100,41 @@ curl -f -L -H "Content-type: application/pkcs10" --data-binary @client_req.pem \
 
             <p>First enroll certificates:</p>
             <div class="highlight">
-              <pre class="code"><code>opkg update
-opkg install curl strongswan-full strongswan-mod-kernel-libipsec kmod-crypto-echainiv kmod-crypto-gcm
-FQDN=$(uci get system.@system[0].hostname)
-cat << EOF > /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem
-{{ session.authority.certificate.blob }}
-EOF
+              <pre class="code"><code># Install packages on Ubuntu & Fedora, patch Fedora paths
+which apt && apt install strongswan
+which dnf && dnf install strongswan
+test -e /etc/strongswan && test -e /etc/ipsec.conf || ln -s strongswan/ipsec.conf /etc/ipsec.conf
+test -e /etc/strongswan && test -e /etc/ipsec.d || ln -s strongswan/ipsec.d /etc/ipsec.d
+test -e /etc/strongswan && test -e /etc/ipsec.secrets || ln -s strongswan/ipsec.secrets /etc/ipsec.secrets
+
+FQDN=$(cat /etc/hostname)
+
+# Install CA certificate
+cat << EOF > /etc/ipsec.d/cacerts/ca_cert.pem
+{{ session.authority.certificate.blob }}EOF
+
+# Generate keypair
 test -e /etc/ipsec.d/private/client.pem \
- || openssl ecparam -name secp384r1 -genkey -noout -out /etc/ipsec.d/private/client.pem; \
+ || openssl {% if session.authority.certificate.algorithm == "ec" %}ecparam -name secp384r1 -genkey -noout -out /etc/ipsec.d/private/client.pem{% else %}genrsa -out /etc/ipsec.d/private/client.pem 2048{% endif %}
+
+# Attempt to submit CSR
 test -e /etc/ipsec.d/reqs/client.pem \
  || openssl req -new -sha384 \
       -key /etc/ipsec.d/private/client.pem \
-      -out /etc/ipsec.d/reqs/client.pem -subj "/CN=$FQDN"; \
+      -out /etc/ipsec.d/reqs/client.pem -subj "/CN=$FQDN"
+cat /etc/ipsec.d/reqs/client.pem
 curl -f -L -H "Content-type: application/pkcs10" \
   --data-binary @/etc/ipsec.d/reqs/client.pem \
   -o /etc/ipsec.d/certs/client.pem \
   http://{{ window.location.hostname }}/api/request/?wait=yes</code></pre>
             </div>
 
-            <p>Then configure StrongSwan</p>
+            <p>To configure StrongSwan as roadwarrior:</p>
             <div class="highlight">
               <pre class="code"><code>cat > /etc/ipsec.conf << EOF
 conn c2s
     auto=start
-    right=router.k-space.ee
+    right=router2.k-space.ee
     dpdaction=restart
     closeaction=restart
     left=%defaultroute
@@ -122,8 +143,8 @@ conn c2s
     rightid=%any
     leftsourceip=%config
     leftcert=client.pem
-    ike=aes128-sha384-{% if session.authority.certificate.algorithm == "ec" %}ecp384{% else %}modp2048{% endif %}!
-    esp=aes128gcm16!
+    ike=aes256-sha384-{% if session.authority.certificate.algorithm == "ec" %}ecp384{% else %}modp2048{% endif %}!
+    esp=aes128gcm16-aes128gmac!
 
 EOF
 
@@ -136,14 +157,15 @@ ipsec restart</code></pre>
 
             <p>First enroll certificates:</p>
             <div class="highlight">
-              <pre class="code"><code># Derive FQDN from WAN interface's reverse DNS record
+              <pre class="code"><code>opkg install curl libmbedtls
+# Derive FQDN from WAN interface's reverse DNS record
 FQDN=$(nslookup $(uci get network.wan.ipaddr) |  grep "name =" | head -n1 | cut -d "=" -f 2 | xargs)
 
 mkdir -p /etc/certidude/authority/{{ window.location.hostname }}
 grep -c certidude /etc/sysupgrade.conf || echo /etc/certidude >> /etc/sysupgrade.conf
 cat << EOF > /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem
-{{ session.authority.certificate.blob }}
-EOF
+{{ session.authority.certificate.blob }}EOF
+
 test -e /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem \
  || openssl {% if session.authority.certificate.algorithm == "ec" %}ecparam -name secp384r1 -genkey -noout -out /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem{% else %}genrsa -out /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem 2048{% endif %}
 test -e /etc/certidude/authority/{{ window.location.hostname }}/server_req.pem \
@@ -173,7 +195,8 @@ case $script_type in
 esac
 EOF
 
-chmod +x /etc/certidude/authority/{{ window.location.hostname }}/updown</code></pre>
+chmod +x /etc/certidude/authority/{{ window.location.hostname }}/updown
+</code></pre>
             </div>
 
             <p>Then either set up OpenVPN service:</p>
@@ -271,7 +294,7 @@ done
             <p>Alternatively or additionally set up StrongSwan:</p>
             <div class="highlight">
               <pre class="code"><code>opkg update
-opkg install curl openssl-util strongswan-full kmod-crypto-echainiv kmod-crypto-gcm
+opkg install curl openssl-util strongswan-full strongswan-mod-openssl kmod-crypto-echainiv kmod-crypto-gcm
 
 # Generate StrongSwan config
 cat > /etc/ipsec.conf << EOF
@@ -282,21 +305,21 @@ config setup
 ca {{ window.location.hostname }}
     auto=add
     cacert = /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem
-    crluri = http://{{ window.location.hostname }}/api/revoked
-    ocspuri = http://{{ window.location.hostname }}/api/ocsp/
+{% if session.features.crl %}    crluri = http://{{ window.location.hostname }}/api/revoked/{% endif %}
+{% if session.features.ocsp %}    ocspuri = http://{{ window.location.hostname }}/api/ocsp/{% endif %}
 
 conn s2c
     auto=add
     dpdaction=clear
     closeaction=clear
-    leftdns=$(uci get network.lan.ipaddr)
-    rightsourceip=172.21.0.0/24
-    left=$(uci get network.wan.ipaddr)
-    leftsubnet=$(uci get network.lan.ipaddr | cut -d . -f 1-3).0/24
+    leftdns=$(uci get network.lan.ipaddr) # IP of DNS server advertised to roadwarriors
+    rightsourceip=172.21.0.0/24 # Roadwarrior virtual IP pool
+    left=$(uci get network.wan.ipaddr) # Bind to this IP address
+    leftsubnet=$(uci get network.lan.ipaddr | cut -d . -f 1-3).0/24 # Subnets pushed to roadwarriors
     leftcert=/etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem
-    ike=aes128-sha384-{% if session.authority.certificate.algorithm == "ec" %}ecp384{% else %}modp2048{% endif %}!
-    esp=aes128gcm16!
-    leftupdown=/etc/certidude/{{ window.location.hostname }}/updown
+    ike=aes256-sha384-{% if session.authority.certificate.algorithm == "ec" %}ecp384{% else %}modp2048{% endif %}!
+    esp=aes128gcm16-aes128gmac!
+    leftupdown=/etc/certidude/authority/{{ window.location.hostname }}/updown
 
 EOF
 
@@ -410,7 +433,9 @@ forbidden
 <ul>
     <li>Server certificate lifetime: {{ session.authority.signature.server_certificate_lifetime }} days</li>
     <li>Client certificate lifetime: {{ session.authority.signature.client_certificate_lifetime }} days</li>
+    {% if session.features.crl %}
     <li>Revocation list lifetime: {{ session.authority.signature.revocation_list_lifetime }} seconds</li>
+    {% endif %}
 </ul>
 
 <p>Authenticated users allowed from:
@@ -534,8 +559,8 @@ forbidden
     {% endfor %}
     </div>
     <p><h1>Revoked certificates</h1></p>
-    <p>Following certificates have been revoked,for more information click
-    <a href="#revocation_list_modal" data-toggle="modal">here</a>.</p>
+    <p>Following certificates have been revoked{% if session.features.crl %}, for more information click
+    <a href="#revocation_list_modal" data-toggle="modal">here</a>{% endif %}.</p>
 
     {% for certificate in session.authority.revoked | sort(attribute="revoked", reverse=true) %}
       {% include "views/revoked.html" %}

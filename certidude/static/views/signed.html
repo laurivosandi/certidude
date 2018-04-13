@@ -79,11 +79,13 @@ curl http://{{ window.location.hostname }}/api/signed/{{ certificate.common_name
   | openssl x509 -text -noout</code></pre>
       </div>
 
+      {% if session.features.ocsp %}
       <p>To perform online certificate status request:</p>
       <pre><code class="language-bash" data-lang="bash">curl http://{{ window.location.hostname }}/api/certificate/ > session.pem
 openssl ocsp -issuer session.pem -CAfile session.pem \
   -url http://{{ window.location.hostname }}/api/ocsp/ \
   -serial 0x{{ certificate.serial }}</code></pre>
+      {% endif %}
 
       <p>To fetch script:</p>
       <pre><code class="language-bash" data-lang="bash">cd /var/lib/certidude/{{ window.location.hostname }}/
