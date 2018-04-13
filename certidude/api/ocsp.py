@@ -50,6 +50,7 @@ class OCSPResource(AuthorityHandler):
         responses = []
         for item in ocsp_req["tbs_request"]["request_list"]:
             serial = item["req_cert"]["serial_number"].native
+            assert serial > 0, "Serial number correctness check failed"
 
             try:
                 link_target = os.readlink(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % serial))

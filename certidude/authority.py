@@ -380,7 +380,7 @@ def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, profile
     builder = CertificateBuilder(dn, csr_pubkey)
     builder.serial_number = random.randint(
         0x1000000000000000000000000000000000000000,
-        0xffffffffffffffffffffffffffffffffffffffff)
+        0x7fffffffffffffffffffffffffffffffffffffff)
 
     now = datetime.utcnow()
     builder.begin_date = now - timedelta(minutes=5)
