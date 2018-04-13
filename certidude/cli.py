@@ -972,10 +972,11 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         click.echo("Not attempting to install packages from APT as requested...")
     else:
         click.echo("Installing packages...")
-        os.system("apt-get install -qq -y cython3 python3-dev python3-mimeparse \
+        os.system("DEBIAN_FRONTEND=noninteractive apt-get install -qq -y \
+            cython3 python3-dev python3-mimeparse \
             python3-markdown python3-pyxattr python3-jinja2 python3-cffi \
             software-properties-common libsasl2-modules-gssapi-mit npm nodejs \
-            libkrb5-dev libldap2-dev libsasl2-dev gawk libncurses5-dev rsync")
+            libkrb5-dev libldap2-dev libsasl2-dev gawk libncurses5-dev rsync attr")
         os.system("pip3 install -q --upgrade gssapi falcon humanize ipaddress simplepam")
         os.system("pip3 install -q --pre --upgrade python-ldap")
 
