@@ -35,6 +35,8 @@ OCSP_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "ocsp subnets").split(" ") if j])
 CRL_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "crl subnets").split(" ") if j])
+RENEWAL_SUBNETS = set([ipaddress.ip_network(j) for j in
+    cp.get("authorization", "renewal subnets").split(" ") if j])
 
 AUTHORITY_DIR = "/var/lib/certidude"
 AUTHORITY_PRIVATE_KEY_PATH = cp.get("authority", "private key path")
@@ -64,7 +66,6 @@ REQUEST_SUBMISSION_ALLOWED = cp.getboolean("authority", "request submission allo
 AUTHORITY_CERTIFICATE_URL = cp.get("signature", "authority certificate url")
 AUTHORITY_CRL_URL = cp.get("signature", "revoked url")
 AUTHORITY_OCSP_URL = cp.get("signature", "responder url")
-CERTIFICATE_RENEWAL_ALLOWED = cp.getboolean("signature", "renewal allowed")
 
 REVOCATION_LIST_LIFETIME = cp.getint("signature", "revocation list lifetime")
 

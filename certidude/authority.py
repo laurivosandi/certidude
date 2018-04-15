@@ -21,8 +21,6 @@ from xattr import getxattr, listxattr, setxattr
 
 random = SystemRandom()
 
-RE_HOSTNAME =  "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])(@(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9]))?$"
-
 # https://securityblog.redhat.com/2014/06/18/openssl-privilege-separation-analysis/
 # https://jamielinux.com/docs/openssl-certificate-authority/
 # http://pycopia.googlecode.com/svn/trunk/net/pycopia/ssl/certs.py
@@ -84,7 +82,7 @@ def self_enroll():
 
 
 def get_request(common_name):
-    if not re.match(RE_HOSTNAME, common_name):
+    if not re.match(const.RE_HOSTNAME, common_name):
         raise ValueError("Invalid common name %s" % repr(common_name))
     path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
     try:
@@ -97,7 +95,7 @@ def get_request(common_name):
         raise errors.RequestDoesNotExist("Certificate signing request file %s does not exist" % path)
 
 def get_signed(common_name):
-    if not re.match(RE_HOSTNAME, common_name):
+    if not re.match(const.RE_HOSTNAME, common_name):
         raise ValueError("Invalid common name %s" % repr(common_name))
     path = os.path.join(config.SIGNED_DIR, common_name + ".pem")
     with open(path, "rb") as fh:
@@ -160,7 +158,7 @@ def store_request(buf, overwrite=False, address="", user=""):
 
     common_name = csr["certification_request_info"]["subject"].native["common_name"]
 
-    if not re.match(RE_HOSTNAME, common_name):
+    if not re.match(const.RE_HOSTNAME, common_name):
         raise ValueError("Invalid common name")
 
     request_path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
@@ -298,7 +296,7 @@ def export_crl(pem=True):
 
 def delete_request(common_name):
     # Validate CN
-    if not re.match(RE_HOSTNAME, common_name):
+    if not re.match(const.RE_HOSTNAME, common_name):
         raise ValueError("Invalid common name")
 
     path, buf, csr, submitted = get_request(common_name)

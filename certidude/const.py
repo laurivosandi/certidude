@@ -6,6 +6,7 @@ import sys
 
 KEY_SIZE = 1024 if os.getenv("TRAVIS") else 4096
 CURVE_NAME = "secp384r1"
+RE_HOSTNAME =  "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])(@(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9]))?$"
 
 RUN_DIR = "/run/certidude"
 CONFIG_DIR = "/etc/certidude"

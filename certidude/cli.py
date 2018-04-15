@@ -5,11 +5,13 @@ import hashlib
 import logging
 import os
 import random
+import re
 import signal
 import string
 import subprocess
 import sys
 from asn1crypto import pem, x509
+from asn1crypto.csr import CertificationRequest
 from base64 import b64encode
 from certbuilder import CertificateBuilder, pem_armor_certificate
 from certidude import const
@@ -178,17 +180,6 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
             fh.write("%d\n" % os.getpid())
 
         try:
-            scheme = "http" if clients.getboolean(authority_name, "insecure") else "https"
-        except NoOptionError:
-            scheme = "https"
-
-        # Expand ca.example.com
-        authority_url = "%s://%s/api/certificate/" % (scheme, authority_name)
-        request_url = "%s://%s/api/request/" % (scheme, authority_name)
-        revoked_url = "%s://%s/api/revoked/" % (scheme, authority_name)
-
-
-        try:
             authority_path = clients.get(authority_name, "authority path")
         except NoOptionError:
             authority_path = "/var/lib/certidude/%s/ca_cert.pem" % authority_name
@@ -201,6 +192,7 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
             else:
                 if not os.path.exists(os.path.dirname(authority_path)):
                     os.makedirs(os.path.dirname(authority_path))
+                authority_url = "http://%s/api/certificate/" % authority_name
                 click.echo("Attempting to fetch authority certificate from %s" % authority_url)
                 try:
                     r = requests.get(authority_url,
@@ -260,15 +252,21 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
             revocations_path = None
         else:
             # Fetch certificate revocation list
+            revoked_url = "http://%s/api/revoked/" % authority_name
             click.echo("Fetching CRL from %s to %s" % (revoked_url, revocations_path))
             r = requests.get(revoked_url, headers={'accept': 'application/x-pem-file'})
-            assert r.status_code == 200, "Failed to fetch CRL from %s, got %s" % (revoked_url, r.text)
 
-            #revocations = crl.CertificateList.load(pem.unarmor(r.content))
-            # TODO: check signature, parse reasons, remove keys if revoked
-            revocations_partial = revocations_path + ".part"
-            with open(revocations_partial, 'wb') as f:
-                f.write(r.content)
+            if r.status_code == 200:
+                revocations = crl.CertificateList.load(pem.unarmor(r.content))
+                # TODO: check signature, parse reasons, remove keys if revoked
+                revocations_partial = revocations_path + ".part"
+                with open(revocations_partial, 'wb') as f:
+                    f.write(r.content)
+            elif r.status_code == 404:
+                click.echo("CRL disabled, server said 404")
+            else:
+                click.echo("Failed to fetch CRL from %s, got %s" % (revoked_url, r.text))
+
 
         try:
             common_name = clients.get(authority_name, "common name")
@@ -279,6 +277,13 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
         # If deriving common name from *current* hostname is preferred
         if common_name == "$HOSTNAME":
             common_name = const.HOSTNAME
+        elif common_name == "$FQDN":
+            common_name = const.FQDN
+        elif "$" in common_name:
+            raise ValueError("Invalid variable '%s' supplied, only $HOSTNAME and $FQDN allowed" % common_name)
+        if not re.match(const.RE_HOSTNAME, common_name):
+            raise ValueError("Invalid common name '%s' supplied" % common_name)
+
 
         ################################
         ### Generate keypair and CSR ###
@@ -290,6 +295,14 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
         except NoOptionError:
             key_path = "/var/lib/certidude/%s/client_key.pem" % authority_name
             request_path = "/var/lib/certidude/%s/client_csr.pem" % authority_name
+
+        if os.path.exists(request_path):
+            with open(request_path, "rb") as fh:
+                header, _, der_bytes = pem.unarmor(fh.read())
+                csr = CertificationRequest.load(der_bytes)
+                if csr["certification_request_info"]["subject"].native["common_name"] != common_name:
+                    click.echo("Stored request's common name differs from currently requested one, deleting old request")
+                    os.remove(request_path)
 
         if not os.path.exists(request_path):
             key_partial = key_path + ".part"
@@ -312,7 +325,7 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
             selinux_fixup(request_partial)
             os.rename(key_partial, key_path)
             os.rename(request_partial, request_path)
-        # else: check that CSR has correct CN
+
 
         ##############################################
         ### Submit CSR and save signed certificate ###
@@ -323,14 +336,7 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
         except NoOptionError:
             certificate_path = "/var/lib/certidude/%s/client_cert.pem" % authority_name
 
-        headers={
-            "Content-Type": "application/pkcs10",
-            "Accept": "application/x-x509-user-cert,application/x-pem-file"
-        }
-
-
         try:
-            # Attach renewal signature if renewal requested and cert exists
             renewal_overlap = clients.getint(authority_name, "renewal overlap")
         except NoOptionError: # Renewal not specified in config
             renewal_overlap = None
@@ -343,15 +349,8 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
                 if renewal_overlap and NOW > expires - timedelta(days=renewal_overlap):
                     click.echo("Certificate will expire %s, will attempt to renew" % expires)
                     renew = True
-                headers["X-Renewal-Signature"] = b64encode(
-                    asymmetric.rsa_pss_sign(
-                        asymmetric.load_private_key(kh.read()),
-                        cert_buf + rh.read(),
-                        "sha384"))
         except EnvironmentError: # Certificate missing, can't renew
             pass
-        else:
-            click.echo("Attached renewal signature %s" % headers["X-Renewal-Signature"])
 
         if not os.path.exists(certificate_path) or renew:
             # Set up URL-s
@@ -359,31 +358,48 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
             request_params.add("autosign=true")
             if not no_wait:
                 request_params.add("wait=forever")
+
+            kwargs = {
+                "data": open(request_path),
+                "verify": authority_path,
+                "headers": {
+                    "Content-Type": "application/pkcs10",
+                    "Accept": "application/x-x509-user-cert,application/x-pem-file"
+                }
+            }
+
+            if renew: # Do mutually authenticated TLS handshake
+                request_url = "https://%s:8443/api/request/" % authority_name
+                kwargs["cert"] = certificate_path, key_path
+            else:
+                # If machine is joined to domain attempt to present machine credentials for authentication
+                if kerberos:
+                    try:
+                        from requests_kerberos import HTTPKerberosAuth, OPTIONAL
+                    except ImportError:
+                        click.echo("Kerberos bindings not available, please install requests-kerberos")
+                    else:
+                        os.environ["KRB5CCNAME"]="/tmp/ca.ticket"
+
+                        # Mac OS X has keytab with lowercase hostname
+                        cmd = "kinit -S HTTP/%s -k %s$" % (authority_name, const.HOSTNAME.lower())
+                        click.echo("Executing: %s" % cmd)
+                        if os.system(cmd):
+                            # Fedora /w SSSD has keytab with uppercase hostname
+                            cmd = "kinit -S HTTP/%s -k %s$" % (authority_name, const.HOSTNAME.upper())
+                            if os.system(cmd):
+                                # Failed, probably /etc/krb5.keytab contains spaghetti
+                                raise ValueError("Failed to initialize Kerberos service ticket using machine keytab")
+                        assert os.path.exists("/tmp/ca.ticket"), "Ticket not created!"
+                        click.echo("Initialized Kerberos service ticket using machine keytab")
+                        kwargs["auth"] = HTTPKerberosAuth(mutual_authentication=OPTIONAL, force_preemptive=True)
+                else:
+                    click.echo("Not using machine keytab")
+                request_url = "https://%s/api/request/" % authority_name
+
             if request_params:
                 request_url = request_url + "?" + "&".join(request_params)
-
-            # If machine is joined to domain attempt to present machine credentials for authentication
-            if kerberos:
-                os.environ["KRB5CCNAME"]="/tmp/ca.ticket"
-
-                # Mac OS X has keytab with lowercase hostname
-                cmd = "kinit -S HTTP/%s -k %s$" % (authority_name, const.HOSTNAME.lower())
-                click.echo("Executing: %s" % cmd)
-                if os.system(cmd):
-                    # Fedora /w SSSD has keytab with uppercase hostname
-                    cmd = "kinit -S HTTP/%s -k %s$" % (authority_name, const.HOSTNAME.upper())
-                    if os.system(cmd):
-                        # Failed, probably /etc/krb5.keytab contains spaghetti
-                        raise ValueError("Failed to initialize TGT using machine keytab")
-                assert os.path.exists("/tmp/ca.ticket"), "Ticket not created!"
-                click.echo("Initialized Kerberos TGT using machine keytab")
-                from requests_kerberos import HTTPKerberosAuth, OPTIONAL
-                auth = HTTPKerberosAuth(mutual_authentication=OPTIONAL, force_preemptive=True)
-            else:
-                click.echo("Not using machine keytab")
-                auth = None
-
-            submission = requests.post(request_url, auth=auth, data=open(request_path), headers=headers)
+            submission = requests.post(request_url, **kwargs)
 
             # Destroy service ticket
             if os.path.exists("/tmp/ca.ticket"):
