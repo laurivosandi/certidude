@@ -281,8 +281,8 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
             common_name = const.FQDN
         elif "$" in common_name:
             raise ValueError("Invalid variable '%s' supplied, only $HOSTNAME and $FQDN allowed" % common_name)
-        if not re.match(const.RE_HOSTNAME, common_name):
-            raise ValueError("Invalid common name '%s' supplied" % common_name)
+        if not re.match(const.RE_COMMON_NAME, common_name):
+            raise ValueError("Supplied common name %s doesn't match the expression %s" % (common_name, const.RE_COMMON_NAME))
 
 
         ################################
@@ -338,7 +338,7 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
 
         try:
             renewal_overlap = clients.getint(authority_name, "renewal overlap")
-        except NoOptionError: # Renewal not specified in config
+        except NoOptionError: # Renewal not configured
             renewal_overlap = None
 
         try:
@@ -1169,6 +1169,14 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
                 fh.write(env.get_template("server/builder.conf").render(vars()))
             click.echo("File %s created" % const.BUILDER_CONFIG_PATH)
 
+        # Create image builder config
+        if os.path.exists(const.PROFILE_CONFIG_PATH):
+            click.echo("Signature profile config %s already exists, remove to regenerate" % const.PROFILE_CONFIG_PATH)
+        else:
+            with open(const.PROFILE_CONFIG_PATH, "w") as fh:
+                fh.write(env.get_template("server/profile.conf").render(vars()))
+            click.echo("File %s created" % const.PROFILE_CONFIG_PATH)
+
         # Create directory with 755 permissions
         os.umask(0o022)
         if not os.path.exists(directory):
@@ -1347,12 +1355,12 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
 
 @click.command("sign", help="Sign certificate")
 @click.argument("common_name")
-@click.option("--profile", "-p", default="default", help="Profile")
+@click.option("--profile", "-p", default="rw", help="Profile")
 @click.option("--overwrite", "-o", default=False, is_flag=True, help="Revoke valid certificate with same CN")
 def certidude_sign(common_name, overwrite, profile):
     from certidude import authority
     drop_privileges()
-    cert = authority.sign(common_name, overwrite=overwrite, profile=profile)
+    cert = authority.sign(common_name, overwrite=overwrite, profile=config.PROFILES[profile])
 
 
 @click.command("revoke", help="Revoke certificate")
@@ -1396,6 +1404,11 @@ def certidude_serve(port, listen, fork):
     log_handlers = []
 
     from certidude import config
+
+    click.echo("Loading signature profiles:")
+    for profile in config.PROFILES.values():
+         click.echo("- %s" % profile)
+    click.echo()
 
     # Rebuild reverse mapping
     for cn, path, buf, cert, signed, expires in authority.list_signed():

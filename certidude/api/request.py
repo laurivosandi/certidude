@@ -10,6 +10,7 @@ from base64 import b64decode
 from certidude import config, push, errors
 from certidude.auth import login_required, login_optional, authorize_admin
 from certidude.decorators import csrf_protection, MyEncoder
+from certidude.profile import SignatureProfile
 from datetime import datetime
 from oscrypto import asymmetric
 from oscrypto.errors import SignatureError
@@ -71,7 +72,8 @@ class RequestListResource(AuthorityHandler):
 
                 # Automatic enroll with Kerberos machine cerdentials
                 resp.set_header("Content-Type", "application/x-pem-file")
-                cert, resp.body = self.authority._sign(csr, body, overwrite=True)
+                cert, resp.body = self.authority._sign(csr, body,
+                    profile=config.PROFILES["rw"], overwrite=True)
                 logger.info("Automatically enrolled Kerberos authenticated machine %s from %s",
                     machine, req.context.get("remote_addr"))
                 return
@@ -89,28 +91,26 @@ class RequestListResource(AuthorityHandler):
             cert_pk = cert["tbs_certificate"]["subject_public_key_info"].native
             csr_pk = csr["certification_request_info"]["subject_pk_info"].native
 
-            try:
+            # Same public key
+            if cert_pk == csr_pk:
                 buf = req.get_header("X-SSL-CERT")
-                header, _, der_bytes = pem.unarmor(buf.replace("\t", "").encode("ascii"))
-                handshake_cert = x509.Certificate.load(der_bytes)
-            except:
-                raise
-            else:
-                # Same public key
-                if cert_pk == csr_pk:
-                    # Used mutually authenticated TLS handshake, assume renewal
+                # Used mutually authenticated TLS handshake, assume renewal
+                if buf:
+                    header, _, der_bytes = pem.unarmor(buf.replace("\t", "").encode("ascii"))
+                    handshake_cert = x509.Certificate.load(der_bytes)
                     if handshake_cert.native == cert.native:
                         for subnet in config.RENEWAL_SUBNETS:
                             if req.context.get("remote_addr") in subnet:
                                 resp.set_header("Content-Type", "application/x-x509-user-cert")
-                                _, resp.body = self.authority._sign(csr, body, overwrite=True)
+                                _, resp.body = self.authority._sign(csr, body, overwrite=True,
+                                    profile=SignatureProfile.from_cert(cert))
                                 logger.info("Renewing certificate for %s as %s is whitelisted", common_name, req.context.get("remote_addr"))
                                 return
 
-                    # No header supplied, redirect to signed API call
-                    resp.status = falcon.HTTP_SEE_OTHER
-                    resp.location = os.path.join(os.path.dirname(req.relative_uri), "signed", common_name)
-                    return
+                # No header supplied, redirect to signed API call
+                resp.status = falcon.HTTP_SEE_OTHER
+                resp.location = os.path.join(os.path.dirname(req.relative_uri), "signed", common_name)
+                return
 
 
         """
@@ -123,7 +123,7 @@ class RequestListResource(AuthorityHandler):
                     if req.context.get("remote_addr") in subnet:
                         try:
                             resp.set_header("Content-Type", "application/x-pem-file")
-                            _, resp.body = self.authority._sign(csr, body)
+                            _, resp.body = self.authority._sign(csr, body, profile=config.PROFILES["rw"])
                             logger.info("Autosigned %s as %s is whitelisted", common_name, req.context.get("remote_addr"))
                             return
                         except EnvironmentError:
@@ -222,7 +222,7 @@ class RequestDetailResource(AuthorityHandler):
         """
         try:
             cert, buf = self.authority.sign(cn,
-                profile=req.get_param("profile", default="default"),
+                profile=config.PROFILES[req.get_param("profile", default="rw")],
                 overwrite=True,
                 signer=req.context.get("user").name)
             # Mailing and long poll publishing implemented in the function above

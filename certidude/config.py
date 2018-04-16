@@ -2,7 +2,9 @@ import configparser
 import ipaddress
 import os
 from certidude import const
+from certidude.profile import SignatureProfile
 from collections import OrderedDict
+from datetime import timedelta
 
 # Options that are parsed from config file are fetched here
 
@@ -96,11 +98,22 @@ TOKEN_SECRET = cp.get("token", "secret").encode("ascii")
 # The API call for looking up scripts uses following directory as root
 SCRIPT_DIR = cp.get("script", "path")
 
-PROFILES = OrderedDict([[i, [j.strip() for j in cp.get("profile", i).split(",")]] for i in cp.options("profile")])
+from configparser import ConfigParser
+profile_config = ConfigParser()
+profile_config.readfp(open(const.PROFILE_CONFIG_PATH))
+
+PROFILES = dict([(key, SignatureProfile(key,
+    profile_config.get(key, "title"),
+    profile_config.get(key, "ou"),
+    profile_config.getboolean(key, "ca"),
+    profile_config.getint(key, "lifetime"),
+    profile_config.get(key, "key usage"),
+    profile_config.get(key, "extended key usage"),
+    profile_config.get(key, "common name"),
+    )) for key in profile_config.sections()])
 
 cp2 = configparser.RawConfigParser()
 cp2.readfp(open(const.BUILDER_CONFIG_PATH, "r"))
 IMAGE_BUILDER_PROFILES = [(j, cp2.get(j, "title"), cp2.get(j, "rename")) for j in cp2.sections()]
-
 
 TOKEN_OVERWRITE_PERMITTED=True

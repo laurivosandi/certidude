@@ -71,7 +71,7 @@ def self_enroll():
         from certidude import authority
         from certidude.common import drop_privileges
         drop_privileges()
-        authority.sign(common_name, skip_push=True, overwrite=True, profile="srv")
+        authority.sign(common_name, skip_push=True, overwrite=True, profile=config.PROFILES["srv"])
         sys.exit(0)
     else:
         os.waitpid(pid, 0)
@@ -82,7 +82,7 @@ def self_enroll():
 
 
 def get_request(common_name):
-    if not re.match(const.RE_HOSTNAME, common_name):
+    if not re.match(const.RE_COMMON_NAME, common_name):
         raise ValueError("Invalid common name %s" % repr(common_name))
     path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
     try:
@@ -95,7 +95,7 @@ def get_request(common_name):
         raise errors.RequestDoesNotExist("Certificate signing request file %s does not exist" % path)
 
 def get_signed(common_name):
-    if not re.match(const.RE_HOSTNAME, common_name):
+    if not re.match(const.RE_COMMON_NAME, common_name):
         raise ValueError("Invalid common name %s" % repr(common_name))
     path = os.path.join(config.SIGNED_DIR, common_name + ".pem")
     with open(path, "rb") as fh:
@@ -158,7 +158,7 @@ def store_request(buf, overwrite=False, address="", user=""):
 
     common_name = csr["certification_request_info"]["subject"].native["common_name"]
 
-    if not re.match(const.RE_HOSTNAME, common_name):
+    if not re.match(const.RE_COMMON_NAME, common_name):
         raise ValueError("Invalid common name")
 
     request_path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
@@ -296,7 +296,7 @@ def export_crl(pem=True):
 
 def delete_request(common_name):
     # Validate CN
-    if not re.match(const.RE_HOSTNAME, common_name):
+    if not re.match(const.RE_COMMON_NAME, common_name):
         raise ValueError("Invalid common name")
 
     path, buf, csr, submitted = get_request(common_name)
@@ -310,7 +310,7 @@ def delete_request(common_name):
         config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest(),
         headers={"User-Agent": "Certidude API"})
 
-def sign(common_name, skip_notify=False, skip_push=False, overwrite=False, profile="default", signer=None):
+def sign(common_name, profile, skip_notify=False, skip_push=False, overwrite=False, signer=None):
     """
     Sign certificate signing request by it's common name
     """
@@ -323,16 +323,13 @@ def sign(common_name, skip_notify=False, skip_push=False, overwrite=False, profi
 
 
     # Sign with function below
-    cert, buf = _sign(csr, csr_buf, skip_notify, skip_push, overwrite, profile, signer)
+    cert, buf = _sign(csr, csr_buf, profile, skip_notify, skip_push, overwrite, signer)
 
     os.unlink(req_path)
     return cert, buf
 
-def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, profile="default", signer=None):
+def _sign(csr, buf, profile, skip_notify=False, skip_push=False, overwrite=False, signer=None):
     # TODO: CRLDistributionPoints, OCSP URL, Certificate URL
-    if profile not in config.PROFILES:
-        raise ValueError("Invalid profile supplied '%s'" % profile)
-
     assert buf.startswith(b"-----BEGIN ")
     assert isinstance(csr, CertificationRequest)
     csr_pubkey = asymmetric.load_public_key(csr["certification_request_info"]["subject_pk_info"])
@@ -370,10 +367,9 @@ def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, profile
         else:
             raise FileExistsError("Will not overwrite existing certificate")
 
-    # Sign via signer process
     dn = {u'common_name': common_name }
-    profile_server_flags, lifetime, dn["organizational_unit_name"], _ = config.PROFILES[profile]
-    lifetime = int(lifetime)
+    if profile.ou:
+        dn["organizational_unit_name"] = profile.ou
 
     builder = CertificateBuilder(dn, csr_pubkey)
     builder.serial_number = random.randint(
@@ -382,18 +378,12 @@ def _sign(csr, buf, skip_notify=False, skip_push=False, overwrite=False, profile
 
     now = datetime.utcnow()
     builder.begin_date = now - timedelta(minutes=5)
-    builder.end_date = now + timedelta(days=lifetime)
+    builder.end_date = now + timedelta(days=profile.lifetime)
     builder.issuer = certificate
-    builder.ca = False
-    builder.key_usage = set(["digital_signature", "key_encipherment"])
-
-    # If we have FQDN and profile suggests server flags, enable them
-    if server_flags(common_name) and profile_server_flags:
-        builder.subject_alt_domains = [common_name] # OpenVPN uses CN while StrongSwan uses SAN to match hostname of the server
-        builder.extended_key_usage = set(["server_auth", "1.3.6.1.5.5.8.2.2", "client_auth"])
-    else:
-        builder.subject_alt_domains = [common_name] # iOS demands SAN also for clients
-        builder.extended_key_usage = set(["client_auth"])
+    builder.ca = profile.ca
+    builder.key_usage = profile.key_usage
+    builder.extended_key_usage = profile.extended_key_usage
+    builder.subject_alt_domains = [common_name]
 
     end_entity_cert = builder.build(private_key)
     end_entity_cert_buf = asymmetric.dump_certificate(end_entity_cert)

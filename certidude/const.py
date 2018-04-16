@@ -6,12 +6,15 @@ import sys
 
 KEY_SIZE = 1024 if os.getenv("TRAVIS") else 4096
 CURVE_NAME = "secp384r1"
-RE_HOSTNAME =  "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9])(@(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\-]*[a-zA-Z0-9])\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\-]*[A-Za-z0-9]))?$"
+RE_FQDN =  "^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)+([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])?$"
+RE_HOSTNAME =  "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
+RE_COMMON_NAME = "^[A-Za-z0-9\-\.\@]+$"
 
 RUN_DIR = "/run/certidude"
 CONFIG_DIR = "/etc/certidude"
 SERVER_CONFIG_PATH = os.path.join(CONFIG_DIR, "server.conf")
 BUILDER_CONFIG_PATH = os.path.join(CONFIG_DIR, "builder.conf")
+PROFILE_CONFIG_PATH = os.path.join(CONFIG_DIR, "profile.conf")
 CLIENT_CONFIG_PATH = os.path.join(CONFIG_DIR, "client.conf")
 SERVICES_CONFIG_PATH = os.path.join(CONFIG_DIR, "services.conf")
 SERVER_PID_PATH = os.path.join(RUN_DIR, "server.pid")

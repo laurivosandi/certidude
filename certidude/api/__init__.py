@@ -163,7 +163,8 @@ class SessionResource(AuthorityHandler):
                 admin_subnets=config.ADMIN_SUBNETS or None,
                 signature = dict(
                     revocation_list_lifetime=config.REVOCATION_LIST_LIFETIME,
-                    profiles = [dict(name=k, server=v[0]=="server", lifetime=v[1], organizational_unit=v[2], title=v[3]) for k,v in config.PROFILES.items()]
+                    profiles = sorted([p.serialize() for p in config.PROFILES.values()], key=lambda p:p.get("slug")),
+
                 )
             ) if req.context.get("user").is_admin() else None,
             features=dict(
