@@ -1,0 +1,9 @@
+cat << EOF > /etc/crontabs/root
+15 1 * * * sleep 70 && touch /etc/banner && reboot
+10 1 1 */2 * /usr/bin/certidude-enroll-renew
+EOF
+
+chmod 0600 /etc/crontabs/root
+
+/etc/init.d/cron enable
+

@@ -109,11 +109,10 @@ esac
 EOF
 
 make -C $BUILD/$BASENAME image FILES=$OVERLAY PROFILE=$PROFILE PACKAGES="luci luci-app-commands \
-    openssl-util curl ca-certificates \
-    strongswan-mod-kernel-libipsec kmod-tun ip-full strongswan-full \
+    openssl-util curl ca-certificates dropbear \
+    strongswan-mod-kernel-libipsec kmod-tun strongswan-default strongswan-mod-openssl strongswan-mod-curl strongswan-mod-ccm strongswan-mod-gcm \
     htop iftop tcpdump nmap nano -odhcp6c -odhcpd -dnsmasq \
     -luci-app-firewall \
     -pppd -luci-proto-ppp -kmod-ppp -ppp -ppp-mod-pppoe \
-    -kmod-ip6tables -ip6tables -luci-proto-ipv6 -kmod-iptunnel6 -kmod-ipsec6"
-
+    -kmod-ip6tables -ip6tables -luci-proto-ipv6 -kmod-iptunnel6 -kmod-ipsec6 bc"
 

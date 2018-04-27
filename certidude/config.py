@@ -18,6 +18,7 @@ ACCOUNTS_BACKEND = cp.get("accounts", "backend")             # posix, ldap
 MAIL_SUFFIX = cp.get("accounts", "mail suffix")
 
 KERBEROS_KEYTAB = cp.get("authentication", "kerberos keytab")
+KERBEROS_REALM = cp.get("authentication", "kerberos realm")
 LDAP_AUTHENTICATION_URI = cp.get("authentication", "ldap uri")
 LDAP_GSSAPI_CRED_CACHE = cp.get("accounts", "ldap gssapi credential cache")
 LDAP_ACCOUNTS_URI = cp.get("accounts", "ldap uri")
@@ -39,6 +40,10 @@ CRL_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "crl subnets").split(" ") if j])
 RENEWAL_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "renewal subnets").split(" ") if j])
+OVERWRITE_SUBNETS = set([ipaddress.ip_network(j) for j in
+    cp.get("authorization", "overwrite subnets").split(" ") if j])
+MACHINE_ENROLLMENT_SUBNETS = set([ipaddress.ip_network(j) for j in
+    cp.get("authorization", "machine enrollment subnets").split(" ") if j])
 
 AUTHORITY_DIR = "/var/lib/certidude"
 AUTHORITY_PRIVATE_KEY_PATH = cp.get("authority", "private key path")
@@ -54,9 +59,6 @@ MAILER_ADDRESS = cp.get("mailer", "address")
 
 BOOTSTRAP_TEMPLATE = cp.get("bootstrap", "services template")
 
-MACHINE_ENROLLMENT_ALLOWED = {
-    "forbidden": False, "allowed": True }[
-    cp.get("authority", "machine enrollment")]
 USER_ENROLLMENT_ALLOWED = {
     "forbidden": False, "single allowed": True, "multiple allowed": True }[
     cp.get("authority", "user enrollment")]
@@ -117,3 +119,6 @@ cp2.readfp(open(const.BUILDER_CONFIG_PATH, "r"))
 IMAGE_BUILDER_PROFILES = [(j, cp2.get(j, "title"), cp2.get(j, "rename")) for j in cp2.sections()]
 
 TOKEN_OVERWRITE_PERMITTED=True
+
+SERVICE_PROTOCOLS = set([j.lower() for j in cp.get("service", "protocols").split(" ") if j])
+SERVICE_ROUTERS = cp.get("service", "routers")

@@ -1,0 +1,10 @@
+#!/bin/sh
+
+# To test: ACTION=ifup INTERFACE=wan sh /etc/hotplug.d/iface/50-certidude
+
+AUTHORITY=certidude.@authority[0]
+
+[ $ACTION == "ifup" ] || exit 0
+[ $INTERFACE == "$(uci get $AUTHORITY.trigger)" ] || exit 0
+
+/usr/bin/certidude-enroll

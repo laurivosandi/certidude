@@ -1,0 +1,25 @@
+#!/bin/sh
+
+AUTHORITY=certidude.@authority[0]
+URL=https://$(uci get $AUTHORITY.hostname):8443
+DIR=/etc/certidude/authority/$(uci get $AUTHORITY.hostname)
+AUTHORITY_PATH=$DIR/ca_cert.pem
+CERTIFICATE_PATH=$DIR/host_cert.pem
+REQUEST_PATH=$DIR/host_req.pem
+KEY_PATH=$DIR/host_key.pem
+
+curl -f -L \
+    -H "Content-Type: application/pkcs10" \
+    --data-binary @$REQUEST_PATH \
+    --cacert $AUTHORITY_PATH \
+    --key $KEY_PATH \
+    --cert $CERTIFICATE_PATH \
+    $URL/api/request/ -o $CERTIFICATE_PATH.part
+
+if [ $? -eq 0 ]; then
+    logger -t certidude -s "Certificate renewal successful"
+    mv $CERTIFICATE_PATH.part $CERTIFICATE_PATH
+    ipsec reload
+else
+    logger -t certidude -s "Failed to renew certificate"
+fi

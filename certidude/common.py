@@ -3,6 +3,65 @@ import os
 import click
 import subprocess
 
+MAPPING = dict(
+    common_name="CN",
+    organizational_unit_name="OU",
+    organization_name="O",
+    domain_component="DC"
+)
+
+def cert_to_dn(cert):
+    d = []
+    for key, value in cert["tbs_certificate"]["subject"].native.items():
+        if not isinstance(value, list):
+            value = [value]
+        for comp in value:
+            d.append("%s=%s" % (MAPPING[key], comp))
+    return ", ".join(d)
+
+def cn_to_dn(common_name, namespace, o=None, ou=None):
+    from asn1crypto.x509 import Name, RelativeDistinguishedName, NameType, DirectoryString, RDNSequence, NameTypeAndValue, UTF8String, DNSName
+
+    rdns = []
+    rdns.append(RelativeDistinguishedName([
+        NameTypeAndValue({
+            'type': NameType.map("common_name"),
+            'value': DirectoryString(
+                name="utf8_string",
+                value=UTF8String(common_name))
+        })
+    ]))
+
+    if ou:
+        rdns.append(RelativeDistinguishedName([
+            NameTypeAndValue({
+                'type': NameType.map("organizational_unit_name"),
+                'value': DirectoryString(
+                    name="utf8_string",
+                    value=UTF8String(ou))
+            })
+        ]))
+
+    if o:
+        rdns.append(RelativeDistinguishedName([
+            NameTypeAndValue({
+                'type': NameType.map("organization_name"),
+                'value': DirectoryString(
+                    name="utf8_string",
+                    value=UTF8String(o))
+            })
+        ]))
+
+    for dc in namespace.split("."):
+        rdns.append(RelativeDistinguishedName([
+            NameTypeAndValue({
+                'type': NameType.map("domain_component"),
+                'value': DNSName(value=dc)
+            })
+        ]))
+
+    return Name(name='', value=RDNSequence(rdns))
+
 def selinux_fixup(path):
     """
     Fix OpenVPN credential store security context on Fedora

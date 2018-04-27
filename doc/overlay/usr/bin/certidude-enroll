@@ -1,0 +1,123 @@
+#!/bin/sh
+
+AUTHORITY=certidude.@authority[0]
+
+# TODO: iterate over all authorities
+
+GATEWAY=$(uci get $AUTHORITY.gateway)
+COMMON_NAME=$(uci get system.@system[0].hostname)
+
+DIR=/etc/certidude/authority/$(uci get $AUTHORITY.hostname)
+mkdir -p $DIR
+
+AUTHORITY_PATH=$DIR/ca_cert.pem
+CERTIFICATE_PATH=$DIR/host_cert.pem
+REQUEST_PATH=$DIR/host_req.pem
+KEY_PATH=$DIR/host_key.pem
+KEY_TYPE=$(uci get $AUTHORITY.key_type)
+KEY_LENGTH=$(uci get $AUTHORITY.key_length)
+KEY_CURVE=$(uci get $AUTHORITY.key_curve)
+
+NTP_SERVERS=$(uci get system.ntp.server)
+
+logger -t certidude -s "Fetching time from NTP servers: $NTP_SERVERS"
+ntpd -q -n -d -p $NTP_SERVERS
+
+logger -t certidude -s "Time is now: $(date)"
+
+# If certificate file is there assume everything's set up
+if [ -f $CERTIFICATE_PATH ]; then
+    SERIAL=$(openssl x509 -in $CERTIFICATE_PATH -noout -serial | cut -d "=" -f 2 | tr [A-F] [a-f])
+    logger -t certidude -s "Certificate with serial $SERIAL already exists in $CERTIFICATE_PATH, attempting to bring up VPN tunnel..."
+    ipsec restart
+    exit 0
+fi
+
+
+#########################################
+### Generate private key if necessary ###
+#########################################
+
+if [ ! -f $KEY_PATH ]; then
+
+    logger -t certidude -s "Generating $KEY_TYPE key for VPN..."
+
+    case $KEY_TYPE in
+        rsa)
+            openssl genrsa -out $KEY_PATH.part $KEY_LENGTH
+            ;;
+        ec)
+            openssl ecparam -name $KEY_CURVE -genkey -noout -out $KEY_PATH.part
+            ;;
+    esac
+    mv $KEY_PATH.part $KEY_PATH
+fi
+
+
+############################
+### Fetch CA certificate ###
+############################
+
+if [ ! -f $AUTHORITY_PATH ]; then
+
+    logger -t certidude -s "Fetching CA certificate from $URL/api/certificate/"
+    curl -f -s http://$(uci get $AUTHORITY.hostname)/api/certificate/ -o $AUTHORITY_PATH.part
+    if [ $? -ne 0 ]; then
+        logger -t certidude -s "Failed to receive CA certificate, server responded: $(cat $AUTHORITY_PATH.part)"
+        exit 10
+    fi
+
+    openssl x509 -in $AUTHORITY_PATH.part -noout
+    if [ $? -ne 0 ]; then
+        logger -t certidude -s "Received invalid CA certificate"
+        exit 11
+    fi
+
+    mv $AUTHORITY_PATH.part $AUTHORITY_PATH
+fi
+
+logger -t certidude -s "CA certificate md5sum: $(md5sum -b $AUTHORITY_PATH)"
+
+
+#####################################
+### Generate request if necessary ###
+#####################################
+
+if [ ! -f $REQUEST_PATH ]; then
+    openssl req -new -sha256 -key $KEY_PATH -out $REQUEST_PATH.part -subj "/CN=$COMMON_NAME"
+    mv $REQUEST_PATH.part $REQUEST_PATH
+fi
+
+logger -t certidude -s "Request md5sum is $(md5sum -b $REQUEST_PATH)"
+
+curl -f -L \
+    -H "Content-Type: application/pkcs10" \
+    --cacert $AUTHORITY_PATH \
+    --data-binary @$REQUEST_PATH \
+    https://$(uci get $AUTHORITY.hostname):8443/api/request/?autosign=true\&wait=yes -o $CERTIFICATE_PATH.part
+
+# TODO: Loop until we get exitcode 0
+# TODO: Use backoff time $((2\*X))
+
+if [ $? -ne 0 ]; then
+    echo "Failed to fetch certificate"
+    exit 21
+fi
+
+# Verify certificate
+openssl verify -CAfile $AUTHORITY_PATH $CERTIFICATE_PATH.part
+
+if [ $? -ne 0 ]; then
+    logger -t certidude -s "Received bogus certificate!"
+    exit 22
+fi
+
+logger -t certidude -s "Certificate md5sum: $(md5sum -b $CERTIFICATE_PATH.part)"
+
+uci commit
+
+mv $CERTIFICATE_PATH.part $CERTIFICATE_PATH
+
+# Start services
+logger -t certidude -s "Starting IPSec IKEv2 daemon..."
+ipsec restart

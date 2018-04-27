@@ -53,24 +53,29 @@ class OCSPResource(AuthorityHandler):
             assert serial > 0, "Serial number correctness check failed"
 
             try:
-                link_target = os.readlink(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % serial))
+                link_target = os.readlink(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%040x.pem" % serial))
                 assert link_target.startswith("../")
                 assert link_target.endswith(".pem")
                 path, buf, cert, signed, expires = self.authority.get_signed(link_target[3:-4])
                 if serial != cert.serial_number:
-                    logger.error("Certificate store integrity check failed, %s refers to certificate with serial %x" % (link_target, cert.serial_number))
+                    logger.error("Certificate store integrity check failed, %s refers to certificate with serial %040x", link_target, cert.serial_number)
                     raise EnvironmentError("Integrity check failed")
+                logger.debug("OCSP responder queried from %s for %s with serial %040x, returned status 'good'",
+                    req.context.get("remote_addr"), cert.subject.native["common_name"], serial)
                 status = ocsp.CertStatus(name='good', value=None)
             except EnvironmentError:
                 try:
-                    path, buf, cert, signed, expires, revoked = self.authority.get_revoked(serial)
+                    path, buf, cert, signed, expires, revoked, reason = self.authority.get_revoked(serial)
+                    logger.debug("OCSP responder queried from %s for %s with serial %040x, returned status 'revoked' due to %s",
+                        req.context.get("remote_addr"), cert.subject.native["common_name"], serial, reason)
                     status = ocsp.CertStatus(
                         name='revoked',
                         value={
                             'revocation_time': revoked,
-                            'revocation_reason': "key_compromise",
+                            'revocation_reason': reason,
                         })
                 except EnvironmentError:
+                    logger.info("OCSP responder queried for unknown serial %040x from %s", serial, req.context.get("remote_addr"))
                     status = ocsp.CertStatus(name="unknown", value=None)
 
             responses.append({

@@ -26,14 +26,15 @@ class AttributeResource(object):
         Results made available only to lease IP address.
         """
         try:
-            path, buf, cert, attribs = self.authority.get_attributes(cn, namespace=self.namespace)
+            path, buf, cert, attribs = self.authority.get_attributes(cn,
+                namespace=self.namespace, flat=True)
         except IOError:
             raise falcon.HTTPNotFound()
         else:
             return attribs
 
     @csrf_protection
-    @whitelist_subject # TODO: sign instead
+    @whitelist_subject
     def on_post(self, req, resp, cn):
         namespace = ("user.%s." % self.namespace).encode("ascii")
         try:
@@ -43,7 +44,7 @@ class AttributeResource(object):
         else:
             for key in req.params:
                 if not re.match("[a-z0-9_\.]+$", key):
-                    raise falcon.HTTPBadRequest("Invalid key")
+                    raise falcon.HTTPBadRequest("Invalid key %s" % key)
             valid = set()
             for key, value in req.params.items():
                 identifier = ("user.%s.%s" % (self.namespace, key)).encode("ascii")

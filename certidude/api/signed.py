@@ -44,7 +44,7 @@ class SignedCertificateDetailResource(AuthorityHandler):
             resp.body = json.dumps(dict(
                 common_name = cn,
                 signer = signer_username,
-                serial = "%x" % cert.serial_number,
+                serial = "%040x" % cert.serial_number,
                 organizational_unit = cert.subject.native.get("organizational_unit_name"),
                 signed = cert["tbs_certificate"]["validity"]["not_before"].native.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
                 expires = cert["tbs_certificate"]["validity"]["not_after"].native.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
@@ -54,7 +54,8 @@ class SignedCertificateDetailResource(AuthorityHandler):
                 extensions = dict([
                     (e["extn_id"].native, e["extn_value"].native)
                     for e in cert["tbs_certificate"]["extensions"]
-                    if e["extn_value"] in ("extended_key_usage",)])
+                    if e["extn_id"].native in ("extended_key_usage",)])
+
             ))
             logger.debug("Served certificate %s to %s as application/json",
                 cn, req.context.get("remote_addr"))
@@ -69,5 +70,6 @@ class SignedCertificateDetailResource(AuthorityHandler):
     def on_delete(self, req, resp, cn):
         logger.info("Revoked certificate %s by %s from %s",
             cn, req.context.get("user"), req.context.get("remote_addr"))
-        self.authority.revoke(cn)
+        self.authority.revoke(cn,
+            reason=req.get_param("reason", default="key_compromise"))
 

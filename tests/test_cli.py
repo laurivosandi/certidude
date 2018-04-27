@@ -60,12 +60,13 @@ def clean_client():
     files = [
         "/etc/certidude/client.conf",
         "/etc/certidude/services.conf",
-        "/var/lib/certidude/ca.example.lan/client_key.pem",
-        "/var/lib/certidude/ca.example.lan/server_key.pem",
-        "/var/lib/certidude/ca.example.lan/client_req.pem",
-        "/var/lib/certidude/ca.example.lan/server_req.pem",
-        "/var/lib/certidude/ca.example.lan/client_cert.pem",
-        "/var/lib/certidude/ca.example.lan/server_cert.pem",
+        "/etc/certidude/authority/ca.example.lan/ca_cert.pem",
+        "/etc/certidude/authority/ca.example.lan/client_key.pem",
+        "/etc/certidude/authority/ca.example.lan/server_key.pem",
+        "/etc/certidude/authority/ca.example.lan/client_req.pem",
+        "/etc/certidude/authority/ca.example.lan/server_req.pem",
+        "/etc/certidude/authority/ca.example.lan/client_cert.pem",
+        "/etc/certidude/authority/ca.example.lan/server_cert.pem",
     ]
     for path in files:
         if os.path.exists(path):
@@ -85,6 +86,8 @@ def clean_client():
 
 
 def clean_server():
+    os.umask(0o22)
+
     if os.path.exists("/run/certidude/server.pid"):
         with open("/run/certidude/server.pid") as fh:
             try:
@@ -95,30 +98,29 @@ def clean_server():
 
     if os.path.exists("/var/lib/certidude/ca.example.lan"):
         shutil.rmtree("/var/lib/certidude/ca.example.lan")
-    if os.path.exists("/etc/certidude/server.conf"):
-        os.unlink("/etc/certidude/server.conf")
     if os.path.exists("/run/certidude"):
         shutil.rmtree("/run/certidude")
-    if os.path.exists("/var/log/certidude.log"):
-        os.unlink("/var/log/certidude.log")
-    if os.path.exists("/etc/cron.hourly/certidude"):
-        os.unlink("/etc/cron.hourly/certidude")
 
-    # systemd
-    if os.path.exists("/etc/systemd/system/certidude.service"):
-        os.unlink("/etc/systemd/system/certidude.service")
+    files = [
+        "/etc/krb5.keytab",
+        "/etc/samba/smb.conf",
+        "/etc/certidude/server.conf",
+        "/etc/certidude/builder.conf",
+        "/etc/certidude/profile.conf",
+        "/var/log/certidude.log",
+        "/etc/cron.hourly/certidude",
+        "/etc/systemd/system/certidude.service",
+        "/etc/nginx/sites-available/ca.conf",
+        "/etc/nginx/sites-enabled/ca.conf",
+        "/etc/nginx/sites-available/certidude.conf",
+        "/etc/nginx/sites-enabled/certidude.conf",
+        "/etc/nginx/conf.d/tls.conf",
+        "/etc/certidude/server.keytab",
+    ]
 
-    # Remove nginx stuff
-    if os.path.exists("/etc/nginx/sites-available/ca.conf"):
-        os.unlink("/etc/nginx/sites-available/ca.conf")
-    if os.path.exists("/etc/nginx/sites-enabled/ca.conf"):
-        os.unlink("/etc/nginx/sites-enabled/ca.conf")
-    if os.path.exists("/etc/nginx/sites-available/certidude.conf"):
-        os.unlink("/etc/nginx/sites-available/certidude.conf")
-    if os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
-        os.unlink("/etc/nginx/sites-enabled/certidude.conf")
-    if os.path.exists("/etc/nginx/conf.d/tls.conf"):
-        os.unlink("/etc/nginx/conf.d/tls.conf")
+    for filename in files:
+        if os.path.exists(filename):
+            os.unlink(filename)
 
     # Remove OpenVPN stuff
     if os.path.exists("/etc/openvpn"):
@@ -135,8 +137,6 @@ def clean_server():
                 os.kill(int(fh.read()), 15)
             except OSError:
                 pass
-    if os.path.exists("/etc/certidude/server.keytab"):
-        os.unlink("/etc/certidude/server.keytab")
     os.system("rm -Rfv /var/lib/samba/*")
 
     # Restore initial resolv.conf
@@ -146,7 +146,7 @@ def test_cli_setup_authority():
     assert os.getuid() == 0, "Run tests as root in a clean VM or container"
     assert check_output(["/bin/hostname", "-f"]) == b"ca.example.lan\n", "As a safety precaution, unittests only run in a machine whose hostanme -f  is ca.example.lan"
 
-    os.system("apt-get install -q -y git build-essential python-dev libkrb5-dev")
+    os.system("DEBIAN_FRONTEND=noninteractive apt-get install -qq -y git build-essential python-dev libkrb5-dev")
 
     assert not os.environ.get("KRB5CCNAME"), "Environment contaminated"
     assert not os.environ.get("KRB5_KTNAME"), "Environment contaminated"
@@ -188,39 +188,6 @@ def test_cli_setup_authority():
             os.system("useradd adminbot -G sudo -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1'")
         if "userbot" not in buf:
             os.system("useradd userbot -G users -p '$1$PBkf5waA$n9EV6WJ7PS6lyGWkgeTPf1' -c 'User Bot,,,'")
-
-    # Bootstrap domain controller here,
-    # Samba startup takes some time
-    os.system("apt-get install -y samba krb5-user winbind bc")
-    if os.path.exists("/etc/samba/smb.conf"):
-        os.unlink("/etc/samba/smb.conf")
-    os.system("samba-tool domain provision --server-role=dc --domain=EXAMPLE --realm=EXAMPLE.LAN --host-name=ca")
-    os.system("samba-tool user add userbot S4l4k4l4 --given-name='User' --surname='Bot'")
-    os.system("samba-tool user add adminbot S4l4k4l4 --given-name='Admin' --surname='Bot'")
-    os.system("samba-tool group addmembers 'Domain Admins' adminbot")
-    os.system("samba-tool user setpassword administrator --newpassword=S4l4k4l4")
-    if os.path.exists("/etc/krb5.keytab"):
-        os.unlink("/etc/krb5.keytab")
-    os.symlink("/var/lib/samba/private/secrets.keytab", "/etc/krb5.keytab")
-    os.chmod("/var/lib/samba/private/secrets.keytab", 0o644) # To allow access to certidude server
-    if os.path.exists("/etc/krb5.conf"): # Remove the one from krb5-user package
-        os.unlink("/etc/krb5.conf")
-    os.symlink("/var/lib/samba/private/krb5.conf", "/etc/krb5.conf")
-    with open("/etc/resolv.conf", "w") as fh:
-        fh.write("nameserver 127.0.0.1\nsearch example.lan\n")
-    # TODO: dig -t srv perhaps?
-    os.system("samba")
-
-    # Samba bind 636 late (probably generating keypair)
-    # so LDAPS connections below will fail
-    timeout = 0
-    while timeout < 30:
-        if os.path.exists("/var/lib/samba/private/tls/cert.pem"):
-            break
-        sleep(1)
-        timeout += 1
-    else:
-        assert False, "Samba startup timed out"
 
     reload(const)
     from certidude.cli import entry_point as cli
@@ -447,15 +414,6 @@ def test_cli_setup_authority():
     assert "Stored request " in inbox.pop(), inbox
     assert not inbox
 
-    buf = generate_csr(cn="test2.example.lan")
-    r = client().simulate_post("/api/request/",
-        query_string="autosign=1",
-        body=buf,
-        headers={"content-type":"application/pkcs10"})
-    assert r.status_code == 202 # server CN, request stored
-    assert "Stored request " in inbox.pop(), inbox
-    assert not inbox
-
     # Test signed certificate API call
     r = client().simulate_get("/api/signed/nonexistant/")
     assert r.status_code == 404, r.text
@@ -574,7 +532,7 @@ def test_cli_setup_authority():
     # Test tagging integration in scripting framework
     r = client().simulate_get("/api/signed/test/script/")
     assert r.status_code == 200, r.text # script render ok
-    assert "curl http://ca.example.lan/api/signed/test/attr " in r.text, r.text
+    assert "curl https://ca.example.lan:8443/api/signed/test/attr " in r.text, r.text
     assert "Tartu" in r.text, r.text
 
     r = client().simulate_post("/api/signed/test/tag/",
@@ -640,7 +598,7 @@ def test_cli_setup_authority():
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text
     assert "Revoked " in inbox.pop(), inbox
-
+    """
 
     # Log can be read only by admin
     r = client().simulate_get("/api/log/")
@@ -652,7 +610,7 @@ def test_cli_setup_authority():
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text
     assert r.headers.get('content-type') == "application/json; charset=UTF-8"
-
+    """
 
     # Test session API call
     r = client().simulate_get("/api/")
@@ -708,11 +666,14 @@ def test_cli_setup_authority():
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")
+        fh.write("autosign = false\n")
 
+    assert not os.path.exists("/etc/certidude/authority/ca.example.lan/server_cert.pem")
     result = runner.invoke(cli, ["enroll", "--skip-self", "--no-wait"])
     assert not result.exception, result.output
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
-    assert "(Autosign failed, only client certificates allowed to be signed automatically)" in result.output, result.output
+    assert "(autosign not requested)" in result.output, result.output
+    assert not os.path.exists("/etc/certidude/authority/ca.example.lan/server_cert.pem")
 
     child_pid = os.fork()
     if not child_pid:
@@ -727,12 +688,12 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "Writing certificate to:" in result.output, result.output
+    assert os.path.exists("/etc/certidude/authority/ca.example.lan/server_cert.pem")
 
     result = runner.invoke(cli, ["enroll", "--skip-self", "--renew", "--no-wait"])
     assert not result.exception, result.output
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
-    #assert "Writing certificate to:" in result.output, result.output
-    assert "Attached renewal signature" in result.output, result.output
+    assert "Renewing using current keypair" in result.output, result.output
 
     # Test nginx setup
     assert os.system("nginx -t") == 0, "Generated nginx config was invalid"
@@ -745,7 +706,7 @@ def test_cli_setup_authority():
     # First OpenVPN server is set up
 
     clean_client()
-    assert not os.path.exists("/var/lib/certidude/ca.example.lan/server_cert.pem")
+    assert not os.path.exists("/etc/certidude/authority/ca.example.lan/server_cert.pem")
 
     if not os.path.exists("/etc/openvpn/keys"):
         os.makedirs("/etc/openvpn/keys")
@@ -761,12 +722,13 @@ def test_cli_setup_authority():
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")
+        fh.write("autosign = false\n")
 
-    assert not os.path.exists("/var/lib/certidude/ca.example.lan/server_cert.pem")
+    assert not os.path.exists("/etc/certidude/authority/ca.example.lan/server_cert.pem")
 
     result = runner.invoke(cli, ["enroll", "--skip-self", "--no-wait"])
     assert not result.exception, result.output
-    assert "(Autosign failed, only client certificates allowed to be signed automatically)" in result.output, result.output
+    assert "(autosign not requested)" in result.output, result.output
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/vpn.example.lan.pem")
 
@@ -785,7 +747,7 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "Writing certificate to:" in result.output, result.output
-    assert os.path.exists("/var/lib/certidude/ca.example.lan/server_cert.pem")
+    assert os.path.exists("/etc/certidude/authority//ca.example.lan/server_cert.pem")
     assert os.path.exists("/etc/openvpn/site-to-client.conf")
 
     # Secondly OpenVPN client is set up
@@ -977,7 +939,7 @@ def test_cli_setup_authority():
 
     result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
     assert not result.exception, result.output
-    assert open("/etc/ipsec.secrets").read() == ": RSA /var/lib/certidude/ca.example.lan/server_key.pem\n"
+    assert open("/etc/ipsec.secrets").read() == ": RSA /etc/certidude/authority/ca.example.lan/server_key.pem\n"
     assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/ipsec.example.lan.pem")
 
     result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
@@ -986,10 +948,11 @@ def test_cli_setup_authority():
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("insecure = true\n")
+        fh.write("autosign = false\n")
 
     result = runner.invoke(cli, ["enroll", "--skip-self", "--no-wait"])
     assert not result.exception, result.output
-    assert "(Autosign failed, only client certificates allowed to be signed automatically" in result.output, result.output
+    assert "(autosign not requested)" in result.output, result.output
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/ipsec.example.lan.pem")
 
@@ -1009,7 +972,7 @@ def test_cli_setup_authority():
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
 
     assert "Writing certificate to:" in result.output, result.output
-    assert os.path.exists("/var/lib/certidude/ca.example.lan/server_cert.pem")
+    assert os.path.exists("/etc/certidude/authority/ca.example.lan/server_cert.pem")
 
     # IPSec client as service
 
@@ -1073,12 +1036,39 @@ def test_cli_setup_authority():
 
     r = requests.get("http://ca.example.lan/api/scep/")
     assert r.status_code == 404
-    r = requests.get("http://ca.example.lan/api/ocsp/")
-    assert r.status_code == 404
     r = requests.post("http://ca.example.lan/api/scep/")
     assert r.status_code == 404
+
+
+    #################
+    ### Test OCSP ###
+    #################
+
+    r = requests.get("http://ca.example.lan/api/ocsp/")
+    assert r.status_code == 400
     r = requests.post("http://ca.example.lan/api/ocsp/")
-    assert r.status_code == 404
+    assert r.status_code == 400
+
+
+    assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_cert.pem -CAfile /var/lib/certidude/ca.example.lan/ca_cert.pem -cert /var/lib/certidude/ca.example.lan/signed/roadwarrior2.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp1.log") == 0
+    assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_cert.pem -CAfile /var/lib/certidude/ca.example.lan/ca_cert.pem -cert /var/lib/certidude/ca.example.lan/ca_cert.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp2.log") == 0
+
+    for filename in os.listdir("/var/lib/certidude/ca.example.lan/revoked"):
+        if not filename.endswith(".pem"):
+            continue
+        assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_cert.pem -CAfile /var/lib/certidude/ca.example.lan/ca_cert.pem -cert /var/lib/certidude/ca.example.lan/revoked/%s -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp3.log" % filename) == 0
+        break
+
+    with open("/tmp/ocsp1.log") as fh:
+        buf = fh.read()
+        assert ": good" in buf, buf
+    with open("/tmp/ocsp2.log") as fh:
+        buf = fh.read()
+        assert ": unknown" in buf, buf
+    with open("/tmp/ocsp3.log") as fh:
+        buf = fh.read()
+        assert ": revoked" in buf, buf
+
 
 
     ####################################
@@ -1088,7 +1078,52 @@ def test_cli_setup_authority():
     # Shut down current instance
     os.kill(server_pid, 15)
     requests.get("http://ca.example.lan/api/")
+#    sleep(2)
+#    os.kill(server_pid, 9) # TODO: Figure out why doesn't shut down gracefully
     os.waitpid(server_pid, 0)
+
+    # Install packages
+    os.system("apt-get install -y samba krb5-user winbind bc")
+    clean_server()
+
+    # Bootstrap domain controller here,
+    # Samba startup takes some timec
+    os.system("samba-tool domain provision --server-role=dc --domain=EXAMPLE --realm=EXAMPLE.LAN --host-name=ca")
+    os.system("samba-tool user add userbot S4l4k4l4 --given-name='User' --surname='Bot'")
+    os.system("samba-tool user add adminbot S4l4k4l4 --given-name='Admin' --surname='Bot'")
+    os.system("samba-tool group addmembers 'Domain Admins' adminbot")
+    os.system("samba-tool user setpassword administrator --newpassword=S4l4k4l4")
+    os.symlink("/var/lib/samba/private/secrets.keytab", "/etc/krb5.keytab")
+    os.chmod("/var/lib/samba/private/secrets.keytab", 0o644) # To allow access to certidude server
+    if os.path.exists("/etc/krb5.conf"): # Remove the one from krb5-user package
+        os.unlink("/etc/krb5.conf")
+    os.symlink("/var/lib/samba/private/krb5.conf", "/etc/krb5.conf")
+    with open("/etc/resolv.conf", "w") as fh:
+        fh.write("nameserver 127.0.0.1\nsearch example.lan\n")
+    # TODO: dig -t srv perhaps?
+    os.system("samba")
+
+    # Samba bind 636 late (probably generating keypair)
+    # so LDAPS connections below will fail
+    timeout = 0
+    while timeout < 30:
+        if os.path.exists("/var/lib/samba/private/tls/cert.pem"):
+            break
+        sleep(1)
+        timeout += 1
+    else:
+        assert False, "Samba startup timed out"
+
+    # Bootstrap authority
+    bootstrap_pid = os.fork() # TODO: this shouldn't be necessary
+    if not bootstrap_pid:
+        result = runner.invoke(cli, ["setup", "authority", "--skip-packages", "--elliptic-curve"])
+        assert not result.exception, result.output
+        return
+    else:
+        os.waitpid(bootstrap_pid, 0)
+
+    assert os.getuid() == 0 and os.getgid() == 0, "Environment contaminated"
 
     # (re)auth against DC
     assert os.system("kdestroy") == 0
@@ -1116,13 +1151,11 @@ def test_cli_setup_authority():
     # Certidude would auth against domain controller
     os.system("sed -e 's/ldap uri = ldaps:.*/ldap uri = ldaps:\\/\\/ca.example.lan/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/ldap uri = ldap:.*/ldap uri = ldap:\\/\\/ca.example.lan/g' -i /etc/certidude/server.conf")
-    os.system("sed -e 's/backends = pam/backends = kerberos ldap/g' -i /etc/certidude/server.conf")
-    os.system("sed -e 's/backend = posix/backend = ldap/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/dc1/ca/g' -i /etc/cron.hourly/certidude")
     os.system("sed -e 's/autosign subnets =.*/autosign subnets =/g' -i /etc/certidude/server.conf")
-    os.system("sed -e 's/machine enrollment =.*/machine enrollment = allowed/g' -i /etc/certidude/server.conf")
+    os.system("sed -e 's/machine enrollment subnets =.*/machine enrollment subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/scep subnets =.*/scep subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf")
-    os.system("sed -e 's/ocsp subnets =.*/ocsp subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf")
+    os.system("sed -e 's/ocsp subnets =.*/ocsp subnets =/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/crl subnets =.*/crl subnets =/g' -i /etc/certidude/server.conf")
     os.system("sed -e 's/address = certificates@example.lan/address =/g' -i /etc/certidude/server.conf")
     from certidude.common import pip
@@ -1157,41 +1190,25 @@ def test_cli_setup_authority():
         if r.status_code != 502:
             break
         sleep(1)
-    assert r.status_code == 401
+    assert r.status_code == 401, "Timed out starting up the API backend"
 
     # CRL-s disabled now
     r = requests.get("http://ca.example.lan/api/revoked/")
     assert r.status_code == 404, r.text
 
-    # OCSP and SCEP should be enabled now
+    # SCEP should be enabled now
     r = requests.get("http://ca.example.lan/api/scep/")
-    assert r.status_code == 400
-    r = requests.get("http://ca.example.lan/api/ocsp/")
     assert r.status_code == 400
     r = requests.post("http://ca.example.lan/api/scep/")
     assert r.status_code == 405
+
+    # OCSP should be disabled now
+    r = requests.get("http://ca.example.lan/api/ocsp/")
+    assert r.status_code == 404
     r = requests.post("http://ca.example.lan/api/ocsp/")
-    assert r.status_code == 400
+    assert r.status_code == 404
 
 
-    assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_cert.pem -cert /var/lib/certidude/ca.example.lan/signed/roadwarrior2.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp1.log") == 0
-    assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_cert.pem -cert /var/lib/certidude/ca.example.lan/ca_cert.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp2.log") == 0
-
-    for filename in os.listdir("/var/lib/certidude/ca.example.lan/revoked"):
-        if not filename.endswith(".pem"):
-            continue
-        assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_cert.pem -cert /var/lib/certidude/ca.example.lan/revoked/%s -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp3.log" % filename) == 0
-        break
-
-    with open("/tmp/ocsp1.log") as fh:
-        buf = fh.read()
-        assert ": good" in buf, buf
-    with open("/tmp/ocsp2.log") as fh:
-        buf = fh.read()
-        assert ": unknown" in buf, buf
-    with open("/tmp/ocsp3.log") as fh:
-        buf = fh.read()
-        assert ": revoked" in buf, buf
 
 
     #####################
@@ -1274,7 +1291,6 @@ def test_cli_setup_authority():
     ### SCEP tests ###
     ##################
 
-    os.umask(0o022)
     if not os.path.exists("/tmp/sscep"):
         assert not os.system("git clone  https://github.com/certnanny/sscep /tmp/sscep")
     if not os.path.exists("/tmp/sscep/sscep_dyn"):
@@ -1283,7 +1299,7 @@ def test_cli_setup_authority():
     if not os.path.exists("/tmp/key.pem"):
         assert not os.system("openssl genrsa -out /tmp/key.pem 1024")
     if not os.path.exists("/tmp/req.pem"):
-        assert not os.system("echo '.\n.\n.\n.\n.\ntest8\n\n\n\n' | openssl req -new -sha256 -key /tmp/key.pem -out /tmp/req.pem")
+        assert not os.system("echo '.\n.\n.\n.\nGateway\ntest8\n\n\n\n' | openssl req -new -sha256 -key /tmp/key.pem -out /tmp/req.pem")
     assert not os.system("/tmp/sscep/sscep_dyn enroll -c /tmp/sscep/ca.pem -u http://ca.example.lan/cgi-bin/pkiclient.exe -k /tmp/key.pem -r /tmp/req.pem -l /tmp/cert.pem")
     # TODO: test e-mails at this point
 
@@ -1301,13 +1317,15 @@ def test_cli_setup_authority():
     # Shut down server
     assert os.path.exists("/proc/%d" % server_pid)
     os.kill(server_pid, 15)
+#    sleep(2)
+#    os.kill(server_pid, 9)
     os.waitpid(server_pid, 0)
 
     # Note: STORAGE_PATH was mangled above, hence it's /tmp not /var/lib/certidude
     assert open("/etc/apparmor.d/local/usr.lib.ipsec.charon").read() == \
-       "/var/lib/certidude/ca.example.lan/client_key.pem r,\n" + \
-       "/var/lib/certidude/ca.example.lan/ca_cert.pem r,\n" + \
-       "/var/lib/certidude/ca.example.lan/client_cert.pem r,\n"
+       "/etc/certidude/authority/ca.example.lan/client_key.pem r,\n" + \
+       "/etc/certidude/authority/ca.example.lan/ca_cert.pem r,\n" + \
+       "/etc/certidude/authority/ca.example.lan/client_cert.pem r,\n"
     assert len(inbox) == 0, inbox # Make sure all messages were checked
 
     os.system("service nginx stop")

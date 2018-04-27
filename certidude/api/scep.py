@@ -1,4 +1,7 @@
+import click
+import falcon
 import hashlib
+import logging
 import os
 from asn1crypto import cms, algos
 from asn1crypto.core import SetOf, PrintableString
@@ -8,6 +11,8 @@ from oscrypto import keys, asymmetric, symmetric
 from oscrypto.errors import SignatureError
 from .utils import AuthorityHandler
 from .utils.firewall import whitelist_subnets
+
+logger = logging.getLogger(__name__)
 
 # Monkey patch asn1crypto
 
@@ -28,21 +33,54 @@ cms.CMSAttribute._oid_specs['sender_nonce'] = cms.SetOfOctetString
 cms.CMSAttribute._oid_specs['recipient_nonce'] = cms.SetOfOctetString
 cms.CMSAttribute._oid_specs['trans_id'] = SetOfPrintableString
 
-class SCEPError(Exception): code = 25 # system failure
-class SCEPBadAlgo(SCEPError): code = 0
-class SCEPBadMessageCheck(SCEPError): code = 1
-class SCEPBadRequest(SCEPError): code = 2
-class SCEPBadTime(SCEPError): code = 3
-class SCEPBadCertId(SCEPError): code = 4
+class SCEPError(Exception):
+    code = 25 # system failure
+    explaination = "General system failure"
+
+class SCEPBadAlgo(SCEPError):
+    code = 0
+    explaination = "Unsupported algorithm in SCEP request"
+
+class SCEPBadMessageCheck(SCEPError):
+    code = 1
+    explaination = "Integrity check failed for SCEP request"
+
+class SCEPBadRequest(SCEPError):
+    code = 2
+    explaination = "Bad request"
+
+class SCEPBadTime(SCEPError):
+    code = 3
+    explaination = "Bad time"
+
+class SCEPBadCertId(SCEPError):
+    code = 4
+    explaination = "Certificate authority mismatch"
+
+class SCEPDigestMismatch(SCEPBadMessageCheck):
+    explaination = "Digest mismatch"
+
+class SCEPSignatureMismatch(SCEPBadMessageCheck):
+    explaination = "Signature mismatch"
 
 class SCEPResource(AuthorityHandler):
     @whitelist_subnets(config.SCEP_SUBNETS)
     def on_get(self, req, resp):
         operation = req.get_param("operation", required=True)
-        if operation.lower() == "getcacert":
+        if operation == "GetCACert":
             resp.body = keys.parse_certificate(self.authority.certificate_buf).dump()
             resp.append_header("Content-Type", "application/x-x509-ca-cert")
             return
+        elif operation == "GetCACaps":
+            # TODO: return renewal flag based on renewal subnets config option
+            resp.body = "Renewal\nMD5\nSHA-1\nSHA-256\nSHA-512\nDES3\n"
+            return
+        elif operation == "PKIOperation":
+            pass
+        else:
+            raise falcon.HTTPBadRequest(
+                "Bad request",
+                "Unknown operation %s" % operation)
 
         # If we bump into exceptions later
         encrypted_container = b""
@@ -74,8 +112,14 @@ class SCEPResource(AuthorityHandler):
 
             # TODO: compare cert to current one if we are renewing
 
-            assert signer["digest_algorithm"]["algorithm"].native == "md5"
-            assert signer["signature_algorithm"]["algorithm"].native == "rsassa_pkcs1v15"
+            digest_algorithm = signer["digest_algorithm"]["algorithm"].native
+            signature_algorithm = signer["signature_algorithm"]["algorithm"].native
+
+            if digest_algorithm not in ("md5", "sha1", "sha256", "sha512"):
+                raise SCEPBadAlgo()
+            if signature_algorithm != "rsassa_pkcs1v15":
+                raise SCEPBadAlgo()
+
             message_digest = None
             transaction_id = None
             sender_nonce = None
@@ -87,8 +131,13 @@ class SCEPResource(AuthorityHandler):
                     transaction_id, = attr["values"]
                 elif attr["type"].native == "message_digest":
                     message_digest, = attr["values"]
-                    if hashlib.md5(encap_content.native).digest() != message_digest.native:
-                        raise SCEPBadMessageCheck()
+                    if getattr(hashlib, digest_algorithm)(encap_content.native).digest() != message_digest.native:
+                        raise SCEPDigestMismatch()
+
+            if not sender_nonce:
+                raise SCEPBadRequest()
+            if not transaction_id:
+                raise SCEPBadRequest()
 
             assert message_digest
             msg = signer["signed_attrs"].dump(force=True)
@@ -102,7 +151,8 @@ class SCEPResource(AuthorityHandler):
                     b"\x31" + msg[1:], # wtf?!
                     "md5")
             except SignatureError:
-                raise SCEPBadMessageCheck()
+                raise SCEPSignatureMismatch()
+
 
             ###############################
             ### Decrypt inner container ###
@@ -122,14 +172,15 @@ class SCEPResource(AuthorityHandler):
             if recipient.native["rid"]["serial_number"] != self.authority.certificate.serial_number:
                 raise SCEPBadCertId()
 
-            # Since CA private key is not directly readable here, we'll redirect it to signer socket
             key = asymmetric.rsa_pkcs1v15_decrypt(
                 self.authority.private_key,
                 recipient.native["encrypted_key"])
             if len(key) == 8: key = key * 3 # Convert DES to 3DES
             buf = symmetric.tripledes_cbc_pkcs5_decrypt(key, encrypted_content, iv)
             _, _, common_name = self.authority.store_request(buf, overwrite=True)
-            cert, buf = self.authority.sign(common_name, overwrite=True)
+            logger.info("SCEP client from %s requested with %s digest algorithm, %s signature",
+                req.context["remote_addr"], digest_algorithm, signature_algorithm)
+            cert, buf = self.authority.sign(common_name, profile=config.PROFILES["gw"], overwrite=True)
             signed_certificate = asymmetric.load_certificate(buf)
             content = signed_certificate.asn1.dump()
 
@@ -138,6 +189,7 @@ class SCEPResource(AuthorityHandler):
                 'type': "fail_info",
                 'values': ["%d" % e.code]
             }))
+            logger.info("Failed to sign SCEP request due to: %s" % e.explaination)
         else:
 
             ##################################
@@ -150,7 +202,8 @@ class SCEPResource(AuthorityHandler):
                     'version': "v1",
                     'certificates': [signed_certificate.asn1],
                     'digest_algorithms': [cms.DigestAlgorithm({
-                        'algorithm': "md5"
+                        'algorithm': digest_algorithm
+
                     })],
                     'encap_content_info': {
                         'content_type': "data",
@@ -208,7 +261,7 @@ class SCEPResource(AuthorityHandler):
             attr_list = [
                 cms.CMSAttribute({
                     'type': "message_digest",
-                    'values': [hashlib.sha1(encrypted_container).digest()]
+                    'values': [getattr(hashlib, digest_algorithm)(encrypted_container).digest()]
                 }),
                 cms.CMSAttribute({
                     'type': "message_type",
@@ -245,12 +298,12 @@ class SCEPResource(AuthorityHandler):
                         'serial_number': self.authority.certificate.serial_number,
                     }),
                 }),
-                'digest_algorithm': algos.DigestAlgorithm({'algorithm': "sha1"}),
+                'digest_algorithm': algos.DigestAlgorithm({'algorithm': digest_algorithm}),
                 'signature_algorithm': algos.SignedDigestAlgorithm({'algorithm': "rsassa_pkcs1v15"}),
                 'signature': asymmetric.rsa_pkcs1v15_sign(
                     self.authority.private_key,
                     b"\x31" + attrs.dump()[1:],
-                    "sha1"
+                    digest_algorithm
                 )
             })
 
@@ -261,7 +314,7 @@ class SCEPResource(AuthorityHandler):
                     'version': "v1",
                     'certificates': [self.authority.certificate],
                     'digest_algorithms': [cms.DigestAlgorithm({
-                        'algorithm': "sha1"
+                        'algorithm': digest_algorithm
                     })],
                     'encap_content_info': {
                         'content_type': "data",

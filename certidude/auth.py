@@ -30,9 +30,14 @@ def authenticate(optional=False):
 
             os.environ["KRB5_KTNAME"] = config.KERBEROS_KEYTAB
 
-            server_creds = gssapi.creds.Credentials(
-                usage='accept',
-                name=gssapi.names.Name('HTTP/%s'% const.FQDN))
+            try:
+                server_creds = gssapi.creds.Credentials(
+                    usage='accept',
+                    name=gssapi.names.Name('HTTP/%s'% const.FQDN))
+            except gssapi.raw.exceptions.BadNameError:
+                logger.error("Failed initialize HTTP service principal, possibly bad permissions for %s or /etc/krb5.conf" %
+                    config.KERBEROS_KEYTAB)
+                raise
 
             context = gssapi.sec_contexts.SecurityContext(creds=server_creds)
 
@@ -49,13 +54,13 @@ def authenticate(optional=False):
                 raise falcon.HTTPBadRequest("Bad request", "Unsupported authentication mechanism (NTLM?) was offered. Please make sure you've logged into the computer with domain user account. The web interface should not prompt for username or password.")
 
             try:
-                username, domain = str(context.initiator_name).split("@")
+                username, realm = str(context.initiator_name).split("@")
             except AttributeError: # TODO: Better exception
                 raise falcon.HTTPForbidden("Failed to determine username, are you trying to log in with correct domain account?")
 
-            if domain.lower() != const.DOMAIN.lower():
+            if realm != config.KERBEROS_REALM:
                 raise falcon.HTTPForbidden("Forbidden",
-                    "Invalid realm supplied")
+                    "Cross-realm trust not supported")
 
             if username.endswith("$") and optional:
                 # Extract machine hostname

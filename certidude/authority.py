@@ -12,6 +12,7 @@ from asn1crypto.csr import CertificationRequest
 from certbuilder import CertificateBuilder
 from certidude import config, push, mailer, const
 from certidude import errors
+from certidude.common import cn_to_dn
 from crlbuilder import CertificateListBuilder, pem_armor_crl
 from csrbuilder import CSRBuilder, pem_armor_csr
 from datetime import datetime, timedelta
@@ -20,6 +21,16 @@ from random import SystemRandom
 from xattr import getxattr, listxattr, setxattr
 
 random = SystemRandom()
+
+try:
+    from time import time_ns
+except ImportError:
+    from time import time
+    def time_ns():
+        return int(time() * 10**9) # 64 bits integer, 32 ns bits
+
+def generate_serial():
+    return time_ns() << 56 | random.randint(0, 2**56-1)
 
 # https://securityblog.redhat.com/2014/06/18/openssl-privilege-separation-analysis/
 # https://jamielinux.com/docs/openssl-certificate-authority/
@@ -38,6 +49,8 @@ with open(config.AUTHORITY_PRIVATE_KEY_PATH, "rb") as fh:
     private_key = asymmetric.load_private_key(key_der_bytes)
 
 def self_enroll():
+    assert os.getuid() == 0 and os.getgid() == 0, "Can self-enroll only as root"
+
     from certidude import const
     common_name = const.FQDN
     directory = os.path.join("/var/lib/certidude", const.FQDN)
@@ -64,13 +77,16 @@ def self_enroll():
 
     builder = CSRBuilder({"common_name": common_name}, self_public_key)
     request = builder.build(private_key)
-    with open(os.path.join(directory, "requests", common_name + ".pem"), "wb") as fh:
-        fh.write(pem_armor_csr(request))
     pid = os.fork()
     if not pid:
         from certidude import authority
         from certidude.common import drop_privileges
         drop_privileges()
+        assert os.getuid() != 0 and os.getgid() != 0
+        path = os.path.join(directory, "requests", common_name + ".pem")
+        click.echo("Writing request to %s" % path)
+        with open(path, "wb") as fh:
+            fh.write(pem_armor_csr(request)) # Write CSR with certidude permissions
         authority.sign(common_name, skip_push=True, overwrite=True, profile=config.PROFILES["srv"])
         sys.exit(0)
     else:
@@ -109,18 +125,23 @@ def get_signed(common_name):
 def get_revoked(serial):
     if isinstance(serial, str):
         serial = int(serial, 16)
-    path = os.path.join(config.REVOKED_DIR, "%x.pem" % serial)
+    path = os.path.join(config.REVOKED_DIR, "%040x.pem" % serial)
     with open(path, "rb") as fh:
         buf = fh.read()
         header, _, der_bytes = pem.unarmor(buf)
         cert = x509.Certificate.load(der_bytes)
+        try:
+            reason = getxattr(path, "user.revocation.reason").decode("ascii")
+        except IOError: # TODO: make sure it's not required
+            reason = "key_compromise"
         return path, buf, cert, \
             cert["tbs_certificate"]["validity"]["not_before"].native.replace(tzinfo=None), \
             cert["tbs_certificate"]["validity"]["not_after"].native.replace(tzinfo=None), \
-            datetime.utcfromtimestamp(os.stat(path).st_ctime)
+            datetime.utcfromtimestamp(os.stat(path).st_ctime), \
+            reason
 
 
-def get_attributes(cn, namespace=None):
+def get_attributes(cn, namespace=None, flat=False):
     path, buf, cert, signed, expires = get_signed(cn)
     attribs = dict()
     for key in listxattr(path):
@@ -129,15 +150,18 @@ def get_attributes(cn, namespace=None):
             continue
         if namespace and not key.startswith("user.%s." % namespace):
             continue
-        value = getxattr(path, key)
-        current = attribs
-        if "." in key:
-            prefix, key = key.rsplit(".", 1)
-            for component in prefix.split("."):
-                if component not in current:
-                    current[component] = dict()
-                current = current[component]
-        current[key] = value.decode("utf-8")
+        value = getxattr(path, key).decode("utf-8")
+        if flat:
+            attribs[key[len("user.%s." % namespace):]] = value
+        else:
+            current = attribs
+            if "." in key:
+                prefix, key = key.rsplit(".", 1)
+                for component in prefix.split("."):
+                    if component not in current:
+                        current[component] = dict()
+                    current = current[component]
+            current[key] = value
     return path, buf, cert, attribs
 
 
@@ -159,7 +183,7 @@ def store_request(buf, overwrite=False, address="", user=""):
     common_name = csr["certification_request_info"]["subject"].native["common_name"]
 
     if not re.match(const.RE_COMMON_NAME, common_name):
-        raise ValueError("Invalid common name")
+        raise ValueError("Invalid common name %s" % repr(common_name))
 
     request_path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
 
@@ -190,14 +214,21 @@ def store_request(buf, overwrite=False, address="", user=""):
     return request_path, csr, common_name
 
 
-def revoke(common_name):
+def revoke(common_name, reason):
     """
     Revoke valid certificate
     """
     signed_path, buf, cert, signed, expires = get_signed(common_name)
-    revoked_path = os.path.join(config.REVOKED_DIR, "%x.pem" % cert.serial_number)
 
-    os.unlink(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % cert.serial_number))
+    if reason not in ("key_compromise", "ca_compromise", "affiliation_changed",
+        "superseded", "cessation_of_operation", "certificate_hold",
+        "remove_from_crl", "privilege_withdrawn"):
+        raise ValueError("Invalid revocation reason %s" % reason)
+
+    setxattr(signed_path, "user.revocation.reason", reason)
+    revoked_path = os.path.join(config.REVOKED_DIR, "%040x.pem" % cert.serial_number)
+
+    os.unlink(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%040x.pem" % cert.serial_number))
     os.rename(signed_path, revoked_path)
 
 
@@ -212,7 +243,7 @@ def revoke(common_name):
     attach_cert = buf, "application/x-pem-file", common_name + ".crt"
     mailer.send("certificate-revoked.md",
         attachments=(attach_cert,),
-        serial_hex="%x" % cert.serial_number,
+        serial_hex="%040x" % cert.serial_number,
         common_name=common_name)
     return revoked_path
 
@@ -251,28 +282,40 @@ def _list_certificates(directory):
                             server = True
                 yield cert.subject.native["common_name"], path, buf, cert, server
 
-def list_signed(directory=config.SIGNED_DIR):
+def list_signed(directory=config.SIGNED_DIR, common_name=None):
     for filename in os.listdir(directory):
-        if filename.endswith(".pem"):
-            common_name = filename[:-4]
-            path, buf, cert, signed, expires = get_signed(common_name)
-            yield common_name, path, buf, cert, signed, expires
+        if not filename.endswith(".pem"):
+            continue
+        basename = filename[:-4]
+        if common_name:
+            if common_name.startswith("^"):
+                if not re.match(common_name, basename):
+                    continue
+            else:
+                if common_name != basename:
+                    continue
+        path, buf, cert, signed, expires = get_signed(basename)
+        yield basename, path, buf, cert, signed, expires
 
 def list_revoked(directory=config.REVOKED_DIR):
     for filename in os.listdir(directory):
         if filename.endswith(".pem"):
             common_name = filename[:-4]
-            path, buf, cert, signed, expired, revoked = get_revoked(common_name)
-            yield cert.subject.native["common_name"], path, buf, cert, signed, expired, revoked
+            path, buf, cert, signed, expired, revoked, reason = get_revoked(common_name)
+            yield cert.subject.native["common_name"], path, buf, cert, signed, expired, revoked, reason
+
 
 def list_server_names():
     return [cn for cn, path, buf, cert, server in list_signed() if server]
 
+
 def export_crl(pem=True):
+    # To migrate older installations run following:
+    # for j in /var/lib/certidude/*/revoked/*.pem; do echo $(attr -s 'revocation.reason' -V key_compromise $j); done
     builder = CertificateListBuilder(
         config.AUTHORITY_CRL_URL,
         certificate,
-        1 # TODO: monotonically increasing
+        generate_serial()
     )
 
     for filename in os.listdir(config.REVOKED_DIR):
@@ -281,12 +324,14 @@ def export_crl(pem=True):
         serial_number = filename[:-4]
         # TODO: Assert serial against regex
         revoked_path = os.path.join(config.REVOKED_DIR, filename)
+        reason = getxattr(revoked_path, "user.revocation.reason").decode("ascii") # TODO: dedup
+
         # TODO: Skip expired certificates
         s = os.stat(revoked_path)
         builder.add_certificate(
             int(filename[:-4], 16),
             datetime.utcfromtimestamp(s.st_ctime),
-            "key_compromise")
+            reason)
 
     certificate_list = builder.build(private_key)
     if pem:
@@ -359,7 +404,7 @@ def _sign(csr, buf, profile, skip_notify=False, skip_push=False, overwrite=False
 
         if overwrite:
             # TODO: is this the best approach?
-            prev_serial_hex = "%x" % prev.serial_number
+            prev_serial_hex = "%040x" % prev.serial_number
             revoked_path = os.path.join(config.REVOKED_DIR, "%s.pem" % prev_serial_hex)
             os.rename(cert_path, revoked_path)
             attachments += [(prev_buf, "application/x-pem-file", "deprecated.crt" if renew else "overwritten.crt")]
@@ -367,14 +412,10 @@ def _sign(csr, buf, profile, skip_notify=False, skip_push=False, overwrite=False
         else:
             raise FileExistsError("Will not overwrite existing certificate")
 
-    dn = {u'common_name': common_name }
-    if profile.ou:
-        dn["organizational_unit_name"] = profile.ou
-
-    builder = CertificateBuilder(dn, csr_pubkey)
-    builder.serial_number = random.randint(
-        0x1000000000000000000000000000000000000000,
-        0x7fffffffffffffffffffffffffffffffffffffff)
+    builder = CertificateBuilder(cn_to_dn(common_name, const.FQDN,
+        o=certificate["tbs_certificate"]["subject"].native.get("organization_name"),
+        ou=profile.ou), csr_pubkey)
+    builder.serial_number = generate_serial()
 
     now = datetime.utcnow()
     builder.begin_date = now - timedelta(minutes=5)
@@ -392,10 +433,10 @@ def _sign(csr, buf, profile, skip_notify=False, skip_push=False, overwrite=False
 
     os.rename(cert_path + ".part", cert_path)
     attachments.append((end_entity_cert_buf, "application/x-pem-file", common_name + ".crt"))
-    cert_serial_hex = "%x" % end_entity_cert.serial_number
+    cert_serial_hex = "%040x" % end_entity_cert.serial_number
 
     # Create symlink
-    link_name = os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % end_entity_cert.serial_number)
+    link_name = os.path.join(config.SIGNED_BY_SERIAL_DIR, "%040x.pem" % end_entity_cert.serial_number)
     assert not os.path.exists(link_name), "Certificate with same serial number already exists: %s" % link_name
     os.symlink("../%s.pem" % common_name, link_name)
 
@@ -422,6 +463,10 @@ def _sign(csr, buf, profile, skip_notify=False, skip_push=False, overwrite=False
         click.echo("Publishing certificate at %s ..." % url)
         requests.post(url, data=end_entity_cert_buf,
             headers={"User-Agent": "Certidude API", "Content-Type": "application/x-x509-user-cert"})
-
-        push.publish("request-signed", common_name)
+        if renew:
+            # TODO: certificate-renewed event
+            push.publish("certificate-revoked", common_name)
+            push.publish("request-signed", common_name)
+        else:
+            push.publish("request-signed", common_name)
     return end_entity_cert, end_entity_cert_buf

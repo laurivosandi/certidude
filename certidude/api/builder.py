@@ -4,8 +4,9 @@ import falcon
 import logging
 import os
 import subprocess
-from certidude import config, const
+from certidude import config, const, authority
 from certidude.auth import login_required, authorize_admin
+from certidude.common import cert_to_dn
 from jinja2 import Template
 
 logger = logging.getLogger(__name__)
@@ -14,6 +15,8 @@ class ImageBuilderResource(object):
     @login_required
     @authorize_admin
     def on_get(self, req, resp, profile, suggested_filename):
+        router = [j[0] for j in authority.list_signed(
+            common_name=config.cp2.get(profile, "router"))][0]
         model = config.cp2.get(profile, "model")
         build_script_path = config.cp2.get(profile, "command")
         overlay_path = config.cp2.get(profile, "overlay")
@@ -35,7 +38,10 @@ class ImageBuilderResource(object):
             stdout=open(log_path, "w"), stderr=subprocess.STDOUT,
             close_fds=True, shell=False,
             cwd=os.path.dirname(os.path.realpath(build_script_path)),
-            env={"PROFILE":model, "PATH":"/usr/sbin:/usr/bin:/sbin:/bin",
+            env={"PROFILE": model, "PATH":"/usr/sbin:/usr/bin:/sbin:/bin",
+                "ROUTER": router,
+                "AUTHORITY_CERTIFICATE_ALGORITHM": authority.public_key.algorithm,
+                "AUTHORITY_CERTIFICATE_DISTINGUISHED_NAME": cert_to_dn(authority.certificate),
                 "BUILD":build, "OVERLAY":build + "/overlay/"},
             startupinfo=None, creationflags=0)
         proc.communicate()

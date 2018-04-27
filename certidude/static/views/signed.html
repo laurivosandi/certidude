@@ -5,7 +5,7 @@
       <i class="fa fa-folder" aria-hidden="true"></i>
     {{ certificate.organizational_unit }} /
     {% endif %}
-    {% if certificate.server %}
+    {% if certificate.extensions.extended_key_usage and "server_auth" in certificate.extensions.extended_key_usage %}
       <i class="fa fa-server"></i>
     {% else %}
       <i class="fa fa-laptop"></i>
@@ -46,11 +46,11 @@
       </button>
       <div class="dropdown-menu">
         <a class="dropdown-item" href="#"
-          onclick="javascript:$(this).button('loading');$.ajax({url:'/api/signed/{{certificate.common_name}}/?sha256sum={{ certificate.sha256sum }}&reason=1',type:'delete'});">Revoke due to key compromise</a>
+          onclick="javascript:$(this).button('loading');$.ajax({url:'/api/signed/{{certificate.common_name}}/?sha256sum={{ certificate.sha256sum }}&reason=key_compromise',type:'delete'});">Revoke due to key compromise</a>
         <a class="dropdown-item" href="#"
-          onclick="javascript:$(this).button('loading');$.ajax({url:'/api/signed/{{certificate.common_name}}/?sha256sum={{ certificate.sha256sum }}&reason=5',type:'delete'});">Revoke due to cessation of operation</a>
+          onclick="javascript:$(this).button('loading');$.ajax({url:'/api/signed/{{certificate.common_name}}/?sha256sum={{ certificate.sha256sum }}&reason=cessation_of_operation',type:'delete'});">Revoke due to cessation of operation</a>
         <a class="dropdown-item" href="#"
-          onclick="javascript:$(this).button('loading');$.ajax({url:'/api/signed/{{certificate.common_name}}/?sha256sum={{ certificate.sha256sum }}&reason=9',type:'delete'});">Revoke due to withdrawn privilege</a>
+          onclick="javascript:$(this).button('loading');$.ajax({url:'/api/signed/{{certificate.common_name}}/?sha256sum={{ certificate.sha256sum }}&reason=privilege_withdrawn',type:'delete'});">Revoke due to withdrawn privilege</a>
       </div>
     </div>
 
@@ -88,8 +88,10 @@ openssl ocsp -issuer session.pem -CAfile session.pem \
       {% endif %}
 
       <p>To fetch script:</p>
-      <pre><code class="language-bash" data-lang="bash">cd /var/lib/certidude/{{ window.location.hostname }}/
-curl --cert client_cert.pem https://{{ window.location.hostname }}:8443/api/signed/{{ certificate.common_name }}/script/</pre></code>
+      <pre><code class="language-bash" data-lang="bash">curl https://{{ window.location.hostname }}:8443/api/signed/{{ certificate.common_name }}/script/ \
+    --cacert /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem \
+    --key /etc/certidude/authority/{{ window.location.hostname }}/host_key.pem \
+    --cert /etc/certidude/authority/{{ window.location.hostname }}/host_cert.pem</pre></code>
 
       <div style="overflow: auto; max-width: 100%;">
         <table class="table" id="signed_certificates">
@@ -110,6 +112,9 @@ curl --cert client_cert.pem https://{{ window.location.hostname }}:8443/api/sign
             <tr><th>SHA1</th><td>{{ certificate.sha1sum }}</td></tr>
             -->
             <tr><th>SHA256</th><td style="word-wrap:break-word;  overflow-wrap: break-word;  ">{{ certificate.sha256sum }}</td></tr>
+            {% if certificate.extensions.extended_key_usage %}
+            <tr><th>Extended key usage</th><td>{{ certificate.extensions.extended_key_usage | join(", ") }}</td></tr>
+            {% endif %}
           </tbody>
         </table>
       </div>

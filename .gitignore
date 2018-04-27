@@ -64,3 +64,7 @@ node_modules/
 # Ignore patch
 *.orig
 *.rej
+
+lextab.py
+yacctab.py
+.pytest_cache

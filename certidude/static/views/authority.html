@@ -7,26 +7,25 @@
         </div>
         <form action="/api/request/" method="post">
           <div class="modal-body">
-            <h5>Certidude client</h5>
-
-            <p>Submit a certificate signing request from Mac OS X, Ubuntu or Fedora:</p>
-            <div class="highlight">
-              <pre><code>easy_install pip;
-pip3 install certidude;
-certidude bootstrap {{ window.location.hostname }}
-  </code></pre>
-            </div>
-
-            <h5>Windows 10</h5>
+{% if "ikev2" in session.service.protocols %}
+            <h5>Windows {% if session.authority.certificate.algorithm == "ec" %}10{% else %}7 and up{% endif %}</h5>
 
             <p>On Windows execute following PowerShell script</p>
 
             <div class="highlight">
-              <pre class="code"><code>$hostname = $env:computername.ToLower()
-$templ = @"
-[Version]
-Signature="$Windows NT$
+              <pre class="code"><code># Install CA certificate
+@"
+{{ session.authority.certificate.blob }}
+"@ | Out-File ca_cert.pem
+{% if session.authority.certificate.algorithm == "ec" %}
+Import-Certificate -FilePath ca_cert.pem -CertStoreLocation Cert:\LocalMachine\Root
+{% else %}
+C:\Windows\system32\certutil.exe -addstore Root ca_cert.pem
+{% endif %}
 
+# Generate keypair and submit CSR
+$hostname = $env:computername.ToLower()
+@"
 [NewRequest]
 Subject = "CN=$hostname"
 Exportable = FALSE
@@ -39,21 +38,14 @@ RequestType = PKCS10
 KeyAlgorithm = ECDSA_P384
 {% else %}ProviderName = "Microsoft RSA SChannel Cryptographic Provider"
 KeyLength = 2048
-{% endif %}"@
-
-$templ | Out-File req.inf
-
-# Fetch CA certificate and install it
-Invoke-WebRequest -Uri http://{{ window.location.hostname }}/api/certificate -OutFile ca_cert.pem
-Import-Certificate -FilePath ca_cert.pem -CertStoreLocation Cert:\LocalMachine\Root
-
-# Generate keypair and submit CSR
-C:\Windows\system32\certreq.exe -new -f -q req.inf client_csr.pem
-Invoke-WebRequest -TimeoutSec 900 -Uri http://{{ window.location.hostname }}/api/request/?wait=1 -InFile client_csr.pem -ContentType application/pkcs10 -Method POST  -MaximumRedirection 3 -OutFile client_cert.pem
+{% endif %}"@ | Out-File req.inf
+C:\Windows\system32\certreq.exe -new -f -q req.inf host_csr.pem
+Invoke-WebRequest -TimeoutSec 900 -Uri 'https://{{ authority_name }}:8443/api/request/?wait=yes&autosign=yes' -InFile host_csr.pem -ContentType application/pkcs10 -Method POST  -MaximumRedirection 3 -OutFile host_cert.pem
 
 # Import certificate
-Import-Certificate -FilePath client_cert.pem -CertStoreLocation Cert:\LocalMachine\My
-
+{% if session.authority.certificate.algorithm == "ec" %}Import-Certificate -FilePath host_cert.pem -CertStoreLocation Cert:\LocalMachine\My
+{% else %}C:\Windows\system32\certutil.exe -addstore My host_cert.pem
+{% endif %}
 # Set up IPSec VPN tunnel
 Remove-VpnConnection -AllUserConnection -Force k-space
 Add-VpnConnection `
@@ -84,21 +76,137 @@ IntegrityCheckMethod - IKE hash algorithm, one of: MD5 SHA196 SHA256 SHA384
 DHGroup = IKE key exchange, one of: None Group1 Group2 Group14 ECP256 ECP384 Group24
 PfsGroup = one of: None PFS1 PFS2 PFS2048 ECP256 ECP384 PFSMM PFS24
 -->
+{% endif %}
 
             <h5>UNIX & UNIX-like</h5>
 
-            <p>On other UNIX-like machines generate key pair and submit the signing request using OpenSSL and cURL:</p>
+            <p>For client certificates generate key pair and submit the signing request with common name set to short hostname:</p>
             <div class="highlight">
-              <pre class="code"><code>NAME=$(hostname);
-{% if session.authority.certificate.algorithm == "ec" %}openssl ecparam -name secp384r1 -genkey -noout -out client_key.pem{% else %}openssl genrsa -out client_key.pem 2048;{% endif %}
-openssl req -new -sha384 -key client_key.pem -out client_req.pem -subj "/CN=$NAME";
-curl -f -L -H "Content-type: application/pkcs10" --data-binary @client_req.pem \
-  http://{{ window.location.hostname }}/api/request/?wait=yes > client_cert.pem</code></pre>
+              <pre class="code"><code>test -e /sbin/uci && NAME=$(uci get system.@system[0].hostname)
+test -e /bin/hostname && NAME=$(hostname)
+test -n "$NAME" || NAME=$(cat /proc/sys/kernel/hostname)
+
+mkdir -p /etc/certidude/authority/{{ authority_name }}/
+echo {{ session.authority.certificate.md5sum }} /etc/certidude/authority/{{ authority_name }}/ca_cert.pem | md5sum -c \
+ || rm -fv /etc/certidude/authority/{{ authority_name }}/*.pem
+test -e /etc/certidude/authority/{{ authority_name }}/ca_cert.pem \
+ || cat << EOF > /etc/certidude/authority/{{ authority_name }}/ca_cert.pem
+{{ session.authority.certificate.blob }}EOF
+test -e /etc/certidude/authority/{{ authority_name }}/host_key.pem \
+ || {% if session.authority.certificate.algorithm == "ec" %}openssl ecparam -name secp384r1 -genkey -noout \
+    -out /etc/certidude/authority/{{ authority_name }}/host_key.pem{% else %}openssl genrsa \
+    -out /etc/certidude/authority/{{ authority_name }}/host_key.pem 2048{% endif %}
+test -e /etc/certidude/authority/{{ authority_name }}/host_req.pem \
+ || openssl req -new -sha384 -subj "/CN=$NAME" \
+    -key /etc/certidude/authority/{{ authority_name }}/host_key.pem \
+    -out /etc/certidude/authority/{{ authority_name }}/host_req.pem
+echo "If CSR submission fails, you can copy paste it to Certidude:"
+cat /etc/certidude/authority/{{ authority_name }}/host_req.pem
+
+test -e /etc/pki/ca-trust/source/anchors \
+ && ln -s /etc/certidude/authority/{{ authority_name }}/ca_cert.pem /etc/pki/ca-trust/source/anchors/{{ authority_name }} \
+ && update-ca-trust
+test -e /usr/local/share/ca-certificates/ \
+ && ln -s /etc/certidude/authority/{{ authority_name }}/ca_cert.pem /usr/local/share/ca-certificates/{{ authority_name }}.crt \
+ && update-ca-certificates
+
+curl -f -L -H "Content-type: application/pkcs10" \
+    --data-binary @/etc/certidude/authority/{{ authority_name }}/host_req.pem \
+    -o /etc/certidude/authority/{{ authority_name }}/host_cert.pem \
+    'http://{{ authority_name }}/api/request/?wait=yes&autosign=yes'
+</code></pre>
             </div>
 
+            <p>For server certificates use fully qualified hostname as common name and sign request accordingly:</p>
+            <div class="highlight">
+              <pre class="code"><code>test -e /sbin/uci && NAME=$(nslookup $(uci get network.wan.ipaddr) |  grep "name =" | head -n1 | cut -d "=" -f 2 | xargs)
+test -e /bin/hostname && NAME=$(hostname -f)
+test -n "$NAME" || NAME=$(cat /proc/sys/kernel/hostname)
+
+mkdir -p /etc/certidude/authority/{{ authority_name }}/
+echo {{ session.authority.certificate.md5sum }} /etc/certidude/authority/{{ authority_name }}/ca_cert.pem | md5sum -c \
+ || rm -fv /etc/certidude/authority/{{ authority_name }}/*.pem
+test -e /etc/certidude/authority/{{ authority_name }}/ca_cert.pem \
+ || cat << EOF > /etc/certidude/authority/{{ authority_name }}/ca_cert.pem
+{{ session.authority.certificate.blob }}EOF
+test -e /etc/certidude/authority/{{ authority_name }}/host_key.pem \
+ || {% if session.authority.certificate.algorithm == "ec" %}openssl ecparam -name secp384r1 -genkey -noout \
+    -out /etc/certidude/authority/{{ authority_name }}/host_key.pem{% else %}openssl genrsa \
+    -out /etc/certidude/authority/{{ authority_name }}/host_key.pem 2048{% endif %}
+test -e /etc/certidude/authority/{{ authority_name }}/host_req.pem \
+ || openssl req -new -sha384 -subj "/CN=$NAME" \
+    -key /etc/certidude/authority/{{ authority_name }}/host_key.pem \
+    -out /etc/certidude/authority/{{ authority_name }}/host_req.pem
+echo "If CSR submission fails, you can copy paste it to Certidude:"
+cat /etc/certidude/authority/{{ authority_name }}/host_req.pem
+
+curl -f -L -H "Content-type: application/pkcs10" \
+    --cacert /etc/certidude/authority/{{ authority_name }}/ca_cert.pem \
+    --data-binary @/etc/certidude/authority/{{ authority_name }}/host_req.pem \
+    -o /etc/certidude/authority/{{ authority_name }}/host_cert.pem \
+    'https://{{ authority_name }}:8443/api/request/?wait=yes'
+</code></pre>
+            </div>
+
+            <p>To renew:</p>
+
+            <div class="highlight">
+              <pre class="code"><code>curl -f -L -H "Content-type: application/pkcs10" \
+    --cacert /etc/certidude/authority/{{ authority_name }}/ca_cert.pem \
+    --key /etc/certidude/authority/{{ authority_name }}/host_key.pem \
+    --cert /etc/certidude/authority/{{ authority_name }}/host_cert.pem \
+    --data-binary @/etc/certidude/authority/{{ authority_name }}/host_req.pem \
+    -o /etc/certidude/authority/{{ authority_name }}/host_cert.pem \
+    'https://{{ authority_name }}:8443/api/request/?wait=yes'
+</code></pre>
+            </div>
+
+{% if "openvpn" in session.service.protocols %}
+
+            <h5>OpenVPN as client</h5>
+
+            <p>First acquire certificates using the snippet above.</p>
+
+            <p>Then install software:</p>
+
+            <div class="highlight">
+              <pre class="code"><code># Install packages on Ubuntu & Fedora
+which apt && apt install openvpn
+which dnf && dnf install openvpn
+
+cat > /etc/openvpn/{{ authority_name }}.conf << EOF
+client
+nobind
+{% for router in session.service.routers %}
+remote {{ router }} 1194 udp
+remote {{ router }} 443 tcp-client
+{% endfor %}
+tls-version-min 1.2
+tls-cipher TLS-DHE-RSA-WITH-AES-256-GCM-SHA384
+cipher AES-128-GCM
+auth SHA384
+mute-replay-warnings
+reneg-sec 0
+remote-cert-tls server
+dev tun
+persist-tun
+persist-key
+ca /etc/certidude/authority/{{ authority_name }}/ca_cert.pem
+key /etc/certidude/authority/{{ authority_name }}/host_key.pem
+cert /etc/certidude/authority/{{ authority_name }}/host_cert.pem
+EOF
+
+systemctl restart openvpn
+</code></pre>
+            </div>
+{% endif %}
+
+{% if "ikev2" in session.service.protocols %}
             <h5>StrongSwan as client</h5>
 
-            <p>First enroll certificates:</p>
+            <p>First acquire certificates using the snippet above.</p>
+
+            <p>Then install software:</p>
             <div class="highlight">
               <pre class="code"><code># Install packages on Ubuntu & Fedora, patch Fedora paths
 which apt && apt install strongswan
@@ -107,82 +215,68 @@ test -e /etc/strongswan && test -e /etc/ipsec.conf || ln -s strongswan/ipsec.con
 test -e /etc/strongswan && test -e /etc/ipsec.d || ln -s strongswan/ipsec.d /etc/ipsec.d
 test -e /etc/strongswan && test -e /etc/ipsec.secrets || ln -s strongswan/ipsec.secrets /etc/ipsec.secrets
 
-FQDN=$(cat /etc/hostname)
-
-# Install CA certificate
-cat << EOF > /etc/ipsec.d/cacerts/ca_cert.pem
-{{ session.authority.certificate.blob }}EOF
-
-# Generate keypair
-test -e /etc/ipsec.d/private/client.pem \
- || openssl {% if session.authority.certificate.algorithm == "ec" %}ecparam -name secp384r1 -genkey -noout -out /etc/ipsec.d/private/client.pem{% else %}genrsa -out /etc/ipsec.d/private/client.pem 2048{% endif %}
-
-# Attempt to submit CSR
-test -e /etc/ipsec.d/reqs/client.pem \
- || openssl req -new -sha384 \
-      -key /etc/ipsec.d/private/client.pem \
-      -out /etc/ipsec.d/reqs/client.pem -subj "/CN=$FQDN"
-cat /etc/ipsec.d/reqs/client.pem
-curl -f -L -H "Content-type: application/pkcs10" \
-  --data-binary @/etc/ipsec.d/reqs/client.pem \
-  -o /etc/ipsec.d/certs/client.pem \
-  http://{{ window.location.hostname }}/api/request/?wait=yes</code></pre>
+# Hard link files to prevent Apparmor issues and have more manageable config
+ln /etc/certidude/authority/{{ authority_name }}/ca_cert.pem /etc/ipsec.d/cacerts/{{ authority_name }}.pem
+ln /etc/certidude/authority/{{ authority_name }}/host_cert.pem /etc/ipsec.d/certs/{{ authority_name }}.pem
+ln /etc/certidude/authority/{{ authority_name }}/host_key.pem /etc/ipsec.d/private/{{ authority_name }}.pem
+</code></pre>
             </div>
+
+
 
             <p>To configure StrongSwan as roadwarrior:</p>
             <div class="highlight">
               <pre class="code"><code>cat > /etc/ipsec.conf << EOF
-conn c2s
+
+ca {{ authority_name }}
+    auto=add
+    cacert = {{ authority_name }}.pem
+{% if session.features.crl %}    crluri = http://{{ authority_name }}/api/revoked/{% endif %}
+{% if session.features.ocsp %}    ocspuri = http://{{ authority_name }}/api/ocsp/{% endif %}
+
+conn client-to-site
     auto=start
-    right=router2.k-space.ee
+    right={{ session.service.routers[0] }}
+    rightsubnet=0.0.0.0/0
+    rightca="{{ session.authority.certificate.distinguished_name }}"
+    left=%defaultroute
+    leftcert={{ authority_name }}.pem
+    leftsourceip=%config
+    leftca="{{ session.authority.certificate.distinguished_name }}"
+    keyexchange=ikev2
+    keyingtries=%forever
     dpdaction=restart
     closeaction=restart
-    left=%defaultroute
-    rightsubnet=0.0.0.0/0
-    keyingtries=%forever
-    rightid=%any
-    leftsourceip=%config
-    leftcert=client.pem
     ike=aes256-sha384-{% if session.authority.certificate.algorithm == "ec" %}ecp384{% else %}modp2048{% endif %}!
     esp=aes128gcm16-aes128gmac!
 
 EOF
 
-echo ": {% if session.authority.certificate.algorithm == "ec" %}ECDSA{% else %}RSA{% endif %} client.pem" > /etc/ipsec.secrets
+echo ": {% if session.authority.certificate.algorithm == "ec" %}ECDSA{% else %}RSA{% endif %} {{ authority_name }}.pem" > /etc/ipsec.secrets
 
 ipsec restart</code></pre>
             </div>
 
+
+{% endif %}
+
+
             <h5>OpenWrt/LEDE as VPN gateway</h5>
 
-            <p>First enroll certificates:</p>
+            <p>First enroll certificates using the snippet from UNIX section above</p>
+
+            <p>Then:</p>
             <div class="highlight">
               <pre class="code"><code>opkg install curl libmbedtls
 # Derive FQDN from WAN interface's reverse DNS record
 FQDN=$(nslookup $(uci get network.wan.ipaddr) |  grep "name =" | head -n1 | cut -d "=" -f 2 | xargs)
-
-mkdir -p /etc/certidude/authority/{{ window.location.hostname }}
 grep -c certidude /etc/sysupgrade.conf || echo /etc/certidude >> /etc/sysupgrade.conf
-cat << EOF > /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem
-{{ session.authority.certificate.blob }}EOF
-
-test -e /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem \
- || openssl {% if session.authority.certificate.algorithm == "ec" %}ecparam -name secp384r1 -genkey -noout -out /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem{% else %}genrsa -out /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem 2048{% endif %}
-test -e /etc/certidude/authority/{{ window.location.hostname }}/server_req.pem \
- || openssl req -new -sha384 \
-      -key /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem \
-      -out /etc/certidude/authority/{{ window.location.hostname }}/server_req.pem -subj "/CN=$FQDN"
-cat /etc/certidude/authority/{{ window.location.hostname }}/server_req.pem
-curl -f -L -H "Content-type: application/pkcs10" \
-  --data-binary @/etc/certidude/authority/{{ window.location.hostname }}/server_req.pem \
-  -o /etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem \
-  http://{{ window.location.hostname }}/api/request/?wait=yes
 
 # Create VPN gateway up/down script for reporting client IP addresses to CA
-cat <<\EOF > /etc/certidude/authority/{{ window.location.hostname }}/updown
+cat <<\EOF > /etc/certidude/authority/{{ authority_name }}/updown
 #!/bin/sh
 
-CURL="curl -m 3 -f --key /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem --cert /etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem --cacert /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem https://{{ window.location.hostname }}:8443/api/lease/"
+CURL="curl -m 3 -f --key /etc/certidude/authority/{{ authority_name }}/host_key.pem --cert /etc/certidude/authority/{{ authority_name }}/host_cert.pem --cacert /etc/certidude/authority/{{ authority_name }}/ca_cert.pem https://{{ authority_name }}:8443/api/lease/"
 
 case $PLUTO_VERB in
   up-client) $CURL --data-urlencode "outer_address=$PLUTO_PEER" --data-urlencode "inner_address=$PLUTO_PEER_SOURCEIP" --data-urlencode "client=$PLUTO_PEER_ID" ;;
@@ -195,19 +289,23 @@ case $script_type in
 esac
 EOF
 
-chmod +x /etc/certidude/authority/{{ window.location.hostname }}/updown
+chmod +x /etc/certidude/authority/{{ authority_name }}/updown
 </code></pre>
             </div>
+
+
+{% if "openvpn" in session.service.protocols %}
 
             <p>Then either set up OpenVPN service:</p>
             <div class="highlight">
               <pre class="code"><code>opkg update
 opkg install curl openssl-util openvpn-openssl
 
+{% if session.authority.certificate.algorithm != "ec" %}
 # Generate Diffie-Hellman parameters file for OpenVPN
 test -e /etc/certidude/dh.pem \
  || openssl dhparam 2048 -out /etc/certidude/dh.pem
-
+{% endif %}
 # Create interface definition for tunnel
 uci set network.vpn=interface
 uci set network.vpn.name='vpn'
@@ -267,10 +365,10 @@ for section in s2c_tcp s2c_udp; do
 # Common paths
 uci set openvpn.$section.script_security=2
 uci set openvpn.$section.client_connect='/etc/certidude/updown'
-uci set openvpn.$section.key='/etc/certidude/authority/{{ window.location.hostname }}/server_key.pem'
-uci set openvpn.$section.cert='/etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem'
-uci set openvpn.$section.ca='/etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem'
-uci set openvpn.$section.dh='/etc/certidude/dh.pem'
+uci set openvpn.$section.key='/etc/certidude/authority/{{ authority_name }}/host_key.pem'
+uci set openvpn.$section.cert='/etc/certidude/authority/{{ authority_name }}/host_cert.pem'
+uci set openvpn.$section.ca='/etc/certidude/authority/{{ authority_name }}/ca_cert.pem'
+{% if session.authority.certificate.algorithm != "ec" %}uci set openvpn.$section.dh='/etc/certidude/dh.pem'{% endif %}
 uci set openvpn.$section.enabled=1
 
 # DNS and routes
@@ -291,6 +389,9 @@ done
 /etc/init.d/firewall restart</code></pre>
             </div>
 
+{% endif %}
+
+{% if "ikev2" in session.service.protocols %}
             <p>Alternatively or additionally set up StrongSwan:</p>
             <div class="highlight">
               <pre class="code"><code>opkg update
@@ -302,31 +403,46 @@ config setup
     strictcrlpolicy=yes
     uniqueids = yes
 
-ca {{ window.location.hostname }}
+ca {{ authority_name }}
     auto=add
-    cacert = /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem
-{% if session.features.crl %}    crluri = http://{{ window.location.hostname }}/api/revoked/{% endif %}
-{% if session.features.ocsp %}    ocspuri = http://{{ window.location.hostname }}/api/ocsp/{% endif %}
+    cacert = {{ authority_name }}.pem
+{% if session.features.crl %}    crluri = http://{{ authority_name }}/api/revoked/{% endif %}
+{% if session.features.ocsp %}    ocspuri = http://{{ authority_name }}/api/ocsp/{% endif %}
 
-conn s2c
-    auto=add
-    dpdaction=clear
-    closeaction=clear
-    leftdns=$(uci get network.lan.ipaddr) # IP of DNS server advertised to roadwarriors
-    rightsourceip=172.21.0.0/24 # Roadwarrior virtual IP pool
-    left=$(uci get network.wan.ipaddr) # Bind to this IP address
-    leftsubnet=$(uci get network.lan.ipaddr | cut -d . -f 1-3).0/24 # Subnets pushed to roadwarriors
-    leftcert=/etc/certidude/authority/{{ window.location.hostname }}/server_cert.pem
+conn default-{{ authority_name }}
     ike=aes256-sha384-{% if session.authority.certificate.algorithm == "ec" %}ecp384{% else %}modp2048{% endif %}!
     esp=aes128gcm16-aes128gmac!
-    leftupdown=/etc/certidude/authority/{{ window.location.hostname }}/updown
+    left=$(uci get network.wan.ipaddr) # Bind to this IP address
+    leftid={{ session.service.routers | first }}
+    leftupdown=/etc/certidude/authority/{{ authority_name }}/updown
+    leftcert={{ authority_name }}.pem
+    leftsubnet=$(uci get network.lan.ipaddr | cut -d . -f 1-3).0/24 # Subnets pushed to roadwarriors
+    leftdns=$(uci get network.lan.ipaddr) # IP of DNS server advertised to roadwarriors
+    leftca="{{ session.authority.certificate.distinguished_name }}"
+    rightca="{{ session.authority.certificate.distinguished_name }}"
+    rightsourceip=172.21.0.0/24 # Roadwarrior virtual IP pool
+    dpddelay=0
+    dpdaction=clear
+
+conn site-to-clients
+    auto=add
+    also=default-{{ authority_name }}
+
+conn site-to-client1
+    auto=ignore
+    also=default-{{ authority_name }}
+    rightid="CN=*, OU=IP Camera, O=*, DC=*, DC=*, DC=*"
+    rightsourceip=172.21.0.1
+
+
 
 EOF
 
-echo ": {% if session.authority.certificate.algorithm == "ec" %}ECDSA{% else %}RSA{% endif %} /etc/certidude/authority/{{ window.location.hostname }}/server_key.pem" > /etc/ipsec.secrets
+echo ": {% if session.authority.certificate.algorithm == "ec" %}ECDSA{% else %}RSA{% endif %} /etc/certidude/authority/{{ authority_name }}/host_key.pem" > /etc/ipsec.secrets
 
 ipsec restart</code></pre>
             </div>
+{% endif %}
 
             {% if session.authority.builder %}
             <h5>OpenWrt/LEDE image builder</h5>
@@ -339,7 +455,7 @@ ipsec restart</code></pre>
             {% endif %}
 
             <h5>SCEP</h5>
-            <p>Use following as the enrollment URL: http://{{ window.location.hostname }}/cgi-bin/pkiclient.exe</p>
+            <p>Use following as the enrollment URL: http://{{ authority_name }}/cgi-bin/pkiclient.exe</p>
 
             <h5>Copy & paste</h5>
 
@@ -367,10 +483,10 @@ ipsec restart</code></pre>
           <h4 class="modal-title">Revocation lists</h4>
         </div>
         <div class="modal-body">
-          <p>To fetch <a href="http://{{window.location.hostname}}/api/revoked/">certificate revocation list</a>:</p>
-<pre><code>curl http://{{window.location.hostname}}/api/revoked/ > crl.der
-curl http://{{window.location.hostname}}/api/revoked/ -L -H "Accept: application/x-pem-file"
-curl http://{{window.location.hostname}}/api/revoked/?wait=yes -L -H "Accept: application/x-pem-file" > crl.pem</code></pre>
+          <p>To fetch <a href="http://{{authority_name}}/api/revoked/">certificate revocation list</a>:</p>
+<pre><code>curl http://{{authority_name}}/api/revoked/ > crl.der
+curl http://{{authority_name}}/api/revoked/ -L -H "Accept: application/x-pem-file"
+curl http://{{authority_name}}/api/revoked/?wait=yes -L -H "Accept: application/x-pem-file" > crl.pem</code></pre>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn" data-dismiss="modal">Close</button>

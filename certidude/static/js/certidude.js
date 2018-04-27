@@ -305,7 +305,8 @@ function loadAuthority() {
             /**
              * Render authority views
              **/
-            $("#view").html(env.render('views/authority.html', { session: session, window: window }));
+            $("#view").html(env.render('views/authority.html', { session: session, window: window,
+                authority_name: window.location.hostname }));
             $("time").timeago();
             if (session.authority) {
                 $("#log input").each(function(i, e) {
@@ -462,12 +463,8 @@ function datetimeFilter(s) {
 }
 
 function serialFilter(s) {
-    return s.substring(0,8) + " " +
-        s.substring(8,12) + " " +
-        s.substring(12,16) + " " +
-        s.substring(16,28) + " " +
-        s.substring(28,32) + " " +
-        s.substring(32);
+    return s.substring(0,s.length-14) + " " +
+        s.substring(s.length-14);
 }
 
 $(document).ready(function() {

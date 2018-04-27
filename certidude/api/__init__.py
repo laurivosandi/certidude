@@ -8,6 +8,7 @@ import hashlib
 from datetime import datetime
 from xattr import listxattr, getxattr
 from certidude.auth import login_required
+from certidude.common import cert_to_dn
 from certidude.user import User
 from certidude.decorators import serialize, csrf_protection
 from certidude import const, config, authority
@@ -54,7 +55,7 @@ class SessionResource(AuthorityHandler):
                 )
 
         def serialize_revoked(g):
-            for common_name, path, buf, cert, signed, expired, revoked in g():
+            for common_name, path, buf, cert, signed, expired, revoked, reason in g():
                 yield dict(
                     serial = "%x" % cert.serial_number,
                     common_name = common_name,
@@ -62,6 +63,7 @@ class SessionResource(AuthorityHandler):
                     signed = signed,
                     expired = expired,
                     revoked = revoked,
+                    reason = reason,
                     sha256sum = hashlib.sha256(buf).hexdigest())
 
         def serialize_certificates(g):
@@ -69,7 +71,7 @@ class SessionResource(AuthorityHandler):
                 # Extract certificate tags from filesystem
                 try:
                     tags = []
-                    for tag in getxattr(path, "user.xdg.tags").decode("ascii").split(","):
+                    for tag in getxattr(path, "user.xdg.tags").decode("utf-8").split(","):
                         if "=" in tag:
                             k, v = tag.split("=", 1)
                         else:
@@ -116,7 +118,7 @@ class SessionResource(AuthorityHandler):
                     extensions = dict([
                         (e["extn_id"].native, e["extn_value"].native)
                         for e in cert["tbs_certificate"]["extensions"]
-                        if e["extn_value"] in ("extended_key_usage",)])
+                        if e["extn_id"].native in ("extended_key_usage",)])
                 )
 
         if req.context.get("user").is_admin():
@@ -131,6 +133,11 @@ class SessionResource(AuthorityHandler):
                 mail=req.context.get("user").mail
             ),
             request_submission_allowed = config.REQUEST_SUBMISSION_ALLOWED,
+            service = dict(
+                protocols = config.SERVICE_PROTOCOLS,
+                routers = [j[0] for j in authority.list_signed(
+                    common_name=config.SERVICE_ROUTERS)]
+            ),
             authority = dict(
                 builder = dict(
                     profiles = config.IMAGE_BUILDER_PROFILES
@@ -143,13 +150,15 @@ class SessionResource(AuthorityHandler):
                 certificate = dict(
                     algorithm = authority.public_key.algorithm,
                     common_name = self.authority.certificate.subject.native["common_name"],
+                    distinguished_name = cert_to_dn(self.authority.certificate),
+                    md5sum = hashlib.md5(self.authority.certificate_buf).hexdigest(),
                     blob = self.authority.certificate_buf.decode("ascii"),
                 ),
                 mailer = dict(
                     name = config.MAILER_NAME,
                     address = config.MAILER_ADDRESS
                 ) if config.MAILER_ADDRESS else None,
-                machine_enrollment_allowed=config.MACHINE_ENROLLMENT_ALLOWED,
+                machine_enrollment_subnets=config.MACHINE_ENROLLMENT_SUBNETS,
                 user_enrollment_allowed=config.USER_ENROLLMENT_ALLOWED,
                 user_multiple_certificates=config.USER_MULTIPLE_CERTIFICATES,
                 events = config.EVENT_SOURCE_SUBSCRIBE % config.EVENT_SOURCE_TOKEN,
@@ -278,8 +287,8 @@ def certidude_app(log_handlers=[]):
         log_handlers.append(LogHandler(uri))
         app.add_route("/api/log/", LogResource(uri))
     elif config.LOGGING_BACKEND == "syslog":
-        from logging.handlers import SyslogHandler
-        log_handlers.append(SyslogHandler())
+        from logging.handlers import SysLogHandler
+        log_handlers.append(SysLogHandler())
         # Browsing syslog via HTTP is obviously not possible out of the box
     elif config.LOGGING_BACKEND:
         raise ValueError("Invalid logging.backend = %s" % config.LOGGING_BACKEND)

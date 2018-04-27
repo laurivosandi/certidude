@@ -96,15 +96,15 @@ uci set firewall.@redirect[-1].target=DNAT
 uci set firewall.@redirect[-1].proto=tcp
 uci set firewall.@redirect[-1].enabled=0
 
-uci set uhttpd.main.listen_http=0.0.0.0:8080
-
 /etc/init.d/dropbear disable
+
+uci set uhttpd.main.listen_http=0.0.0.0:8080
 
 EOF
 
 make -C $BUILD/$BASENAME image FILES=$OVERLAY PROFILE=$PROFILE PACKAGES="openssl-util curl ca-certificates htop \
-    iftop tcpdump nmap nano mtr patch diffutils ipset usbutils luci \
-    strongswan-mod-kernel-libipsec kmod-tun ip-full strongswan-full \
-    pciutils -odhcpd -odhcp6c -kmod-ath9k picocom libustream-openssl kmod-crypto-gcm"
+    iftop tcpdump nmap nano mtr patch diffutils ipset usbutils luci dropbear kmod-tun \
+    strongswan-default strongswan-mod-kernel-libipsec strongswan-mod-openssl strongswan-mod-curl strongswan-mod-ccm strongswan-mod-gcm \
+    pciutils -odhcpd -odhcp6c -kmod-ath9k picocom libustream-openssl kmod-crypto-gcm bc"
 
 

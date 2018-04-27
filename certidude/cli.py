@@ -12,12 +12,13 @@ import subprocess
 import sys
 from asn1crypto import pem, x509
 from asn1crypto.csr import CertificationRequest
+from asn1crypto.crl import CertificateList
 from base64 import b64encode
 from certbuilder import CertificateBuilder, pem_armor_certificate
 from certidude import const
 from csrbuilder import CSRBuilder, pem_armor_csr
 from configparser import ConfigParser, NoOptionError
-from certidude.common import apt, rpm, drop_privileges, selinux_fixup
+from certidude.common import apt, rpm, drop_privileges, selinux_fixup, cn_to_dn
 from datetime import datetime, timedelta
 from glob import glob
 from ipaddress import ip_network
@@ -49,7 +50,7 @@ def setup_client(prefix="client_", dh=False):
         def wrapped(**arguments):
             common_name = arguments.get("common_name")
             authority = arguments.get("authority")
-            b = os.path.join(const.STORAGE_PATH, authority)
+            b = os.path.join("/etc/certidude/authority", authority)
             if dh:
                 path = os.path.join(const.STORAGE_PATH, "dh.pem")
                 if not os.path.exists(path):
@@ -94,6 +95,8 @@ def setup_client(prefix="client_", dh=False):
 @click.option("-s", "--skip-self", default=False, is_flag=True, help="Skip self enroll")
 @click.option("-nw", "--no-wait", default=False, is_flag=True, help="Return immideately if server doesn't autosign")
 def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
+    assert os.getuid() == 0 and os.getgid() == 0, "Can enroll only as root"
+
     if not skip_self and os.path.exists(const.SERVER_CONFIG_PATH):
         click.echo("Self-enrolling authority's web interface certificate")
         from certidude import authority
@@ -182,7 +185,7 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
         try:
             authority_path = clients.get(authority_name, "authority path")
         except NoOptionError:
-            authority_path = "/var/lib/certidude/%s/ca_cert.pem" % authority_name
+            authority_path = "/etc/certidude/authority/%s/ca_cert.pem" % authority_name
         finally:
             if os.path.exists(authority_path):
                 click.echo("Found authority certificate in: %s" % authority_path)
@@ -233,7 +236,7 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
                 # pip
 
                 # Firefox (?) on Debian, Ubuntu
-                if os.path.exists("/usr/bin/update-ca-certificates"):
+                if os.path.exists("/usr/bin/update-ca-certificates") or os.path.exists("/usr/sbin/update-ca-certificates"):
                     link_path = "/usr/local/share/ca-certificates/%s" % authority_name
                     if not os.path.lexists(link_path):
                         os.symlink(authority_path, link_path)
@@ -257,11 +260,13 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
             r = requests.get(revoked_url, headers={'accept': 'application/x-pem-file'})
 
             if r.status_code == 200:
-                revocations = crl.CertificateList.load(pem.unarmor(r.content))
+                header, _, crl_der_bytes = pem.unarmor(r.content)
+                revocations = CertificateList.load(crl_der_bytes)
                 # TODO: check signature, parse reasons, remove keys if revoked
                 revocations_partial = revocations_path + ".part"
                 with open(revocations_partial, 'wb') as f:
                     f.write(r.content)
+                os.rename(revocations_partial, revocations_path)
             elif r.status_code == 404:
                 click.echo("CRL disabled, server said 404")
             else:
@@ -293,8 +298,8 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
             key_path = clients.get(authority_name, "key path")
             request_path = clients.get(authority_name, "request path")
         except NoOptionError:
-            key_path = "/var/lib/certidude/%s/client_key.pem" % authority_name
-            request_path = "/var/lib/certidude/%s/client_csr.pem" % authority_name
+            key_path = "/etc/certidude/authority/%s/host_key.pem" % authority_name
+            request_path = "/etc/certidude/authority/%s/host_csr.pem" % authority_name
 
         if os.path.exists(request_path):
             with open(request_path, "rb") as fh:
@@ -334,7 +339,7 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
         try:
             certificate_path = clients.get(authority_name, "certificate path")
         except NoOptionError:
-            certificate_path = "/var/lib/certidude/%s/client_cert.pem" % authority_name
+            certificate_path = "/etc/certidude/authority/%s/host_cert.pem" % authority_name
 
         try:
             renewal_overlap = clients.getint(authority_name, "renewal overlap")
@@ -352,10 +357,15 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
         except EnvironmentError: # Certificate missing, can't renew
             pass
 
+        try:
+            autosign = clients.getboolean(authority_name, "autosign")
+        except NoOptionError:
+            autosign = True
+
         if not os.path.exists(certificate_path) or renew:
             # Set up URL-s
             request_params = set()
-            request_params.add("autosign=true")
+            request_params.add("autosign=%s" % ("yes" if autosign else "no"))
             if not no_wait:
                 request_params.add("wait=forever")
 
@@ -371,6 +381,7 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
             if renew: # Do mutually authenticated TLS handshake
                 request_url = "https://%s:8443/api/request/" % authority_name
                 kwargs["cert"] = certificate_path, key_path
+                click.echo("Renewing using current keypair at %s %s" % kwargs["cert"])
             else:
                 # If machine is joined to domain attempt to present machine credentials for authentication
                 if kerberos:
@@ -416,6 +427,8 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
             elif submission.status_code == requests.codes.gone:
                 # Should the client retry or disable request submission?
                 raise ValueError("Server refused to sign the request") # TODO: Raise proper exception
+            elif submission.status_code == requests.codes.bad_request:
+                raise ValueError("Server said following, likely current certificate expired/revoked? %s" % submission.text)
             else:
                 submission.raise_for_status()
 
@@ -964,12 +977,9 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
     help="nginx site config for serving Certidude, /etc/nginx/sites-available/certidude by default")
 @click.option("--common-name", "-cn", default=const.FQDN, help="Common name of the server, %s by default" % const.FQDN)
 @click.option("--title", "-t", default="Certidude at %s" % const.FQDN, help="Common name of the certificate authority, 'Certidude at %s' by default" % const.FQDN)
-@click.option("--country", "-c", default=None, help="Country, none by default")
-@click.option("--state", "-s", default=None, help="State or country, none by default")
-@click.option("--locality", "-l", default=None, help="City or locality, none by default")
 @click.option("--authority-lifetime", default=20*365, help="Authority certificate lifetime in days, 20 years by default")
 @click.option("--organization", "-o", default=None, help="Company or organization name")
-@click.option("--organizational-unit", "-o", default=None)
+@click.option("--organizational-unit", "-ou", default="Certificate Authority")
 @click.option("--push-server", help="Push server, by default http://%s" % const.FQDN)
 @click.option("--directory", help="Directory for authority files")
 @click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
@@ -977,7 +987,8 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
 @click.option("--skip-packages", is_flag=True, help="Don't attempt to install apt/pip/npm packages")
 @click.option("--elliptic-curve", "-e", is_flag=True, help="Generate EC instead of RSA keypair")
 @fqdn_required
-def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, state, locality, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags, title, skip_packages, elliptic_curve):
+def certidude_setup_authority(username, kerberos_keytab, nginx_config, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags, title, skip_packages, elliptic_curve):
+    assert subprocess.check_output(["/usr/bin/lsb_release", "-cs"]) == b"xenial\n", "Only Ubuntu 16.04 supported at the moment"
     assert os.getuid() == 0 and os.getgid() == 0, "Authority can be set up only by root"
 
     import pwd
@@ -992,7 +1003,8 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
             cython3 python3-dev python3-mimeparse \
             python3-markdown python3-pyxattr python3-jinja2 python3-cffi \
             software-properties-common libsasl2-modules-gssapi-mit npm nodejs \
-            libkrb5-dev libldap2-dev libsasl2-dev gawk libncurses5-dev rsync attr")
+            libkrb5-dev libldap2-dev libsasl2-dev gawk libncurses5-dev \
+            rsync attr wget unzip")
         os.system("pip3 install -q --upgrade gssapi falcon humanize ipaddress simplepam")
         os.system("pip3 install -q --pre --upgrade python-ldap")
 
@@ -1096,9 +1108,18 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
     else:
         click.echo("Not systemd based OS, don't know how to set up initscripts")
 
+    # Set umask to 0022
+    os.umask(0o022)
     assert os.getuid() == 0 and os.getgid() == 0
+
     bootstrap_pid = os.fork()
     if not bootstrap_pid:
+
+        # Create what's usually /var/lib/certidude
+        if not os.path.exists(directory):
+            os.makedirs(directory)
+        assert os.stat(directory).st_mode == 0o40755
+
         # Create bundle directories
         bundle_js = os.path.join(assets_dir, "js", "bundle.js")
         bundle_css = os.path.join(assets_dir, "css", "bundle.css")
@@ -1107,6 +1128,10 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
             if not os.path.exists(subdir):
                 click.echo("Creating directory %s" % subdir)
                 os.makedirs(subdir)
+
+        # Copy fonts
+        click.echo("Copying fonts...")
+        os.system("rsync -avq /usr/local/lib/node_modules/font-awesome/fonts/ %s/fonts/" % assets_dir)
 
         # Install JavaScript pacakges
         if skip_packages:
@@ -1140,10 +1165,6 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         os.rename(bundle_css + ".part", bundle_css)
         os.rename(bundle_js + ".part", bundle_js)
 
-        # Copy fonts
-        click.echo("Copying fonts...")
-        os.system("rsync -avq /usr/local/lib/node_modules/font-awesome/fonts/ %s/fonts/" % assets_dir)
-
         assert os.getuid() == 0 and os.getgid() == 0
         _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
         os.setgid(gid)
@@ -1152,10 +1173,11 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
         if not os.path.exists(const.CONFIG_DIR):
             click.echo("Creating %s" % const.CONFIG_DIR)
             os.makedirs(const.CONFIG_DIR)
+
+        os.umask(0o137) # 640
         if os.path.exists(const.SERVER_CONFIG_PATH):
             click.echo("Configuration file %s already exists, remove to regenerate" % const.SERVER_CONFIG_PATH)
         else:
-            os.umask(0o137)
             push_token = "".join([random.choice(string.ascii_letters + string.digits) for j in range(0,32)])
             with open(const.SERVER_CONFIG_PATH, "w") as fh:
                 fh.write(env.get_template("server/server.conf").render(vars()))
@@ -1169,7 +1191,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
                 fh.write(env.get_template("server/builder.conf").render(vars()))
             click.echo("File %s created" % const.BUILDER_CONFIG_PATH)
 
-        # Create image builder config
+        # Create signature profile config
         if os.path.exists(const.PROFILE_CONFIG_PATH):
             click.echo("Signature profile config %s already exists, remove to regenerate" % const.PROFILE_CONFIG_PATH)
         else:
@@ -1177,10 +1199,9 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
                 fh.write(env.get_template("server/profile.conf").render(vars()))
             click.echo("File %s created" % const.PROFILE_CONFIG_PATH)
 
-        # Create directory with 755 permissions
-        os.umask(0o022)
-        if not os.path.exists(directory):
-            os.makedirs(directory)
+        if not os.path.exists("/var/lib/certidude/builder"):
+            click.echo("Creating %s" % "/var/lib/certidude/builder")
+            os.makedirs("/var/lib/certidude/builder")
 
         # Create subdirectories with 770 permissions
         os.umask(0o007)
@@ -1191,10 +1212,11 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
                 os.mkdir(path)
             else:
                 click.echo("Directory already exists %s" % path)
+            assert os.stat(path).st_mode == 0o40770
 
         # Create SQLite database file with correct permissions
+        os.umask(0o117)
         if not os.path.exists(sqlite_path):
-            os.umask(0o117)
             with open(sqlite_path, "wb") as fh:
                 pass
 
@@ -1207,16 +1229,10 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
                 click.echo("Generating %d-bit RSA key for CA ..." % const.KEY_SIZE)
                 public_key, private_key = asymmetric.generate_pair("rsa", bit_size=const.KEY_SIZE)
 
-            names = (
-                ("country_name", country),
-                ("state_or_province_name", state),
-                ("locality_name", locality),
-                ("organization_name", organization),
-                ("common_name", title)
-            )
-
+            # https://technet.microsoft.com/en-us/library/aa998840(v=exchg.141).aspx
             builder = CertificateBuilder(
-                dict([(k,v) for (k,v) in names if v]),
+                cn_to_dn("Certidude at %s" % common_name, common_name,
+                    o=organization, ou=organizational_unit),
                 public_key
             )
             builder.self_signed = True
@@ -1239,7 +1255,13 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, country, 
             os.umask(0o177)
             with open(ca_key, 'wb') as f:
                 f.write(asymmetric.dump_private_key(private_key, None))
+
         sys.exit(0) # stop this fork here
+
+        assert os.stat(sqlite_path).st_mode == 0o100640
+        assert os.stat(ca_cert).st_mode == 0o100640
+        assert os.stat(ca_key).st_mode == 0o100600
+        assert os.stat("/etc/nginx/sites-available/certidude.conf").st_mode == 0o100640
     else:
         os.waitpid(bootstrap_pid, 0)
         from certidude import authority
@@ -1322,7 +1344,7 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
                     click.echo("y " + path)
                 continue
             click.echo()
-            click.echo(click.style(common_name, fg="blue") + " " + click.style("%x" % cert.serial_number, fg="white"))
+            click.echo(click.style(common_name, fg="blue") + " " + click.style("%040x" % cert.serial_number, fg="white"))
             click.echo("="*(len(common_name)+60))
 
             if signed < NOW and NOW < expires:
@@ -1338,15 +1360,15 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
                 click.echo(" - %s: %s" % (ext["extn_id"].native, repr(ext["extn_value"].native)))
 
     if show_revoked:
-        for common_name, path, buf, cert, signed, expires, revoked in authority.list_revoked():
+        for common_name, path, buf, cert, signed, expires, revoked, reason in authority.list_revoked():
             if not verbose:
                 click.echo("r " + path)
                 continue
             click.echo()
-            click.echo(click.style(common_name, fg="blue") + " " + click.style("%x" % cert.serial_number, fg="white"))
+            click.echo(click.style(common_name, fg="blue") + " " + click.style("%040x" % cert.serial_number, fg="white"))
             click.echo("="*(len(common_name)+60))
 
-            click.echo("Status: " + click.style("revoked", fg="red") + " %s%s" % (naturaltime(NOW-revoked), click.style(", %s" % revoked, fg="white")))
+            click.echo("Status: " + click.style("revoked", fg="red") + " due to " + reason + " %s%s" % (naturaltime(NOW-revoked), click.style(", %s" % revoked, fg="white")))
             click.echo("openssl x509 -in %s -text -noout" % path)
             dump_common(common_name, path, cert)
             for ext in cert["tbs_certificate"]["extensions"]:
@@ -1358,17 +1380,18 @@ def certidude_list(verbose, show_key_type, show_extensions, show_path, show_sign
 @click.option("--profile", "-p", default="rw", help="Profile")
 @click.option("--overwrite", "-o", default=False, is_flag=True, help="Revoke valid certificate with same CN")
 def certidude_sign(common_name, overwrite, profile):
-    from certidude import authority
+    from certidude import authority, config
     drop_privileges()
     cert = authority.sign(common_name, overwrite=overwrite, profile=config.PROFILES[profile])
 
 
 @click.command("revoke", help="Revoke certificate")
+@click.option("--reason", "-r", default="key_compromise", help="Revocation reason, one of: key_compromise affiliation_changed superseded cessation_of_operation privilege_withdrawn")
 @click.argument("common_name")
-def certidude_revoke(common_name):
+def certidude_revoke(common_name, reason):
     from certidude import authority
     drop_privileges()
-    authority.revoke(common_name)
+    authority.revoke(common_name, reason)
 
 
 @click.command("expire", help="Move expired certificates")
@@ -1377,13 +1400,13 @@ def certidude_expire():
     threshold = datetime.utcnow() - timedelta(minutes=5) # Kerberos tolerance
     for common_name, path, buf, cert, signed, expires in authority.list_signed():
         if expires < threshold:
-            expired_path = os.path.join(config.EXPIRED_DIR, "%x.pem" % cert.serial_number)
+            expired_path = os.path.join(config.EXPIRED_DIR, "%040x.pem" % cert.serial_number)
             click.echo("Moving %s to %s" % (path, expired_path))
             os.rename(path, expired_path)
-            os.remove(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % cert.serial_number))
-    for common_name, path, buf, cert, signed, expires, revoked in authority.list_revoked():
+            os.remove(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%040x.pem" % cert.serial_number))
+    for common_name, path, buf, cert, signed, expires, revoked, reason in authority.list_revoked():
         if expires < threshold:
-            expired_path = os.path.join(config.EXPIRED_DIR, "%x.pem" % cert.serial_number)
+            expired_path = os.path.join(config.EXPIRED_DIR, "%040x.pem" % cert.serial_number)
             click.echo("Moving %s to %s" % (path, expired_path))
             os.rename(path, expired_path)
     # TODO: Send e-mail
@@ -1412,7 +1435,7 @@ def certidude_serve(port, listen, fork):
 
     # Rebuild reverse mapping
     for cn, path, buf, cert, signed, expires in authority.list_signed():
-        by_serial = os.path.join(config.SIGNED_BY_SERIAL_DIR, "%x.pem" % cert.serial_number)
+        by_serial = os.path.join(config.SIGNED_BY_SERIAL_DIR, "%040x.pem" % cert.serial_number)
         if not os.path.exists(by_serial):
             click.echo("Linking %s to ../%s.pem" % (by_serial, cn))
             os.symlink("../%s.pem" % cn, by_serial)
@@ -1423,14 +1446,6 @@ def certidude_serve(port, listen, fork):
         os.makedirs(const.RUN_DIR)
         os.chmod(const.RUN_DIR, 0o755)
 
-    # TODO: umask!
-
-
-    from logging.handlers import RotatingFileHandler
-    rh = RotatingFileHandler("/var/log/certidude.log", maxBytes=1048576*5, backupCount=5)
-    rh.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
-    log_handlers.append(rh)
-
     click.echo("Users subnets: %s" %
         ", ".join([str(j) for j in config.USER_SUBNETS]))
     click.echo("Administrative subnets: %s" %
@@ -1439,10 +1454,6 @@ def certidude_serve(port, listen, fork):
         ", ".join([str(j) for j in config.AUTOSIGN_SUBNETS]))
     click.echo("Request submissions allowed from following subnets: %s" %
         ", ".join([str(j) for j in config.REQUEST_SUBNETS]))
-
-    logging.basicConfig(
-        filename=const.SERVER_LOG_PATH,
-        level=logging.DEBUG)
 
     click.echo("Serving API at %s:%d" % (listen, port))
     from wsgiref.simple_server import make_server, WSGIServer
@@ -1473,7 +1484,6 @@ def certidude_serve(port, listen, fork):
                 j.setLevel(logging.DEBUG)
                 for handler in log_handlers:
                     j.addHandler(handler)
-
 
     if not fork or not os.fork():
         pid = os.getpid()

@@ -6,9 +6,9 @@ import sys
 
 KEY_SIZE = 1024 if os.getenv("TRAVIS") else 4096
 CURVE_NAME = "secp384r1"
-RE_FQDN =  "^(([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])\.)+([a-z0-9]|[a-z0-9][a-z0-9\-]*[a-z0-9])?$"
-RE_HOSTNAME =  "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$"
-RE_COMMON_NAME = "^[A-Za-z0-9\-\.\@]+$"
+RE_FQDN =  "^(([a-z0-9]|[a-z0-9][a-z0-9\-_]*[a-z0-9])\.)+([a-z0-9]|[a-z0-9][a-z0-9\-_]*[a-z0-9])?$"
+RE_HOSTNAME =  "^[a-z0-9]([a-z0-9\-_]{0,61}[a-z0-9])?$"
+RE_COMMON_NAME = "^[A-Za-z0-9\-\.\_@]+$"
 
 RUN_DIR = "/run/certidude"
 CONFIG_DIR = "/etc/certidude"
@@ -25,6 +25,8 @@ try:
     FQDN = socket.getaddrinfo(socket.gethostname(), 0, socket.AF_INET, 0, 0, socket.AI_CANONNAME)[0][3]
 except socket.gaierror:
     FQDN = socket.gethostname()
+if hasattr(FQDN, "decode"): # Keep client backwards compatible with Python 2.x
+    FQDN = FQDN.decode("ascii")
 
 try:
     HOSTNAME, DOMAIN = FQDN.split(".", 1)

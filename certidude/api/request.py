@@ -14,7 +14,7 @@ from certidude.profile import SignatureProfile
 from datetime import datetime
 from oscrypto import asymmetric
 from oscrypto.errors import SignatureError
-from xattr import getxattr
+from xattr import getxattr, setxattr
 from .utils import AuthorityHandler
 from .utils.firewall import whitelist_subnets, whitelist_content_types
 
@@ -60,25 +60,38 @@ class RequestListResource(AuthorityHandler):
         common_name = csr["certification_request_info"]["subject"].native["common_name"]
 
         """
+        Determine whether autosign is allowed to overwrite already issued
+        certificates automatically
+        """
+
+        overwrite_allowed = False
+        for subnet in config.OVERWRITE_SUBNETS:
+            if req.context.get("remote_addr") in subnet:
+                overwrite_allowed = True
+                break
+
+
+        """
         Handle domain computer automatic enrollment
         """
         machine = req.context.get("machine")
         if machine:
-            if config.MACHINE_ENROLLMENT_ALLOWED:
-                if common_name != machine:
-                    raise falcon.HTTPBadRequest(
-                        "Bad request",
-                        "Common name %s differs from Kerberos credential %s!" % (common_name, machine))
+            reasons.append("machine enrollment not allowed from %s" % req.context.get("remote_addr"))
+            for subnet in config.MACHINE_ENROLLMENT_SUBNETS:
+                if req.context.get("remote_addr") in subnet:
+                    if common_name != machine:
+                        raise falcon.HTTPBadRequest(
+                            "Bad request",
+                            "Common name %s differs from Kerberos credential %s!" % (common_name, machine))
 
-                # Automatic enroll with Kerberos machine cerdentials
-                resp.set_header("Content-Type", "application/x-pem-file")
-                cert, resp.body = self.authority._sign(csr, body,
-                    profile=config.PROFILES["rw"], overwrite=True)
-                logger.info("Automatically enrolled Kerberos authenticated machine %s from %s",
-                    machine, req.context.get("remote_addr"))
-                return
-            else:
-                reasons.append("Machine enrollment not allowed")
+                    # Automatic enroll with Kerberos machine cerdentials
+                    resp.set_header("Content-Type", "application/x-pem-file")
+                    cert, resp.body = self.authority._sign(csr, body,
+                        profile=config.PROFILES["rw"], overwrite=overwrite_allowed)
+                    logger.info("Automatically enrolled Kerberos authenticated machine %s from %s",
+                        machine, req.context.get("remote_addr"))
+                    return
+
 
         """
         Attempt to renew certificate using currently valid key pair
@@ -94,58 +107,61 @@ class RequestListResource(AuthorityHandler):
             # Same public key
             if cert_pk == csr_pk:
                 buf = req.get_header("X-SSL-CERT")
-                # Used mutually authenticated TLS handshake, assume renewal
                 if buf:
-                    header, _, der_bytes = pem.unarmor(buf.replace("\t", "").encode("ascii"))
+                    # Used mutually authenticated TLS handshake, assume renewal
+                    header, _, der_bytes = pem.unarmor(buf.replace("\t", "\n").replace("\n\n", "\n").encode("ascii"))
                     handshake_cert = x509.Certificate.load(der_bytes)
                     if handshake_cert.native == cert.native:
                         for subnet in config.RENEWAL_SUBNETS:
                             if req.context.get("remote_addr") in subnet:
                                 resp.set_header("Content-Type", "application/x-x509-user-cert")
+                                setxattr(path, "user.revocation.reason", "superseded")
                                 _, resp.body = self.authority._sign(csr, body, overwrite=True,
                                     profile=SignatureProfile.from_cert(cert))
                                 logger.info("Renewing certificate for %s as %s is whitelisted", common_name, req.context.get("remote_addr"))
                                 return
-
-                # No header supplied, redirect to signed API call
-                resp.status = falcon.HTTP_SEE_OTHER
-                resp.location = os.path.join(os.path.dirname(req.relative_uri), "signed", common_name)
-                return
+                    reasons.append("renewal failed")
+                else:
+                    # No renewal requested, redirect to signed API call
+                    resp.status = falcon.HTTP_SEE_OTHER
+                    resp.location = os.path.join(os.path.dirname(req.relative_uri), "signed", common_name)
+                    return
 
 
         """
         Process automatic signing if the IP address is whitelisted,
         autosigning was requested and certificate can be automatically signed
         """
+
         if req.get_param_as_bool("autosign"):
-            if not self.authority.server_flags(common_name):
-                for subnet in config.AUTOSIGN_SUBNETS:
-                    if req.context.get("remote_addr") in subnet:
-                        try:
-                            resp.set_header("Content-Type", "application/x-pem-file")
-                            _, resp.body = self.authority._sign(csr, body, profile=config.PROFILES["rw"])
-                            logger.info("Autosigned %s as %s is whitelisted", common_name, req.context.get("remote_addr"))
-                            return
-                        except EnvironmentError:
-                            logger.info("Autosign for %s from %s failed, signed certificate already exists",
-                                common_name, req.context.get("remote_addr"))
-                            reasons.append("Autosign failed, signed certificate already exists")
-                        break
-                else:
-                    reasons.append("Autosign failed, IP address not whitelisted")
+            for subnet in config.AUTOSIGN_SUBNETS:
+                if req.context.get("remote_addr") in subnet:
+                    try:
+                        resp.set_header("Content-Type", "application/x-pem-file")
+                        _, resp.body = self.authority._sign(csr, body,
+                            overwrite=overwrite_allowed, profile=config.PROFILES["rw"])
+                        logger.info("Autosigned %s as %s is whitelisted", common_name, req.context.get("remote_addr"))
+                        return
+                    except EnvironmentError:
+                        logger.info("Autosign for %s from %s failed, signed certificate already exists",
+                            common_name, req.context.get("remote_addr"))
+                        reasons.append("autosign failed, signed certificate already exists")
+                    break
             else:
-                reasons.append("Autosign failed, only client certificates allowed to be signed automatically")
+                reasons.append("autosign failed, IP address not whitelisted")
+        else:
+            reasons.append("autosign not requested")
 
         # Attempt to save the request otherwise
         try:
             request_path, _, _ = self.authority.store_request(body,
                 address=str(req.context.get("remote_addr")))
         except errors.RequestExists:
-            reasons.append("Same request already uploaded exists")
+            reasons.append("same request already uploaded exists")
             # We should still redirect client to long poll URL below
         except errors.DuplicateCommonNameError:
             # TODO: Certificate renewal
-            logger.warning("Rejected signing request with overlapping common name from %s",
+            logger.warning("rejected signing request with overlapping common name from %s",
                 req.context.get("remote_addr"))
             raise falcon.HTTPConflict(
                 "CSR with such CN already exists",
@@ -154,14 +170,15 @@ class RequestListResource(AuthorityHandler):
             push.publish("request-submitted", common_name)
 
         # Wait the certificate to be signed if waiting is requested
-        logger.info("Stored signing request %s from %s", common_name, req.context.get("remote_addr"))
+        logger.info("Stored signing request %s from %s, reasons: %s", common_name, req.context.get("remote_addr"), reasons)
+
         if req.get_param("wait"):
             # Redirect to nginx pub/sub
             url = config.LONG_POLL_SUBSCRIBE % hashlib.sha256(body).hexdigest()
             click.echo("Redirecting to: %s"  % url)
             resp.status = falcon.HTTP_SEE_OTHER
             resp.set_header("Location", url)
-            logger.debug("Redirecting signing request from %s to %s", req.context.get("remote_addr"), url)
+            logger.debug("Redirecting signing request from %s to %s, reasons: %s", req.context.get("remote_addr"), url, ", ".join(reasons))
         else:
             # Request was accepted, but not processed
             resp.status = falcon.HTTP_202
