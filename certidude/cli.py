@@ -1142,15 +1142,17 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
                 click.echo("Creating directory %s" % subdir)
                 os.makedirs(subdir)
 
-        # Copy fonts
-        click.echo("Copying fonts...")
-        os.system("rsync -avq /usr/local/lib/node_modules/font-awesome/fonts/ %s/fonts/" % assets_dir)
-
         # Install JavaScript pacakges
         if skip_packages:
             click.echo("Not attempting to install packages from NPM as requested...")
         else:
-            os.system("npm install --silent -g nunjucks@2.5.2 nunjucks-date@1.2.0 node-forge bootstrap@4.0.0-alpha.6 jquery timeago tether font-awesome qrcode-svg")
+            cmd = "npm install --silent -g nunjucks@2.5.2 nunjucks-date@1.2.0 node-forge bootstrap@4.0.0-alpha.6 jquery timeago tether font-awesome qrcode-svg"
+            click.echo("Installing JavaScript packages: %s" % cmd)
+            assert os.system(cmd) == 0
+
+        # Copy fonts
+        click.echo("Copying fonts...")
+        os.system("rsync -avq /usr/local/lib/node_modules/font-awesome/fonts/ %s/fonts/" % assets_dir)
 
         # Compile nunjucks templates
         cmd = 'nunjucks-precompile --include ".html$" --include ".ps1$" --include ".sh$" --include ".svg" %s > %s.part' % (static_path, bundle_js)
