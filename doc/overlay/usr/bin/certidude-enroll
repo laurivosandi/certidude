@@ -1,5 +1,8 @@
 #!/bin/sh
 
+set -e
+set -x
+
 AUTHORITY=certidude.@authority[0]
 
 # TODO: iterate over all authorities
@@ -29,7 +32,6 @@ logger -t certidude -s "Time is now: $(date)"
 if [ -f $CERTIFICATE_PATH ]; then
     SERIAL=$(openssl x509 -in $CERTIFICATE_PATH -noout -serial | cut -d "=" -f 2 | tr [A-F] [a-f])
     logger -t certidude -s "Certificate with serial $SERIAL already exists in $CERTIFICATE_PATH, attempting to bring up VPN tunnel..."
-    ipsec restart
     exit 0
 fi
 
@@ -39,15 +41,19 @@ fi
 #########################################
 
 if [ ! -f $KEY_PATH ]; then
-
-    logger -t certidude -s "Generating $KEY_TYPE key for VPN..."
-
     case $KEY_TYPE in
         rsa)
+            logger -t certidude -s "Generating $KEY_LENGTH-bit RSA key..."
             openssl genrsa -out $KEY_PATH.part $KEY_LENGTH
+            openssl rsa -in $KEY_PATH.part -noout
             ;;
         ec)
+            logger -t certidude -s "Generating $KEY_CURVE ECDSA key..."
             openssl ecparam -name $KEY_CURVE -genkey -noout -out $KEY_PATH.part
+            ;;
+        *)
+            logger -t certidude -s "Unsupported key type $KEY_TYPE"
+            exit 255
             ;;
     esac
     mv $KEY_PATH.part $KEY_PATH
@@ -120,4 +126,5 @@ mv $CERTIFICATE_PATH.part $CERTIFICATE_PATH
 
 # Start services
 logger -t certidude -s "Starting IPSec IKEv2 daemon..."
-ipsec restart
+/etc/init.d/ipsec enable
+/etc/init.d/ipsec restart

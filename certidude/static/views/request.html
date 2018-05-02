@@ -1,5 +1,5 @@
-<p>
-<div id="request-{{ request.common_name | replace('@', '--') | replace('.', '-') }}" class="card">
+<div id="request-{{ request.common_name | replace('@', '--') | replace('.', '-') }}" class="card filterable mt-3"
+  data-keywords="{{ request.common_name }}|">
   <div class="card-header">
     {% if certificate.server %}
       <i class="fa fa-server"></i>
@@ -62,4 +62,3 @@ curl http://{{ window.location.hostname }}/api/request/{{ request.common_name }}
     </div>
   </div>
 </div>
-</p>

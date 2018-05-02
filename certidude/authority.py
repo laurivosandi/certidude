@@ -48,7 +48,7 @@ with open(config.AUTHORITY_PRIVATE_KEY_PATH, "rb") as fh:
     header, _, key_der_bytes = pem.unarmor(key_buf)
     private_key = asymmetric.load_private_key(key_der_bytes)
 
-def self_enroll():
+def self_enroll(skip_notify=False):
     assert os.getuid() == 0 and os.getgid() == 0, "Can self-enroll only as root"
 
     from certidude import const
@@ -87,7 +87,7 @@ def self_enroll():
         click.echo("Writing request to %s" % path)
         with open(path, "wb") as fh:
             fh.write(pem_armor_csr(request)) # Write CSR with certidude permissions
-        authority.sign(common_name, skip_push=True, overwrite=True, profile=config.PROFILES["srv"])
+        authority.sign(common_name, skip_notify=skip_notify, skip_push=True, overwrite=True, profile=config.PROFILES["srv"])
         sys.exit(0)
     else:
         os.waitpid(pid, 0)
@@ -243,21 +243,9 @@ def revoke(common_name, reason):
     attach_cert = buf, "application/x-pem-file", common_name + ".crt"
     mailer.send("certificate-revoked.md",
         attachments=(attach_cert,),
-        serial_hex="%040x" % cert.serial_number,
+        serial_hex="%x" % cert.serial_number,
         common_name=common_name)
     return revoked_path
-
-def server_flags(cn):
-    if config.USER_ENROLLMENT_ALLOWED and not config.USER_MULTIPLE_CERTIFICATES:
-        # Common name set to username, used for only HTTPS client validation anyway
-        return False
-    if "@" in cn:
-        # username@hostname is user certificate anyway, can't be server
-        return False
-    if "." in cn:
-        # CN is hostname, if contains dot has to be FQDN, hence a server
-        return True
-    return False
 
 
 def list_requests(directory=config.REQUESTS_DIR):
@@ -297,12 +285,16 @@ def list_signed(directory=config.SIGNED_DIR, common_name=None):
         path, buf, cert, signed, expires = get_signed(basename)
         yield basename, path, buf, cert, signed, expires
 
-def list_revoked(directory=config.REVOKED_DIR):
-    for filename in os.listdir(directory):
+def list_revoked(directory=config.REVOKED_DIR, limit=0):
+    for filename in sorted(os.listdir(directory), reverse=True):
         if filename.endswith(".pem"):
             common_name = filename[:-4]
             path, buf, cert, signed, expired, revoked, reason = get_revoked(common_name)
             yield cert.subject.native["common_name"], path, buf, cert, signed, expired, revoked, reason
+        if limit:
+            limit -= 1
+            if limit <= 0:
+                return
 
 
 def list_server_names():
@@ -324,7 +316,10 @@ def export_crl(pem=True):
         serial_number = filename[:-4]
         # TODO: Assert serial against regex
         revoked_path = os.path.join(config.REVOKED_DIR, filename)
-        reason = getxattr(revoked_path, "user.revocation.reason").decode("ascii") # TODO: dedup
+        try:
+            reason = getxattr(revoked_path, "user.revocation.reason").decode("ascii") # TODO: dedup
+        except IOError: # TODO: make sure it's not required
+            reason = "key_compromise"
 
         # TODO: Skip expired certificates
         s = os.stat(revoked_path)
@@ -404,7 +399,7 @@ def _sign(csr, buf, profile, skip_notify=False, skip_push=False, overwrite=False
 
         if overwrite:
             # TODO: is this the best approach?
-            prev_serial_hex = "%040x" % prev.serial_number
+            prev_serial_hex = "%x" % prev.serial_number
             revoked_path = os.path.join(config.REVOKED_DIR, "%s.pem" % prev_serial_hex)
             os.rename(cert_path, revoked_path)
             attachments += [(prev_buf, "application/x-pem-file", "deprecated.crt" if renew else "overwritten.crt")]
@@ -433,7 +428,7 @@ def _sign(csr, buf, profile, skip_notify=False, skip_push=False, overwrite=False
 
     os.rename(cert_path + ".part", cert_path)
     attachments.append((end_entity_cert_buf, "application/x-pem-file", common_name + ".crt"))
-    cert_serial_hex = "%040x" % end_entity_cert.serial_number
+    cert_serial_hex = "%x" % end_entity_cert.serial_number
 
     # Create symlink
     link_name = os.path.join(config.SIGNED_BY_SERIAL_DIR, "%040x.pem" % end_entity_cert.serial_number)

@@ -1,5 +1,5 @@
-<p>
-<div id="certificate-{{ certificate.common_name | replace('@', '--') | replace('.', '-') }}" class="card">
+<div id="certificate-{{ certificate.common_name | replace('@', '--') | replace('.', '-') }}" class="card filterable mt-3"
+  data-keywords="{{ certificate.common_name }}|{% if session.authority.tagging %}{% for tag in certificate.tags %}{{ tag.id }}|{% endfor %}{% endif %}{% for key, value in certificate.attributes %}{{ key }}={{ value }}|{% endfor %}">
   <div class="card-header">
     {% if certificate.organizational_unit %}
       <i class="fa fa-folder" aria-hidden="true"></i>
@@ -121,4 +121,3 @@ openssl ocsp -issuer session.pem -CAfile session.pem \
     </div>
   </div>
 </div>
-</p>

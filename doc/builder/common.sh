@@ -45,19 +45,12 @@ config authority
 
 EOF
 
-
-cat << EOF > $OVERLAY/etc/uci-defaults/40-disable-ipsec
-/etc/init.d/ipsec disable
-EOF
-
 case $AUTHORITY_CERTIFICATE_ALGORITHM in
     rsa)
         echo ": RSA /etc/certidude/authority/$AUTHORITY/host_key.pem" >> $OVERLAY/etc/ipsec.secrets
-        DHGROUP=modp2048
         ;;
     ec)
         echo ": ECDSA /etc/certidude/authority/$AUTHORITY/host_key.pem" >> $OVERLAY/etc/ipsec.secrets
-        DHGROUP=ecp384
         ;;
     *)
         echo "Unknown algorithm $AUTHORITY_CERTIFICATE_ALGORITHM"
@@ -96,8 +89,8 @@ conn %default
     keyingtries=%forever
     dpdaction=restart
     closeaction=restart
-    ike=aes256-sha384-ecp384!
-    esp=aes128gcm16-aes128gmac!
+    ike=$IKE
+    esp=$ESP
     left=%defaultroute
     leftcert=/etc/certidude/authority/$AUTHORITY/host_cert.pem
     leftca="$AUTHORITY_CERTIFICATE_DISTINGUISHED_NAME"
@@ -106,7 +99,7 @@ conn %default
 conn client-to-site
     auto=start
     right="$ROUTER"
-    rightsubnet=0.0.0.0/0
+    rightsubnet="$SUBNETS"
     leftsourceip=%config
     leftupdown=/etc/certidude/authority/$AUTHORITY/updown
 

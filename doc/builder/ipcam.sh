@@ -41,4 +41,4 @@ EOF
 make -C $BUILD/$BASENAME image FILES=$OVERLAY PROFILE=$PROFILE PACKAGES="openssl-util curl ca-certificates \
     strongswan-default strongswan-mod-openssl strongswan-mod-curl strongswan-mod-ccm strongswan-mod-gcm htop \
     iftop tcpdump nmap nano mtr patch diffutils ipset usbutils luci luci-app-mjpg-streamer kmod-video-uvc dropbear \
-    pciutils -dnsmasq -odhcpd -odhcp6c -kmod-ath9k picocom strongswan-mod-kernel-libipsec kmod-tun bc"
+    pciutils -dnsmasq -odhcpd -odhcp6c -kmod-ath9k picocom strongswan-mod-kernel-libipsec kmod-tun"

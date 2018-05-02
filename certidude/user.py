@@ -82,6 +82,7 @@ class DirectoryConnection(object):
 
     def __exit__(self, type, value, traceback):
         self.conn.unbind_s()
+        del os.environ["KRB5CCNAME"] # prevent contaminating environment
 
 
 class ActiveDirectoryUserManager(object):

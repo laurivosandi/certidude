@@ -1,9 +1,9 @@
 import logging
 from xattr import getxattr, removexattr, setxattr
 from certidude import push
-from certidude.auth import login_required, authorize_admin
 from certidude.decorators import serialize, csrf_protection
 from .utils import AuthorityHandler
+from .utils.firewall import login_required, authorize_admin
 
 logger = logging.getLogger(__name__)
 

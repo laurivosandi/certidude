@@ -5,9 +5,10 @@ import logging
 import os
 import subprocess
 from certidude import config, const, authority
-from certidude.auth import login_required, authorize_admin
 from certidude.common import cert_to_dn
+from ipaddress import ip_network
 from jinja2 import Template
+from .utils.firewall import login_required, authorize_admin
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,7 @@ class ImageBuilderResource(object):
     def on_get(self, req, resp, profile, suggested_filename):
         router = [j[0] for j in authority.list_signed(
             common_name=config.cp2.get(profile, "router"))][0]
+        subnets = set([ip_network(j) for j in config.cp2.get(profile, "subnets").split(" ")])
         model = config.cp2.get(profile, "model")
         build_script_path = config.cp2.get(profile, "command")
         overlay_path = config.cp2.get(profile, "overlay")
@@ -40,6 +42,9 @@ class ImageBuilderResource(object):
             cwd=os.path.dirname(os.path.realpath(build_script_path)),
             env={"PROFILE": model, "PATH":"/usr/sbin:/usr/bin:/sbin:/bin",
                 "ROUTER": router,
+                "IKE": config.cp2.get(profile, "ike"),
+                "ESP": config.cp2.get(profile, "esp"),
+                "SUBNETS": ",".join(str(j) for j in subnets),
                 "AUTHORITY_CERTIFICATE_ALGORITHM": authority.public_key.algorithm,
                 "AUTHORITY_CERTIFICATE_DISTINGUISHED_NAME": cert_to_dn(authority.certificate),
                 "BUILD":build, "OVERLAY":build + "/overlay/"},

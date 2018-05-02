@@ -24,7 +24,6 @@ from glob import glob
 from ipaddress import ip_network
 from oscrypto import asymmetric
 
-
 logger = logging.getLogger(__name__)
 
 # http://www.mad-hacking.net/documentation/linux/security/ssl-tls/creating-ca.xml
@@ -569,6 +568,10 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
                 nm_config.set("vpn", "key", key_path)
                 nm_config.set("vpn", "cert", certificate_path)
                 nm_config.set("vpn", "ca", authority_path)
+                nm_config.set("vpn", "tls-cipher", "TLS-%s-WITH-AES-128-GCM-SHA384" % (
+                    "ECDHE-ECDSA" if authority_public_key.algorithm == "ec" else "DHE-RSA"))
+                nm_config.set("vpn", "cipher", "AES-128-GCM")
+                nm_config.set("vpn", "auth", "SHA384")
                 nm_config.add_section("ipv4")
                 nm_config.set("ipv4", "method", "auto")
                 nm_config.set("ipv4", "never-default", "true")
@@ -617,6 +620,11 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
                 nm_config.set("vpn", "userkey", key_path)
                 nm_config.set("vpn", "usercert", certificate_path)
                 nm_config.set("vpn", "certificate", authority_path)
+                dhgroup = "ecp384" if authority_public_key.algorithm == "ec" else "modp2048"
+                nm_config.set("vpn", "ike", "aes256-sha384-prfsha384-" + dhgroup)
+                nm_config.set("vpn", "esp", "aes128gcm16-aes128gmac-" + dhgroup)
+                nm_config.set("vpn", "proposal", "yes")
+
                 nm_config.add_section("ipv4")
                 nm_config.set("ipv4", "method", "auto")
 
@@ -982,13 +990,12 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
 @click.option("--organizational-unit", "-ou", default="Certificate Authority")
 @click.option("--push-server", help="Push server, by default http://%s" % const.FQDN)
 @click.option("--directory", help="Directory for authority files")
-@click.option("--server-flags", is_flag=True, help="Add TLS Server and IKE Intermediate extended key usage flags")
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
 @click.option("--skip-packages", is_flag=True, help="Don't attempt to install apt/pip/npm packages")
 @click.option("--elliptic-curve", "-e", is_flag=True, help="Generate EC instead of RSA keypair")
 @fqdn_required
-def certidude_setup_authority(username, kerberos_keytab, nginx_config, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, server_flags, title, skip_packages, elliptic_curve):
-    assert subprocess.check_output(["/usr/bin/lsb_release", "-cs"]) == b"xenial\n", "Only Ubuntu 16.04 supported at the moment"
+def certidude_setup_authority(username, kerberos_keytab, nginx_config, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, title, skip_packages, elliptic_curve):
+    assert subprocess.check_output(["/usr/bin/lsb_release", "-cs"]) in (b"trusty\n", b"xenial\n", b"bionic\n"), "Only Ubuntu 16.04 supported at the moment"
     assert os.getuid() == 0 and os.getgid() == 0, "Authority can be set up only by root"
 
     import pwd
@@ -1047,6 +1054,9 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
     ca_cert = os.path.join(directory, "ca_cert.pem")
     sqlite_path = os.path.join(directory, "meta", "db.sqlite")
 
+    # Builder variables
+    dhgroup = "ecp384" if elliptic_curve else "modp2048"
+
     try:
         pwd.getpwnam("certidude")
         click.echo("User 'certidude' already exists")
@@ -1084,6 +1094,9 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
     else:
         click.echo("Warning: /etc/krb5.keytab or /etc/samba/smb.conf not found, Kerberos unconfigured")
 
+    letsencrypt_fullchain = "/etc/letsencrypt/live/%s/fullchain.pem" % common_name
+    letsencrypt_privkey = "/etc/letsencrypt/live/%s/privkey.pem" % common_name
+    letsencrypt = os.path.exists(letsencrypt_fullchain)
     doc_path = os.path.join(os.path.realpath(os.path.dirname(os.path.dirname(__file__))), "doc")
     script_dir = os.path.join(os.path.realpath(os.path.dirname(__file__)), "templates", "script")
 
@@ -1140,9 +1153,9 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
             os.system("npm install --silent -g nunjucks@2.5.2 nunjucks-date@1.2.0 node-forge bootstrap@4.0.0-alpha.6 jquery timeago tether font-awesome qrcode-svg")
 
         # Compile nunjucks templates
-        cmd = 'nunjucks-precompile --include ".html$" --include ".svg" %s > %s.part' % (static_path, bundle_js)
+        cmd = 'nunjucks-precompile --include ".html$" --include ".ps1$" --include ".sh$" --include ".svg" %s > %s.part' % (static_path, bundle_js)
         click.echo("Compiling templates: %s" % cmd)
-        os.system(cmd)
+        assert os.system(cmd) == 0
 
         # Assemble bundle.js
         click.echo("Assembling %s" % bundle_js)
@@ -1265,8 +1278,17 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
     else:
         os.waitpid(bootstrap_pid, 0)
         from certidude import authority
-        authority.self_enroll()
+        authority.self_enroll(skip_notify=True)
         assert os.getuid() == 0 and os.getgid() == 0, "Enroll contaminated environment"
+        click.echo("Enabling and starting Certidude backend")
+        os.system("systemctl enable certidude")
+        os.system("systemctl restart certidude")
+        click.echo("Enabling and starting nginx")
+        os.system("systemctl enable nginx")
+        os.system("systemctl start nginx")
+        os.system("systemctl reload nginx")
+        click.echo()
+
         click.echo("To enable e-mail notifications install Postfix as sattelite system and set mailer address in %s" % const.SERVER_CONFIG_PATH)
         click.echo()
         click.echo("Use following commands to inspect the newly created files:")
@@ -1274,11 +1296,6 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
         click.echo("  openssl x509 -text -noout -in %s | less" % ca_cert)
         click.echo("  openssl rsa -check -in %s" % ca_key)
         click.echo("  openssl verify -CAfile %s %s" % (ca_cert, ca_cert))
-        click.echo()
-        click.echo("To enable and start the service:")
-        click.echo()
-        click.echo("  systemctl enable certidude")
-        click.echo("  systemctl start certidude")
         return 0
 
 

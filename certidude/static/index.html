@@ -19,40 +19,23 @@
 
       <div class="collapse navbar-collapse" id="navbarsExampleDefault">
         <ul class="navbar-nav mr-auto">
-          <li class="nav-item active">
-            <a class="nav-link" href="#">Dashboard <span class="sr-only">(current)</span></a>
-          </li>
           <li class="nav-item">
-            <a class="nav-link" href="#">Settings</a>
+            <a class="nav-link disabled dashboard" href="#">Dashboard</a>
           </li>
           <li class="nav-item">
             <a class="nav-link disabled log" href="#">Log</a>
           </li>
         </ul>
         <form class="form-inline my-2 my-lg-0">
-          <input class="form-control mr-sm-2" type="search" placeholder="🔍">
+          <input id="search" class="form-control mr-sm-2" type="search" placeholder="🔍">
         </form>
       </div>
     </nav>
-    <div id="view-dashboard" class="container-fluid">
-      <div id="view">
-          <div class="loader-container">
-            <div class="loader"></div>
-            <p>Loading certificate authority...</p>
-          </div>
-      </div>
-    </div>
-    <div id="view-log" class="container-fluid" style="margin: 5em 0 0 0; display: none;">
-        <h1>Log</h1>
-        <div class="btn-group" data-toggle="buttons">
-          <label class="btn btn-primary active"><input id="log-level-critical" type="checkbox" autocomplete="off" checked> Critical</label>
-          <label class="btn btn-primary active"><input id="log-level-errors" type="checkbox" autocomplete="off" checked> Errors</label>
-          <label class="btn btn-primary active"><input id="log-level-warnings" type="checkbox" autocomplete="off" checked> Warnings</label>
-          <label class="btn btn-primary active"><input id="log-level-info" type="checkbox" autocomplete="off" checked> Info</label>
-          <label class="btn btn-primary"><input id="log-level-debug" type="checkbox" autocomplete="off"> Debug</label>
+    <div id="view-dashboard" class="container-fluid" style="margin: 5em 0 0 0;">
+        <div class="loader-container">
+          <div class="loader"></div>
+          <p>Loading certificate authority...</p>
         </div>
-        <ul id="log-entries" class="list-group">
-        </ul>
     </div>
     <footer class="footer">
       <div class="container">

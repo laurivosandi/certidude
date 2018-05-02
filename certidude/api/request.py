@@ -8,7 +8,6 @@ from asn1crypto import pem, x509
 from asn1crypto.csr import CertificationRequest
 from base64 import b64decode
 from certidude import config, push, errors
-from certidude.auth import login_required, login_optional, authorize_admin
 from certidude.decorators import csrf_protection, MyEncoder
 from certidude.profile import SignatureProfile
 from datetime import datetime
@@ -16,7 +15,8 @@ from oscrypto import asymmetric
 from oscrypto.errors import SignatureError
 from xattr import getxattr, setxattr
 from .utils import AuthorityHandler
-from .utils.firewall import whitelist_subnets, whitelist_content_types
+from .utils.firewall import whitelist_subnets, whitelist_content_types, \
+    login_required, login_optional, authorize_admin
 
 logger = logging.getLogger(__name__)
 
@@ -219,7 +219,6 @@ class RequestDetailResource(AuthorityHandler):
             resp.body = json.dumps(dict(
                 submitted = submitted,
                 common_name = cn,
-                server = self.authority.server_flags(cn),
                 address = getxattr(path, "user.request.address").decode("ascii"), # TODO: move to authority.py
                 md5sum = hashlib.md5(buf).hexdigest(),
                 sha1sum = hashlib.sha1(buf).hexdigest(),

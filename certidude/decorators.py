@@ -42,7 +42,7 @@ def csrf_protection(func):
 
 class MyEncoder(json.JSONEncoder):
     def default(self, obj):
-        from certidude.auth import User
+        from certidude.user import User
         if isinstance(obj, ipaddress._IPAddressBase):
             return str(obj)
         if isinstance(obj, set):

@@ -23,22 +23,12 @@ def cn_to_dn(common_name, namespace, o=None, ou=None):
     from asn1crypto.x509 import Name, RelativeDistinguishedName, NameType, DirectoryString, RDNSequence, NameTypeAndValue, UTF8String, DNSName
 
     rdns = []
-    rdns.append(RelativeDistinguishedName([
-        NameTypeAndValue({
-            'type': NameType.map("common_name"),
-            'value': DirectoryString(
-                name="utf8_string",
-                value=UTF8String(common_name))
-        })
-    ]))
 
-    if ou:
+    for dc in reversed(namespace.split(".")):
         rdns.append(RelativeDistinguishedName([
             NameTypeAndValue({
-                'type': NameType.map("organizational_unit_name"),
-                'value': DirectoryString(
-                    name="utf8_string",
-                    value=UTF8String(ou))
+                'type': NameType.map("domain_component"),
+                'value': DNSName(value=dc)
             })
         ]))
 
@@ -52,13 +42,24 @@ def cn_to_dn(common_name, namespace, o=None, ou=None):
             })
         ]))
 
-    for dc in namespace.split("."):
+    if ou:
         rdns.append(RelativeDistinguishedName([
             NameTypeAndValue({
-                'type': NameType.map("domain_component"),
-                'value': DNSName(value=dc)
+                'type': NameType.map("organizational_unit_name"),
+                'value': DirectoryString(
+                    name="utf8_string",
+                    value=UTF8String(ou))
             })
         ]))
+
+    rdns.append(RelativeDistinguishedName([
+        NameTypeAndValue({
+            'type': NameType.map("common_name"),
+            'value': DirectoryString(
+                name="utf8_string",
+                value=UTF8String(common_name))
+        })
+    ]))
 
     return Name(name='', value=RDNSequence(rdns))
 

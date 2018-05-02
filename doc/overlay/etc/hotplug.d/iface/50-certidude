@@ -7,4 +7,4 @@ AUTHORITY=certidude.@authority[0]
 [ $ACTION == "ifup" ] || exit 0
 [ $INTERFACE == "$(uci get $AUTHORITY.trigger)" ] || exit 0
 
-/usr/bin/certidude-enroll
+/usr/bin/certidude-enroll > /var/log/certidude.log 2>&1

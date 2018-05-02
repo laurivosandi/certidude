@@ -1,625 +1,162 @@
-  <div class="modal fade" id="request_submission_modal" role="dialog">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <button type="button" class="close" data-dismiss="modal">&times;</button>
-          <h4 class="modal-title">Request submission</h4>
-        </div>
-        <form action="/api/request/" method="post">
-          <div class="modal-body">
-{% if "ikev2" in session.service.protocols %}
+<div class="modal fade" id="request_submission_modal" role="dialog">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h4 class="modal-title">Request submission</h4>
+      </div>
+      <form action="/api/request/" method="post">
+        <div class="modal-body">
+          {% if "ikev2" in session.service.protocols %}
             <h5>Windows {% if session.authority.certificate.algorithm == "ec" %}10{% else %}7 and up{% endif %}</h5>
-
             <p>On Windows execute following PowerShell script</p>
+            <div class="highlight"><pre class="code"><code>{% include "snippets/windows.ps1" %}</code></pre></div>
+          {% endif %}
 
-            <div class="highlight">
-              <pre class="code"><code># Install CA certificate
-@"
-{{ session.authority.certificate.blob }}
-"@ | Out-File ca_cert.pem
-{% if session.authority.certificate.algorithm == "ec" %}
-Import-Certificate -FilePath ca_cert.pem -CertStoreLocation Cert:\LocalMachine\Root
-{% else %}
-C:\Windows\system32\certutil.exe -addstore Root ca_cert.pem
-{% endif %}
+          <h5>UNIX & UNIX-like</h5>
+          <p>For client certificates generate key pair and submit the signing request with common name set to short hostname:</p>
+          <div class="highlight">
 
-# Generate keypair and submit CSR
-$hostname = $env:computername.ToLower()
-@"
-[NewRequest]
-Subject = "CN=$hostname"
-Exportable = FALSE
-KeySpec = 1
-KeyUsage = 0xA0
-MachineKeySet = True
-ProviderType = 12
-RequestType = PKCS10
-{% if session.authority.certificate.algorithm == "ec" %}ProviderName = "Microsoft Software Key Storage Provider"
-KeyAlgorithm = ECDSA_P384
-{% else %}ProviderName = "Microsoft RSA SChannel Cryptographic Provider"
-KeyLength = 2048
-{% endif %}"@ | Out-File req.inf
-C:\Windows\system32\certreq.exe -new -f -q req.inf host_csr.pem
-Invoke-WebRequest -TimeoutSec 900 -Uri 'https://{{ authority_name }}:8443/api/request/?wait=yes&autosign=yes' -InFile host_csr.pem -ContentType application/pkcs10 -Method POST  -MaximumRedirection 3 -OutFile host_cert.pem
+            <pre class="code"><code>{% include "snippets/request-client.sh" %}</code></pre>
+          </div>
 
-# Import certificate
-{% if session.authority.certificate.algorithm == "ec" %}Import-Certificate -FilePath host_cert.pem -CertStoreLocation Cert:\LocalMachine\My
-{% else %}C:\Windows\system32\certutil.exe -addstore My host_cert.pem
-{% endif %}
-# Set up IPSec VPN tunnel
-Remove-VpnConnection -AllUserConnection -Force k-space
-Add-VpnConnection `
-  -Name k-space `
-  -ServerAddress guests.k-space.ee `
-  -AuthenticationMethod MachineCertificate `
-  -SplitTunneling `
-  -TunnelType ikev2 `
-  -PassThru -AllUserConnection
+          <p>For server certificates use fully qualified hostname as common name and sign request accordingly:</p>
+          <div class="highlight">
+            <pre class="code"><code>{% include "snippets/request-server.sh" %}</code></pre>
+          </div>
 
-# Security hardening
-Set-VpnConnectionIPsecConfiguration  `
-  -ConnectionName k-space `
-  -AuthenticationTransformConstants GCMAES128 `
-  -CipherTransformConstants GCMAES128 `
-  -EncryptionMethod AES256 `
-  -IntegrityCheckMethod SHA384 `
-  -DHGroup {% if session.authority.certificate.algorithm == "ec" %}ECP384{% else %}Group14{% endif %} `
-  -PfsGroup {% if session.authority.certificate.algorithm == "ec" %}ECP384{% else %}PFS2048{% endif %} `
-  -PassThru -AllUserConnection -Force</code></pre>
-            </div>
+          <p>To renew:</p>
 
-<!--
-AuthenticationTransformConstants - ESP integrity algorithm, one of: None MD596 SHA196 SHA256128 GCMAES128 GCMAES192 GCMAES256
-CipherTransformConstants - ESP symmetric cipher, one of: DES DES3 AES128 AES192 AES256 GCMAES128 GCMAES192 GCMAES256
-EncryptionMethod - IKE symmetric cipher, one of: DES DES3 AES128 AES192 AES256
-IntegrityCheckMethod - IKE hash algorithm, one of: MD5 SHA196 SHA256 SHA384
-DHGroup = IKE key exchange, one of: None Group1 Group2 Group14 ECP256 ECP384 Group24
-PfsGroup = one of: None PFS1 PFS2 PFS2048 ECP256 ECP384 PFSMM PFS24
--->
-{% endif %}
+          <div class="highlight">
+          <pre class="code"><code>{% include "snippets/renew.sh" %}</code></pre>
+          </div>
 
-            <h5>UNIX & UNIX-like</h5>
-
-            <p>For client certificates generate key pair and submit the signing request with common name set to short hostname:</p>
-            <div class="highlight">
-              <pre class="code"><code>test -e /sbin/uci && NAME=$(uci get system.@system[0].hostname)
-test -e /bin/hostname && NAME=$(hostname)
-test -n "$NAME" || NAME=$(cat /proc/sys/kernel/hostname)
-
-mkdir -p /etc/certidude/authority/{{ authority_name }}/
-echo {{ session.authority.certificate.md5sum }} /etc/certidude/authority/{{ authority_name }}/ca_cert.pem | md5sum -c \
- || rm -fv /etc/certidude/authority/{{ authority_name }}/*.pem
-test -e /etc/certidude/authority/{{ authority_name }}/ca_cert.pem \
- || cat << EOF > /etc/certidude/authority/{{ authority_name }}/ca_cert.pem
-{{ session.authority.certificate.blob }}EOF
-test -e /etc/certidude/authority/{{ authority_name }}/host_key.pem \
- || {% if session.authority.certificate.algorithm == "ec" %}openssl ecparam -name secp384r1 -genkey -noout \
-    -out /etc/certidude/authority/{{ authority_name }}/host_key.pem{% else %}openssl genrsa \
-    -out /etc/certidude/authority/{{ authority_name }}/host_key.pem 2048{% endif %}
-test -e /etc/certidude/authority/{{ authority_name }}/host_req.pem \
- || openssl req -new -sha384 -subj "/CN=$NAME" \
-    -key /etc/certidude/authority/{{ authority_name }}/host_key.pem \
-    -out /etc/certidude/authority/{{ authority_name }}/host_req.pem
-echo "If CSR submission fails, you can copy paste it to Certidude:"
-cat /etc/certidude/authority/{{ authority_name }}/host_req.pem
-
-test -e /etc/pki/ca-trust/source/anchors \
- && ln -s /etc/certidude/authority/{{ authority_name }}/ca_cert.pem /etc/pki/ca-trust/source/anchors/{{ authority_name }} \
- && update-ca-trust
-test -e /usr/local/share/ca-certificates/ \
- && ln -s /etc/certidude/authority/{{ authority_name }}/ca_cert.pem /usr/local/share/ca-certificates/{{ authority_name }}.crt \
- && update-ca-certificates
-
-curl -f -L -H "Content-type: application/pkcs10" \
-    --data-binary @/etc/certidude/authority/{{ authority_name }}/host_req.pem \
-    -o /etc/certidude/authority/{{ authority_name }}/host_cert.pem \
-    'http://{{ authority_name }}/api/request/?wait=yes&autosign=yes'
-</code></pre>
-            </div>
-
-            <p>For server certificates use fully qualified hostname as common name and sign request accordingly:</p>
-            <div class="highlight">
-              <pre class="code"><code>test -e /sbin/uci && NAME=$(nslookup $(uci get network.wan.ipaddr) |  grep "name =" | head -n1 | cut -d "=" -f 2 | xargs)
-test -e /bin/hostname && NAME=$(hostname -f)
-test -n "$NAME" || NAME=$(cat /proc/sys/kernel/hostname)
-
-mkdir -p /etc/certidude/authority/{{ authority_name }}/
-echo {{ session.authority.certificate.md5sum }} /etc/certidude/authority/{{ authority_name }}/ca_cert.pem | md5sum -c \
- || rm -fv /etc/certidude/authority/{{ authority_name }}/*.pem
-test -e /etc/certidude/authority/{{ authority_name }}/ca_cert.pem \
- || cat << EOF > /etc/certidude/authority/{{ authority_name }}/ca_cert.pem
-{{ session.authority.certificate.blob }}EOF
-test -e /etc/certidude/authority/{{ authority_name }}/host_key.pem \
- || {% if session.authority.certificate.algorithm == "ec" %}openssl ecparam -name secp384r1 -genkey -noout \
-    -out /etc/certidude/authority/{{ authority_name }}/host_key.pem{% else %}openssl genrsa \
-    -out /etc/certidude/authority/{{ authority_name }}/host_key.pem 2048{% endif %}
-test -e /etc/certidude/authority/{{ authority_name }}/host_req.pem \
- || openssl req -new -sha384 -subj "/CN=$NAME" \
-    -key /etc/certidude/authority/{{ authority_name }}/host_key.pem \
-    -out /etc/certidude/authority/{{ authority_name }}/host_req.pem
-echo "If CSR submission fails, you can copy paste it to Certidude:"
-cat /etc/certidude/authority/{{ authority_name }}/host_req.pem
-
-curl -f -L -H "Content-type: application/pkcs10" \
-    --cacert /etc/certidude/authority/{{ authority_name }}/ca_cert.pem \
-    --data-binary @/etc/certidude/authority/{{ authority_name }}/host_req.pem \
-    -o /etc/certidude/authority/{{ authority_name }}/host_cert.pem \
-    'https://{{ authority_name }}:8443/api/request/?wait=yes'
-</code></pre>
-            </div>
-
-            <p>To renew:</p>
-
-            <div class="highlight">
-              <pre class="code"><code>curl -f -L -H "Content-type: application/pkcs10" \
-    --cacert /etc/certidude/authority/{{ authority_name }}/ca_cert.pem \
-    --key /etc/certidude/authority/{{ authority_name }}/host_key.pem \
-    --cert /etc/certidude/authority/{{ authority_name }}/host_cert.pem \
-    --data-binary @/etc/certidude/authority/{{ authority_name }}/host_req.pem \
-    -o /etc/certidude/authority/{{ authority_name }}/host_cert.pem \
-    'https://{{ authority_name }}:8443/api/request/?wait=yes'
-</code></pre>
-            </div>
-
-{% if "openvpn" in session.service.protocols %}
-
+          {% if "openvpn" in session.service.protocols %}
             <h5>OpenVPN as client</h5>
 
             <p>First acquire certificates using the snippet above.</p>
 
             <p>Then install software:</p>
 
-            <div class="highlight">
-              <pre class="code"><code># Install packages on Ubuntu & Fedora
-which apt && apt install openvpn
-which dnf && dnf install openvpn
+            <div class="highlight"><pre class="code"><code>{% include "snippets/openvpn-client.sh" %}</code></pre></div>
+          {% endif %}
 
-cat > /etc/openvpn/{{ authority_name }}.conf << EOF
-client
-nobind
-{% for router in session.service.routers %}
-remote {{ router }} 1194 udp
-remote {{ router }} 443 tcp-client
-{% endfor %}
-tls-version-min 1.2
-tls-cipher TLS-DHE-RSA-WITH-AES-256-GCM-SHA384
-cipher AES-128-GCM
-auth SHA384
-mute-replay-warnings
-reneg-sec 0
-remote-cert-tls server
-dev tun
-persist-tun
-persist-key
-ca /etc/certidude/authority/{{ authority_name }}/ca_cert.pem
-key /etc/certidude/authority/{{ authority_name }}/host_key.pem
-cert /etc/certidude/authority/{{ authority_name }}/host_cert.pem
-EOF
-
-systemctl restart openvpn
-</code></pre>
-            </div>
-{% endif %}
-
-{% if "ikev2" in session.service.protocols %}
+          {% if "ikev2" in session.service.protocols %}
             <h5>StrongSwan as client</h5>
 
             <p>First acquire certificates using the snippet above.</p>
 
             <p>Then install software:</p>
             <div class="highlight">
-              <pre class="code"><code># Install packages on Ubuntu & Fedora, patch Fedora paths
-which apt && apt install strongswan
-which dnf && dnf install strongswan
-test -e /etc/strongswan && test -e /etc/ipsec.conf || ln -s strongswan/ipsec.conf /etc/ipsec.conf
-test -e /etc/strongswan && test -e /etc/ipsec.d || ln -s strongswan/ipsec.d /etc/ipsec.d
-test -e /etc/strongswan && test -e /etc/ipsec.secrets || ln -s strongswan/ipsec.secrets /etc/ipsec.secrets
-
-# Hard link files to prevent Apparmor issues and have more manageable config
-ln /etc/certidude/authority/{{ authority_name }}/ca_cert.pem /etc/ipsec.d/cacerts/{{ authority_name }}.pem
-ln /etc/certidude/authority/{{ authority_name }}/host_cert.pem /etc/ipsec.d/certs/{{ authority_name }}.pem
-ln /etc/certidude/authority/{{ authority_name }}/host_key.pem /etc/ipsec.d/private/{{ authority_name }}.pem
-</code></pre>
+              <pre class="code"><code>{% include "snippets/strongswan-patching.sh" %}</code></pre>
             </div>
-
-
 
             <p>To configure StrongSwan as roadwarrior:</p>
-            <div class="highlight">
-              <pre class="code"><code>cat > /etc/ipsec.conf << EOF
-
-ca {{ authority_name }}
-    auto=add
-    cacert = {{ authority_name }}.pem
-{% if session.features.crl %}    crluri = http://{{ authority_name }}/api/revoked/{% endif %}
-{% if session.features.ocsp %}    ocspuri = http://{{ authority_name }}/api/ocsp/{% endif %}
-
-conn client-to-site
-    auto=start
-    right={{ session.service.routers[0] }}
-    rightsubnet=0.0.0.0/0
-    rightca="{{ session.authority.certificate.distinguished_name }}"
-    left=%defaultroute
-    leftcert={{ authority_name }}.pem
-    leftsourceip=%config
-    leftca="{{ session.authority.certificate.distinguished_name }}"
-    keyexchange=ikev2
-    keyingtries=%forever
-    dpdaction=restart
-    closeaction=restart
-    ike=aes256-sha384-{% if session.authority.certificate.algorithm == "ec" %}ecp384{% else %}modp2048{% endif %}!
-    esp=aes128gcm16-aes128gmac!
-
-EOF
-
-echo ": {% if session.authority.certificate.algorithm == "ec" %}ECDSA{% else %}RSA{% endif %} {{ authority_name }}.pem" > /etc/ipsec.secrets
-
-ipsec restart</code></pre>
-            </div>
+            <div class="highlight"><pre class="code"><code>{% include "snippets/strongswan-client.sh" %}</code></pre></div>
+          {% endif %}
 
 
-{% endif %}
+          <h5>OpenWrt/LEDE as VPN gateway</h5>
 
+          <p>First enroll certificates using the snippet from UNIX section above</p>
 
-            <h5>OpenWrt/LEDE as VPN gateway</h5>
+          <p>Then:</p>
+          <div class="highlight">
+            <pre class="code"><code>opkg install curl libmbedtls
+            # Derive FQDN from WAN interface's reverse DNS record
+            FQDN=$(nslookup $(uci get network.wan.ipaddr) |  grep "name =" | head -n1 | cut -d "=" -f 2 | xargs)
+            grep -c certidude /etc/sysupgrade.conf || echo /etc/certidude >> /etc/sysupgrade.conf
+{% include "snippets/gateway-updown.sh" %}
+            </code></pre>
+          </div>
 
-            <p>First enroll certificates using the snippet from UNIX section above</p>
-
-            <p>Then:</p>
-            <div class="highlight">
-              <pre class="code"><code>opkg install curl libmbedtls
-# Derive FQDN from WAN interface's reverse DNS record
-FQDN=$(nslookup $(uci get network.wan.ipaddr) |  grep "name =" | head -n1 | cut -d "=" -f 2 | xargs)
-grep -c certidude /etc/sysupgrade.conf || echo /etc/certidude >> /etc/sysupgrade.conf
-
-# Create VPN gateway up/down script for reporting client IP addresses to CA
-cat <<\EOF > /etc/certidude/authority/{{ authority_name }}/updown
-#!/bin/sh
-
-CURL="curl -m 3 -f --key /etc/certidude/authority/{{ authority_name }}/host_key.pem --cert /etc/certidude/authority/{{ authority_name }}/host_cert.pem --cacert /etc/certidude/authority/{{ authority_name }}/ca_cert.pem https://{{ authority_name }}:8443/api/lease/"
-
-case $PLUTO_VERB in
-  up-client) $CURL --data-urlencode "outer_address=$PLUTO_PEER" --data-urlencode "inner_address=$PLUTO_PEER_SOURCEIP" --data-urlencode "client=$PLUTO_PEER_ID" ;;
-  *) ;;
-esac
-
-case $script_type in
-  client-connect) $CURL --data-urlencode client=$X509_0_CN --data-urlencode serial=$tls_serial_0 --data-urlencode outer_address=$untrusted_ip --data-urlencode inner_address=$ifconfig_pool_remote_ip  ;;
-  *) ;;
-esac
-EOF
-
-chmod +x /etc/certidude/authority/{{ authority_name }}/updown
-</code></pre>
-            </div>
-
-
-{% if "openvpn" in session.service.protocols %}
-
+          {% if "openvpn" in session.service.protocols %}
             <p>Then either set up OpenVPN service:</p>
             <div class="highlight">
-              <pre class="code"><code>opkg update
-opkg install curl openssl-util openvpn-openssl
-
-{% if session.authority.certificate.algorithm != "ec" %}
-# Generate Diffie-Hellman parameters file for OpenVPN
-test -e /etc/certidude/dh.pem \
- || openssl dhparam 2048 -out /etc/certidude/dh.pem
-{% endif %}
-# Create interface definition for tunnel
-uci set network.vpn=interface
-uci set network.vpn.name='vpn'
-uci set network.vpn.ifname=tun_s2c_udp tun_s2c_tcp
-uci set network.vpn.proto='none'
-
-# Create zone definition for VPN interface
-uci set firewall.vpn=zone
-uci set firewall.vpn.name='vpn'
-uci set firewall.vpn.input='ACCEPT'
-uci set firewall.vpn.forward='ACCEPT'
-uci set firewall.vpn.output='ACCEPT'
-uci set firewall.vpn.network='vpn'
-
-# Allow UDP 1194 on WAN interface
-uci set firewall.openvpn=rule
-uci set firewall.openvpn.name='Allow OpenVPN'
-uci set firewall.openvpn.src='wan'
-uci set firewall.openvpn.dest_port=1194
-uci set firewall.openvpn.proto='udp'
-uci set firewall.openvpn.target='ACCEPT'
-
-# Allow TCP 443 on WAN interface
-uci set firewall.openvpn=rule
-uci set firewall.openvpn.name='Allow OpenVPN over TCP'
-uci set firewall.openvpn.src='wan'
-uci set firewall.openvpn.dest_port=443
-uci set firewall.openvpn.proto='tcp'
-uci set firewall.openvpn.target='ACCEPT'
-
-# Forward traffic from VPN to LAN
-uci set firewall.c2s=forwarding
-uci set firewall.c2s.src='vpn'
-uci set firewall.c2s.dest='lan'
-
-# Permit DNS queries from VPN
-uci set dhcp.@dnsmasq[0].localservice='0'
-
-touch /etc/config/openvpn
-
-# Configure OpenVPN over TCP
-uci set openvpn.s2c_tcp=openvpn
-uci set openvpn.s2c_tcp.local=$(uci get network.wan.ipaddr)
-uci set openvpn.s2c_tcp.server='10.179.43.0 255.255.255.128'
-uci set openvpn.s2c_tcp.proto='tcp-server'
-uci set openvpn.s2c_tcp.port='443'
-uci set openvpn.s2c_tcp.dev=tun_s2c_tcp
-
-# Configure OpenVPN over UDP
-uci set openvpn.s2c_udp=openvpn
-uci set openvpn.s2c_udp.local=$(uci get network.wan.ipaddr)
-uci set openvpn.s2c_udp.server='10.179.43.128 255.255.255.128'
-uci set openvpn.s2c_tcp.dev=tun_s2c_udp
-
-for section in s2c_tcp s2c_udp; do
-
-# Common paths
-uci set openvpn.$section.script_security=2
-uci set openvpn.$section.client_connect='/etc/certidude/updown'
-uci set openvpn.$section.key='/etc/certidude/authority/{{ authority_name }}/host_key.pem'
-uci set openvpn.$section.cert='/etc/certidude/authority/{{ authority_name }}/host_cert.pem'
-uci set openvpn.$section.ca='/etc/certidude/authority/{{ authority_name }}/ca_cert.pem'
-{% if session.authority.certificate.algorithm != "ec" %}uci set openvpn.$section.dh='/etc/certidude/dh.pem'{% endif %}
-uci set openvpn.$section.enabled=1
-
-# DNS and routes
-uci add_list openvpn.$section.push="route-metric 1000"
-uci add_list openvpn.$section.push="route $(uci get network.lan.ipaddr) $(uci get network.lan.netmask)"
-uci add_list openvpn.$section.push="dhcp-option DNS $(uci get network.lan.ipaddr)"
-uci add_list openvpn.$section.push="dhcp-option DOMAIN $(uci get dhcp.@dnsmasq[0].domain)"
-
-# Security hardening
-uci set openvpn.$section.tls_version_min='1.2'
-uci set openvpn.$section.tls_cipher='TLS-{% if session.authority.certificate.algorithm == "ec" %}ECDHE-ECDSA{% else %}DHE-RSA{% endif %}-WITH-AES-128-GCM-SHA384'
-uci set openvpn.$section.cipher='AES-128-GCM'
-uci set openvpn.$section.auth='SHA384'
-
-done
-
-/etc/init.d/openvpn restart
-/etc/init.d/firewall restart</code></pre>
+              <pre class="code"><code>{% include "snippets/openwrt-openvpn.sh" %}</code></pre>
             </div>
+          {% endif %}
 
-{% endif %}
-
-{% if "ikev2" in session.service.protocols %}
+          {% if "ikev2" in session.service.protocols %}
             <p>Alternatively or additionally set up StrongSwan:</p>
             <div class="highlight">
-              <pre class="code"><code>opkg update
-opkg install curl openssl-util strongswan-full strongswan-mod-openssl kmod-crypto-echainiv kmod-crypto-gcm
-
-# Generate StrongSwan config
-cat > /etc/ipsec.conf << EOF
-config setup
-    strictcrlpolicy=yes
-    uniqueids = yes
-
-ca {{ authority_name }}
-    auto=add
-    cacert = {{ authority_name }}.pem
-{% if session.features.crl %}    crluri = http://{{ authority_name }}/api/revoked/{% endif %}
-{% if session.features.ocsp %}    ocspuri = http://{{ authority_name }}/api/ocsp/{% endif %}
-
-conn default-{{ authority_name }}
-    ike=aes256-sha384-{% if session.authority.certificate.algorithm == "ec" %}ecp384{% else %}modp2048{% endif %}!
-    esp=aes128gcm16-aes128gmac!
-    left=$(uci get network.wan.ipaddr) # Bind to this IP address
-    leftid={{ session.service.routers | first }}
-    leftupdown=/etc/certidude/authority/{{ authority_name }}/updown
-    leftcert={{ authority_name }}.pem
-    leftsubnet=$(uci get network.lan.ipaddr | cut -d . -f 1-3).0/24 # Subnets pushed to roadwarriors
-    leftdns=$(uci get network.lan.ipaddr) # IP of DNS server advertised to roadwarriors
-    leftca="{{ session.authority.certificate.distinguished_name }}"
-    rightca="{{ session.authority.certificate.distinguished_name }}"
-    rightsourceip=172.21.0.0/24 # Roadwarrior virtual IP pool
-    dpddelay=0
-    dpdaction=clear
-
-conn site-to-clients
-    auto=add
-    also=default-{{ authority_name }}
-
-conn site-to-client1
-    auto=ignore
-    also=default-{{ authority_name }}
-    rightid="CN=*, OU=IP Camera, O=*, DC=*, DC=*, DC=*"
-    rightsourceip=172.21.0.1
-
-
-
-EOF
-
-echo ": {% if session.authority.certificate.algorithm == "ec" %}ECDSA{% else %}RSA{% endif %} /etc/certidude/authority/{{ authority_name }}/host_key.pem" > /etc/ipsec.secrets
-
-ipsec restart</code></pre>
+            <pre class="code"><code>opkg update
+            opkg install curl openssl-util strongswan-full strongswan-mod-openssl kmod-crypto-echainiv kmod-crypto-gcm
+            {% include "snippets/strongswan-server.sh" %}
+            ipsec restart</code></pre>
             </div>
-{% endif %}
+          {% endif %}
 
-            {% if session.authority.builder %}
+          {% if session.authority.builder %}
             <h5>OpenWrt/LEDE image builder</h5>
             <p>Hit a link to generate machine specific image. Note that this might take couple minutes to finish.</p>
             <ul>
-            {% for name, title, filename in session.authority.builder.profiles %}
+              {% for name, title, filename in session.authority.builder.profiles %}
                 <li><a href="/api/build/{{ name }}/{{ filename }}">{{ title }}</a></li>
-            {% endfor %}
+              {% endfor %}
             </ul>
-            {% endif %}
+          {% endif %}
 
-            <h5>SCEP</h5>
-            <p>Use following as the enrollment URL: http://{{ authority_name }}/cgi-bin/pkiclient.exe</p>
+          <h5>SCEP</h5>
+          <p>Use following as the enrollment URL: http://{{ authority_name }}/cgi-bin/pkiclient.exe</p>
 
-            <h5>Copy & paste</h5>
+          <h5>Copy & paste</h5>
 
-            <p>Use whatever tools you have available on your platform to generate
-            keypair and just paste ASCII armored PEM file contents here and hit submit:</p>
+          <p>Use whatever tools you have available on your platform to generate
+          keypair and just paste ASCII armored PEM file contents here and hit submit:</p>
 
-            <textarea id="request_body" style="width:100%; min-height: 10em;" placeholder="-----BEGIN CERTIFICATE REQUEST-----"></textarea>
+          <textarea id="request_body" style="width:100%; min-height: 10em;"
+            placeholder="-----BEGIN CERTIFICATE REQUEST-----"></textarea>
+        </div>
+        <div class="modal-footer">
+          <div class="btn-group">
+            <button type="button" onclick="onSubmitRequest();" class="btn btn-primary"><i class="fa fa-upload"></i> Submit</button>
+            <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fa fa-ban"></i> Close</button>
           </div>
-          <div class="modal-footer">
-            <div class="btn-group">
-              <button type="button" onclick="onSubmitRequest();" class="btn btn-primary"><i class="fa fa-upload"></i> Submit</button>
-              <button type="button" class="btn btn-secondary" data-dismiss="modal"><i class="fa fa-ban"></i> Close</button>
-            </div>
-          </div>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
   </div>
+</div>
 
-  <div class="modal fade" id="revocation_list_modal" role="dialog">
-    <div class="modal-dialog modal-lg">
-      <div class="modal-content">
-        <div class="modal-header">
-          <button type="button" class="close" data-dismiss="modal">&times;</button>
-          <h4 class="modal-title">Revocation lists</h4>
-        </div>
-        <div class="modal-body">
-          <p>To fetch <a href="http://{{authority_name}}/api/revoked/">certificate revocation list</a>:</p>
+<div class="modal fade" id="revocation_list_modal" role="dialog">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <button type="button" class="close" data-dismiss="modal">&times;</button>
+        <h4 class="modal-title">Revocation lists</h4>
+      </div>
+      <div class="modal-body">
+        <p>To fetch <a href="http://{{authority_name}}/api/revoked/">certificate revocation list</a>:</p>
 <pre><code>curl http://{{authority_name}}/api/revoked/ > crl.der
 curl http://{{authority_name}}/api/revoked/ -L -H "Accept: application/x-pem-file"
 curl http://{{authority_name}}/api/revoked/?wait=yes -L -H "Accept: application/x-pem-file" > crl.pem</code></pre>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn" data-dismiss="modal">Close</button>
-        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn" data-dismiss="modal">Close</button>
       </div>
     </div>
   </div>
-
-<section id="about">
-<h2>{{ session.user.gn }} {{ session.user.sn }} ({{session.user.name }}) settings</h2>
-
-<p title="Bundles are mainly intended for Android and iOS users">
-Click <button id="enroll">here</button> to generate Android or iOS bundle for current user account.</p>
-
-<p>Mails will be sent to: {{ session.user.mail }}</p>
-
-{% if session.authority %}
-
-<h2>Authority certificate</h2>
-
-<p>Several things are hardcoded into the <a href="/api/certificate">certificate</a> and
-as such require complete reset of X509 infrastructure if some of them needs to be changed.</p>
-
-<h2>Authority settings</h2>
-
-<p>These can be reconfigured via /etc/certidude/server.conf on the server.</p>
-
-{% if session.authority.mailer %}
-    <p>Mails will appear from: {{ session.authority.mailer.name }} &lt;{{ session.authority.mailer.address }}&gt;</p>
-{% else %}
-    <p>E-mail disabled</p>
-{% endif %}
-
-
-<p>User enrollment:
-{% if session.authority.user_enrollment_allowed %}
-    {% if session.authority.user_multiple_certificates %}
-    multiple
-    {% else %}
-    single
-    {% endif %}
-allowed
-{% else %}
-forbidden
-{% endif %}
-</p>
-
-
-<p>Machine enrollment:
-{% if session.authority.machine_enrollment_allowed %}
-allowed
-{% else %}
-forbidden
-{% endif %}
-</p>
-
-
-<p>Certificate attributes:</p>
-
-<ul>
-    <li>Server certificate lifetime: {{ session.authority.signature.server_certificate_lifetime }} days</li>
-    <li>Client certificate lifetime: {{ session.authority.signature.client_certificate_lifetime }} days</li>
-    {% if session.features.crl %}
-    <li>Revocation list lifetime: {{ session.authority.signature.revocation_list_lifetime }} seconds</li>
-    {% endif %}
-</ul>
-
-<p>Authenticated users allowed from:
-{% if not session.authority.user_subnets %}
-    nowhere</p>
-{% elif "0.0.0.0/0" in session.authority.user_subnets %}
-    anywhere</p>
-{% else %}
-    </p>
-    <ul>
-        {% for i in session.authority.user_subnets %}
-            <li>{{ i }}</li>
-        {% endfor %}
-    </ul>
-{% endif %}
-
-
-
-<p>Authority administration is allowed from:
-{% if not session.authority.admin_subnets %}
-    nowhere</p>
-{% elif "0.0.0.0/0" in session.authority.admin_subnets %}
-    anywhere</p>
-{% else %}
-    <ul>
-        {% for subnet in session.authority.admin_subnets %}
-            <li>{{ subnet }}</li>
-        {% endfor %}
-    </ul>
-{% endif %}
-
-<p>Authority administration allowed for:</p>
-
-<ul>
-{% for user in session.authority.admin_users %}
-    <li><a href="mailto:{{ user.mail}}">{{ user.given_name }} {{user.surname }}</a></li>
-{% endfor %}
-</ul>
-</section>
-
-{% else %}
-<p>Here you can renew your certificates</p>
-
-{% endif %}
-
-{% set s = session.certificate.identity %}
-
-
+</div>
 
 <div class="row">
-
-
-  <div class="col-sm-6">
+  <div class="col-sm-{{ column_width }}">
     <h1>Signed certificates</h1>
-    <p>Following certificates have been signed:</p>
+    <p>Authority administration allowed for
+        {% for user in session.authority.admin_users %}<a href="mailto:{{ user.mail}}">{{ user.given_name }} {{user.surname }}</a>{% if not loop.last %}, {% endif %}{% endfor %} from {% if "0.0.0.0/0" in session.authority.admin_subnets %}anywhere{% else %}
+        {% for subnet in session.authority.admin_subnets %}{{ subnet }}{% if not loop.last %}, {% endif %}{% endfor %}{% endif %}.
+        Authority certificate can be downloaded from <a href="/api/certificate/">here</a>.
+        Following certificates have been signed:</p>
     <div id="signed_certificates">
     {% for certificate in session.authority.signed | sort(attribute="signed", reverse=true) %}
       {% include "views/signed.html" %}
     {% endfor %}
     </div>
   </div>
-  <div class="col-sm-6">
-
-
-{% if session.authority %}
+  <div class="col-sm-{{ column_width }}">
+  {% if session.authority %}
     {% if session.features.token %}
       <h1>Tokens</h1>
-
       <p>Tokens allow enrolling smartphones and third party devices.</p>
       <ul>
         <li>You can issue yourself a token to be used on a mobile device</li>
@@ -635,7 +172,6 @@ forbidden
             </span>
         </div>
       </p>
-
       <div id="token_qrcode"></div>
     {% endif %}
 
@@ -649,12 +185,10 @@ forbidden
        Request submission is enabled.
     {% else %}
        Request submission allowed from
-       {% for subnet in session.authority.request_subnets %}{{ subnet }},{% endfor %}.
+       {% for subnet in session.authority.request_subnets %}
+         {{ subnet }}{% if not loop.last %}, {% endif %}
+       {% endfor %}.
     {% endif %}
-
-    {# if session.request_submission_allowed #}
-        See <a href="#request_submission_modal" data-toggle="modal">here</a> for more information on manual signing request upload.
-    {# endif #}
 
     {% if session.authority.autosign_subnets %}
         {% if "0.0.0.0/0" in session.authority.autosign_subnets %}
@@ -662,17 +196,21 @@ forbidden
         {% else %}
            Requests from
                 {% for subnet in session.authority.autosign_subnets %}
-                    {{ subnet }},
+                    {{ subnet }}{% if not loop.last %}, {% endif %}
                 {% endfor %}
            are automatically signed.
         {% endif %}
     {% endif %}
     </p>
 
+  {% if columns >= 3 %}
+  </div>
+  <div class="col-sm-{{ column_width }}">
+  {% endif %}
     <div id="pending_requests">
-    {% for request in session.authority.requests | sort(attribute="submitted", reverse=true) %}
-      {% include "views/request.html" %}
-    {% endfor %}
+      {% for request in session.authority.requests | sort(attribute="submitted", reverse=true) %}
+        {% include "views/request.html" %}
+      {% endfor %}
     </div>
     <p><h1>Revoked certificates</h1></p>
     <p>Following certificates have been revoked{% if session.features.crl %}, for more information click
@@ -682,8 +220,24 @@ forbidden
       {% include "views/revoked.html" %}
     {% endfor %}
   </div>
+  <div id="column-log" class="col-sm-{% if columns == 4 %}{{ column_width }}{% else %}12{% endif %}" {% if columns < 4 %}style="display:none;"{% endif %}>
+    <div class="loader-container">
+      <div class="loader"></div>
+      <p>Loading logs, this might take a while...</p>
+    </div>
+    <div class="content" style="display:none;">
+      <h1>Log</h1>
+      <div class="btn-group" data-toggle="buttons">
+        <label class="btn btn-primary active"><input id="log-level-critical" type="checkbox" autocomplete="off" checked> Critical</label>
+        <label class="btn btn-primary active"><input id="log-level-errors" type="checkbox" autocomplete="off" checked> Errors</label>
+        <label class="btn btn-primary active"><input id="log-level-warnings" type="checkbox" autocomplete="off" checked> Warnings</label>
+        <label class="btn btn-primary active"><input id="log-level-info" type="checkbox" autocomplete="off" checked> Info</label>
+        <label class="btn btn-primary"><input id="log-level-debug" type="checkbox" autocomplete="off"> Debug</label>
+      </div>
+      <ul id="log-entries" class="list-group">
+      </ul>
+    </div>
+  </div>
 </div>
-<section id="config">
-</section>
 
 {% endif %}

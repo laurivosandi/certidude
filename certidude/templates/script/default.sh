@@ -28,7 +28,7 @@ if [ -e /sys/class/dmi ]; then
   ARGS="$ARGS&&mem=$(dmidecode -t 17 | grep Size | cut -d ":" -f 2 | cut -d " " -f 2 | paste -sd+ | bc) MB"
 else
   ARGS="$ARGS&dmi.product_name=$(cat /proc/cpuinfo  | grep '^machine' | head -n 1 | cut -d ":"   -f 2 | xargs)"
-  ARGS="$ARGS&mem=$(echo $(cat /proc/meminfo  | grep MemTotal | cut -d ":" -f 2 | xargs | cut -d " " -f 1)/1000+1 | bc) MB"
+  ARGS="$ARGS&mem=$(expr $(cat /proc/meminfo  | grep MemTotal | cut -d ":" -f 2 | xargs | cut -d " " -f 1) / 1024 + 1 ) MB"
 fi
 
 # Submit some stats to CA

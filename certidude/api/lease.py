@@ -5,9 +5,9 @@ import re
 import xattr
 from datetime import datetime
 from certidude import config, push
-from certidude.auth import login_required, authorize_admin, authorize_server
 from certidude.decorators import serialize
 from .utils import AuthorityHandler
+from .utils.firewall import login_required, authorize_admin, authorize_server
 
 logger = logging.getLogger(__name__)
 

@@ -3,10 +3,10 @@ import falcon
 import logging
 import json
 import hashlib
-from certidude.auth import login_required, authorize_admin
 from certidude.decorators import csrf_protection
 from xattr import listxattr, getxattr
 from .utils import AuthorityHandler
+from .utils.firewall import login_required, authorize_admin
 
 logger = logging.getLogger(__name__)
 

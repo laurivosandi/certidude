@@ -27,7 +27,7 @@ LDAP_BASE = cp.get("accounts", "ldap base")
 USER_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "user subnets").split(" ") if j])
 ADMIN_SUBNETS = set([ipaddress.ip_network(j) for j in
-    cp.get("authorization", "admin subnets").split(" ") if j]).union(USER_SUBNETS)
+    cp.get("authorization", "admin subnets").split(" ") if j])
 AUTOSIGN_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "autosign subnets").split(" ") if j])
 REQUEST_SUBNETS = set([ipaddress.ip_network(j) for j in

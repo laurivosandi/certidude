@@ -4,9 +4,7 @@ import re
 from xattr import setxattr, listxattr, removexattr
 from certidude import push
 from certidude.decorators import serialize, csrf_protection
-from certidude.auth import login_required, authorize_admin
-
-from .utils.firewall import whitelist_subject
+from .utils.firewall import login_required, authorize_admin, whitelist_subject
 
 logger = logging.getLogger(__name__)
 

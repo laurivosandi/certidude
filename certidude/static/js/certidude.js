@@ -25,9 +25,24 @@ function onHashChanged() {
         query[decodeURIComponent(b[0])] = decodeURIComponent(b[1] || '');
     }
 
+    if (query.columns) { query.columns = parseInt(query.columns) };
+
+    if (query.columns < 2 || query.columns > 4) {
+        query.columns = 2;
+    }
+
     console.info("Hash is now:", query);
 
-    loadAuthority();
+    if (window.location.protocol != "https:") {
+        $.get("/api/certificate/", function(blob) {
+            $("#view-dashboard").html(env.render('views/insecure.html', { window: window,
+                authority_name: window.location.hostname,
+                session: { authority: { certificate: { blob: blob }}}
+            }));
+        });
+    } else {
+        loadAuthority(query);
+    }
 }
 
 function onTagClicked(tag) {
@@ -277,12 +292,9 @@ function onSendToken() {
             alert(e);
         }
     });
-
-
-
 }
 
-function loadAuthority() {
+function loadAuthority(query) {
     console.info("Loading CA, to debug: curl " + window.location.href + " --negotiate -u : -H 'Accept: application/json'");
     $.ajax({
         method: "GET",
@@ -294,7 +306,7 @@ function loadAuthority() {
             } else {
                 var msg = { title: "Error " + response.status, description: response.statusText }
             }
-            $("#view").html(env.render('views/error.html', { message: msg }));
+            $("#view-dashboard").html(env.render('views/error.html', { message: msg }));
         },
         success: function(session, status, xhr) {
             window.session = session;
@@ -302,10 +314,18 @@ function loadAuthority() {
             console.info("Loaded:", session);
             $("#login").hide();
 
+            if (!query.columns) {
+                query.columns = 2;
+            }
+
             /**
              * Render authority views
              **/
-            $("#view").html(env.render('views/authority.html', { session: session, window: window,
+            $("#view-dashboard").html(env.render('views/authority.html', {
+                session: session,
+                window: window,
+                columns: query.columns,
+                column_width: 12 / query.columns,
                 authority_name: window.location.hostname }));
             $("time").timeago();
             if (session.authority) {
@@ -320,7 +340,7 @@ function loadAuthority() {
 
                 console.info("Opening EventSource from:", session.authority.events);
 
-                var source = new EventSource(session.authority.events);
+                window.source = new EventSource(session.authority.events);
 
                 source.onmessage = function(event) {
                     console.log("Received server-sent event:", event);
@@ -336,15 +356,6 @@ function loadAuthority() {
                 source.addEventListener("attribute-update", onAttributeUpdated);
                 source.addEventListener("server-started", onServerStarted);
                 source.addEventListener("server-stopped", onServerStopped);
-
-                console.info("Swtiching to requests section");
-                $("section").hide();
-                $("section#requests").show();
-                $("#section-revoked").show();
-                $("#section-signed").show();
-                $("#section-requests").show();
-                $("#section-token").show();
-
 
             }
 
@@ -383,7 +394,7 @@ function loadAuthority() {
             $(window).on("search", function() {
                 var q = $("#search").val();
                 $(".filterable").each(function(i, e) {
-                    if ($(e).attr("data-cn").toLowerCase().indexOf(q) >= 0) {
+                    if ($(e).attr("data-keywords").toLowerCase().indexOf(q) >= 0) {
                         $(e).show();
                     } else {
                         $(e).hide();
@@ -432,28 +443,49 @@ function loadAuthority() {
                 });
             }
 
+
+            $("nav .nav-link.dashboard").removeClass("disabled").click(function() {
+                $("#column-requests").show();
+                $("#column-signed").show();
+                $("#column-revoked").show();
+                $("#column-log").hide();
+            });
+
             /**
              * Fetch log entries
              */
             if (session.features.logging) {
-                $("nav .nav-link.log").removeClass("disabled").click(function() {
-                    $("#view-dashboard").hide();
-                    $("#view-log").show();
-                    $.ajax({
-                        method: "GET",
-                        url: "/api/log/",
-                        dataType: "json",
-                        success: function(entries, status, xhr) {
-                            console.info("Got", entries.length, "log entries");
-                            console.info("j=", entries.length-1);
-                            for (var j = entries.length-1; j--; ) {
-                                onLogEntry(entries[j]);
-                            };
-                            source.addEventListener("log-entry", onLogEntry);
-                        }
+                if (query.columns == 4) {
+                    loadLog();
+                } else {
+                    $("nav .nav-link.log").removeClass("disabled").click(function() {
+                        $("#column-requests").show();
+                        $("#column-signed").show();
+                        $("#column-revoked").show();
+                        $("#column-log").hide();
                     });
-                });
+                }
             }
+        }
+    });
+}
+
+function loadLog() {
+    if (window.log_initialized) return;
+    window.log_initialized = true;
+    $.ajax({
+        method: "GET",
+        url: "/api/log/",
+        dataType: "json",
+        success: function(entries, status, xhr) {
+            console.info("Got", entries.length, "log entries");
+            console.info("j=", entries.length-1);
+            for (var j = entries.length-1; j--; ) {
+                onLogEntry(entries[j]);
+            };
+            source.addEventListener("log-entry", onLogEntry);
+            $("#column-log .loader-container").hide();
+            $("#column-log .content").show();
         }
     });
 }

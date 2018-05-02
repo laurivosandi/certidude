@@ -7,12 +7,12 @@ import os
 import hashlib
 from datetime import datetime
 from xattr import listxattr, getxattr
-from certidude.auth import login_required
 from certidude.common import cert_to_dn
 from certidude.user import User
 from certidude.decorators import serialize, csrf_protection
 from certidude import const, config, authority
 from .utils import AuthorityHandler
+from .utils.firewall import login_required, authorize_admin
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +30,7 @@ class SessionResource(AuthorityHandler):
     @csrf_protection
     @serialize
     @login_required
+    @authorize_admin
     def on_get(self, req, resp):
 
         def serialize_requests(g):
@@ -43,7 +44,6 @@ class SessionResource(AuthorityHandler):
                 except IOError:
                     submission_hostname = None
                 yield dict(
-                    server = self.authority.server_flags(common_name),
                     submitted = submitted,
                     common_name = common_name,
                     address = submission_address,
@@ -55,7 +55,7 @@ class SessionResource(AuthorityHandler):
                 )
 
         def serialize_revoked(g):
-            for common_name, path, buf, cert, signed, expired, revoked, reason in g():
+            for common_name, path, buf, cert, signed, expired, revoked, reason in g(limit=5):
                 yield dict(
                     serial = "%x" % cert.serial_number,
                     common_name = common_name,
@@ -121,10 +121,7 @@ class SessionResource(AuthorityHandler):
                         if e["extn_id"].native in ("extended_key_usage",)])
                 )
 
-        if req.context.get("user").is_admin():
-            logger.info("Logged in authority administrator %s from %s" % (req.context.get("user"), req.context.get("remote_addr")))
-        else:
-            logger.info("Logged in authority user %s from %s" % (req.context.get("user"), req.context.get("remote_addr")))
+        logger.info("Logged in authority administrator %s from %s" % (req.context.get("user"), req.context.get("remote_addr")))
         return dict(
             user = dict(
                 name=req.context.get("user").name,
@@ -175,14 +172,15 @@ class SessionResource(AuthorityHandler):
                     profiles = sorted([p.serialize() for p in config.PROFILES.values()], key=lambda p:p.get("slug")),
 
                 )
-            ) if req.context.get("user").is_admin() else None,
+            ),
             features=dict(
                 ocsp=bool(config.OCSP_SUBNETS),
                 crl=bool(config.CRL_SUBNETS),
                 token=bool(config.TOKEN_URL),
                 tagging=True,
                 leases=True,
-                logging=config.LOGGING_BACKEND))
+                logging=config.LOGGING_BACKEND)
+        )
 
 
 class StaticResource(object):

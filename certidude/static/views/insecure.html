@@ -1,0 +1,14 @@
+<p>You're viewing this page over insecure channel.
+  You can give it a try and <a href="https://{{ authority_name }}">connect over HTTPS</a>,
+  if that succeeds all subsequents accesses of this page will go over HTTPS.
+</p>
+<p>
+  Click <a href="/api/certificate">here</a> to fetch the certificate of this authority.
+  Alternatively install certificate on Fedora or Ubuntu with following copy-pastable snippet:
+</p>
+
+<div class="highlight">
+<pre class="code"><code>{% include "snippets/store-authority.sh" %}
+{% include "snippets/update-trust.sh" %}</code></pre>
+</div>
+
