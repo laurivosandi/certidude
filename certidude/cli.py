@@ -87,6 +87,22 @@ def setup_client(prefix="client_", dh=False):
     return wrapper
 
 
+class ConfigTreeParser(ConfigParser):
+    def __init__(self, path, *args, **kwargs):
+        ConfigParser.__init__(self, *args, **kwargs)
+        if os.path.exists(path):
+            with open(path) as fh:
+                click.echo("Parsing: %s" % fh.name)
+                self.readfp(fh)
+        if os.path.exists(path + ".d"):
+            for filename in os.listdir(path + ".d"):
+                if not filename.endswith(".conf"):
+                    continue
+                with open(os.path.join(path + ".d", filename)) as fh:
+                    click.echo("Parsing: %s" % fh.name)
+                    self.readfp(fh)
+
+
 @click.command("enroll", help="Run processes for requesting certificates and configuring services")
 @click.option("-k", "--kerberos", default=False, is_flag=True, help="Offer system keytab for auth")
 @click.option("-r", "--renew", default=False, is_flag=True, help="Renew now")
@@ -123,12 +139,8 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
 
     import requests
 
-    clients = ConfigParser()
-    clients.readfp(open(const.CLIENT_CONFIG_PATH))
-
-    service_config = ConfigParser()
-    if os.path.exists(const.SERVICES_CONFIG_PATH):
-        service_config.readfp(open(const.SERVICES_CONFIG_PATH))
+    clients = ConfigTreeParser(const.CLIENT_CONFIG_PATH)
+    service_config = ConfigTreeParser(const.SERVICES_CONFIG_PATH)
 
     # Process directories
     if not os.path.exists(const.RUN_DIR):
