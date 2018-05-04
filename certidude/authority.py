@@ -1,5 +1,6 @@
 from __future__ import division, absolute_import, print_function
 import click
+import logging
 import os
 import re
 import requests
@@ -20,6 +21,7 @@ from jinja2 import Template
 from random import SystemRandom
 from xattr import getxattr, listxattr, setxattr
 
+logger = logging.getLogger(__name__)
 random = SystemRandom()
 
 try:
@@ -214,7 +216,7 @@ def store_request(buf, overwrite=False, address="", user=""):
     return request_path, csr, common_name
 
 
-def revoke(common_name, reason):
+def revoke(common_name, reason, user="root"):
     """
     Revoke valid certificate
     """
@@ -228,17 +230,12 @@ def revoke(common_name, reason):
     setxattr(signed_path, "user.revocation.reason", reason)
     revoked_path = os.path.join(config.REVOKED_DIR, "%040x.pem" % cert.serial_number)
 
+    logger.info("Revoked certificate %s by %s", common_name, user)
+
     os.unlink(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%040x.pem" % cert.serial_number))
     os.rename(signed_path, revoked_path)
 
-
     push.publish("certificate-revoked", common_name)
-
-    # Publish CRL for long polls
-    url = config.LONG_POLL_PUBLISH % "crl"
-    click.echo("Publishing CRL at %s ..." % url)
-    requests.post(url, data=export_crl(),
-        headers={"User-Agent": "Certidude API", "Content-Type": "application/x-pem-file"})
 
     attach_cert = buf, "application/x-pem-file", common_name + ".crt"
     mailer.send("certificate-revoked.md",
@@ -334,13 +331,16 @@ def export_crl(pem=True):
     return certificate_list.dump()
 
 
-def delete_request(common_name):
+def delete_request(common_name, user="root"):
     # Validate CN
     if not re.match(const.RE_COMMON_NAME, common_name):
         raise ValueError("Invalid common name")
 
     path, buf, csr, submitted = get_request(common_name)
     os.unlink(path)
+
+    logger.info("Rejected signing request %s by %s" % (
+        common_name, user))
 
     # Publish event at CA channel
     push.publish("request-deleted", common_name)
@@ -350,7 +350,7 @@ def delete_request(common_name):
         config.LONG_POLL_PUBLISH % hashlib.sha256(buf).hexdigest(),
         headers={"User-Agent": "Certidude API"})
 
-def sign(common_name, profile, skip_notify=False, skip_push=False, overwrite=False, signer=None):
+def sign(common_name, profile, skip_notify=False, skip_push=False, overwrite=False, signer="root"):
     """
     Sign certificate signing request by it's common name
     """

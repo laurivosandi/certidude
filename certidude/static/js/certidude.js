@@ -74,6 +74,7 @@ function onTagClicked(tag) {
             }
         });
     }
+    return false;
 }
 
 function onNewTagClicked(menu) {
@@ -110,6 +111,7 @@ function onTagFilterChanged() {
 function onLogEntry (e) {
     if (e.data) {
         e = JSON.parse(e.data);
+        e.fresh = true;
     }
 
     if ($("#log-level-" + e.severity).prop("checked")) {
@@ -117,7 +119,8 @@ function onLogEntry (e) {
             entry: {
                 created: new Date(e.created).toLocaleString(),
                 message: e.message,
-                severity: e.severity
+                severity: e.severity,
+                fresh: e.fresh,
             }
         }));
     }
@@ -262,7 +265,7 @@ function onServerStarted() {
 }
 
 function onServerStopped() {
-    $("view").html('<div class="loader"></div><p>Server under maintenance</p>');
+    $("#view-dashboard").html('<div class="loader"></div><p>Server under maintenance</p>');
     console.info("Server stopped");
 
 }

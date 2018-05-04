@@ -140,7 +140,7 @@ class RequestListResource(AuthorityHandler):
                         resp.set_header("Content-Type", "application/x-pem-file")
                         _, resp.body = self.authority._sign(csr, body,
                             overwrite=overwrite_allowed, profile=config.PROFILES["rw"])
-                        logger.info("Autosigned %s as %s is whitelisted", common_name, req.context.get("remote_addr"))
+                        logger.info("Signed %s as %s is whitelisted for autosign", common_name, req.context.get("remote_addr"))
                         return
                     except EnvironmentError:
                         logger.info("Autosign for %s from %s failed, signed certificate already exists",
@@ -148,7 +148,7 @@ class RequestListResource(AuthorityHandler):
                         reasons.append("autosign failed, signed certificate already exists")
                     break
             else:
-                reasons.append("autosign failed, IP address not whitelisted")
+                reasons.append("IP address not whitelisted for autosign")
         else:
             reasons.append("autosign not requested")
 
@@ -170,7 +170,7 @@ class RequestListResource(AuthorityHandler):
             push.publish("request-submitted", common_name)
 
         # Wait the certificate to be signed if waiting is requested
-        logger.info("Stored signing request %s from %s, reasons: %s", common_name, req.context.get("remote_addr"), reasons)
+        logger.info("Signing request %s from %s put on hold,  %s", common_name, req.context.get("remote_addr"), ", ".join(reasons))
 
         if req.get_param("wait"):
             # Redirect to nginx pub/sub
@@ -178,7 +178,6 @@ class RequestListResource(AuthorityHandler):
             click.echo("Redirecting to: %s"  % url)
             resp.status = falcon.HTTP_SEE_OTHER
             resp.set_header("Location", url)
-            logger.debug("Redirecting signing request from %s to %s, reasons: %s", req.context.get("remote_addr"), url, ", ".join(reasons))
         else:
             # Request was accepted, but not processed
             resp.status = falcon.HTTP_202
@@ -256,7 +255,7 @@ class RequestDetailResource(AuthorityHandler):
     @authorize_admin
     def on_delete(self, req, resp, cn):
         try:
-            self.authority.delete_request(cn)
+            self.authority.delete_request(cn, user=req.context.get("user"))
             # Logging implemented in the function above
         except errors.RequestDoesNotExist as e:
             resp.body = "No certificate signing request for %s found" % cn

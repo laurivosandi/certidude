@@ -1,4 +1,4 @@
-<li id="log_entry_{{ entry.id }}" class="list-group-item justify-content-between filterable">
+<li id="log_entry_{{ entry.id }}" class="list-group-item justify-content-between filterable{% if entry.fresh %} fresh{% endif %}">
 <span>
 <i class="fa fa-{{ entry.severity }}-circle"/>
 {{ entry.message }}

@@ -1,4 +1,4 @@
-<i class="fa fa-circle" style="color:{% if certificate.lease.age > 172800 %}#d9534f{% else %}{% if certificate.lease.age > 7200 %}#0275d8{% else %}#5cb85c{% endif %}{% endif %};"/>
+<i class="fa fa-circle" style="color:{% if certificate.lease.age > 172800 %}#d9534f{% else %}{% if certificate.lease.age > 10800 %}#0275d8{% else %}#5cb85c{% endif %}{% endif %};"/>
 Last seen
 <time class="timeago" datetime="{{ certificate.lease.last_seen }}">{{ certificate.lease.last_seen }}</time>
 at

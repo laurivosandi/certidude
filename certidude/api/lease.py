@@ -33,9 +33,9 @@ class LeaseResource(AuthorityHandler):
     @authorize_server
     def on_post(self, req, resp):
         client_common_name = req.get_param("client", required=True)
-        m = re.match("CN=(.+?),", client_common_name) # It's actually DN, resolve it to CN
+        m = re.match("^(.*, )*CN=(.+?)(, .*)*$", client_common_name) # It's actually DN, resolve it to CN
         if m:
-            client_common_name, = m.groups()
+            _, client_common_name, _ = m.groups()
 
         path, buf, cert, signed, expires = self.authority.get_signed(client_common_name) # TODO: catch exceptions
         if req.get_param("serial") and cert.serial_number != req.get_param_as_int("serial"): # OCSP-ish solution for OpenVPN, not exposed for StrongSwan

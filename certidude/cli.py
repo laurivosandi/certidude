@@ -1018,26 +1018,28 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
         click.echo("Not attempting to install packages from APT as requested...")
     else:
         click.echo("Installing packages...")
-        os.system("DEBIAN_FRONTEND=noninteractive apt-get install -qq -y \
-            cython3 python3-dev python3-mimeparse \
+        cmd = "DEBIAN_FRONTEND=noninteractive apt-get install -qq -y \
+            cython3 python3-dev \
             python3-markdown python3-pyxattr python3-jinja2 python3-cffi \
             software-properties-common libsasl2-modules-gssapi-mit npm nodejs \
             libkrb5-dev libldap2-dev libsasl2-dev gawk libncurses5-dev \
-            rsync attr wget unzip")
-        os.system("pip3 install -q --upgrade gssapi falcon humanize ipaddress simplepam")
-        os.system("pip3 install -q --pre --upgrade python-ldap")
+            rsync attr wget unzip"
+        click.echo("Running: %s" % cmd)
+        if os.system(cmd): sys.exit(254)
+        if os.system("pip3 install -q --upgrade gssapi falcon humanize ipaddress simplepam user-agents"): sys.exit(253)
+        if os.system("pip3 install -q --pre --upgrade python-ldap"): exit(252)
 
         if not os.path.exists("/usr/lib/nginx/modules/ngx_nchan_module.so"):
             click.echo("Enabling nginx PPA")
-            os.system("add-apt-repository -y ppa:nginx/stable")
-            os.system("apt-get update -q")
-            os.system("apt-get install -y -q libnginx-mod-nchan")
+            if os.system("add-apt-repository -y ppa:nginx/stable"): sys.exit(251)
+            if os.system("apt-get update -q"): sys.exit(250)
+            if os.system("apt-get install -y -q libnginx-mod-nchan"): sys.exit(249)
         else:
             click.echo("PPA for nginx already enabled")
 
         if not os.path.exists("/usr/sbin/nginx"):
             click.echo("Installing nginx from PPA")
-            os.system("apt-get install -y -q nginx")
+            if os.system("apt-get install -y -q nginx"): sys.exit(248)
         else:
             click.echo("Web server nginx already installed")
 
@@ -1160,16 +1162,16 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
         else:
             cmd = "npm install --silent -g nunjucks@2.5.2 nunjucks-date@1.2.0 node-forge bootstrap@4.0.0-alpha.6 jquery timeago tether font-awesome qrcode-svg"
             click.echo("Installing JavaScript packages: %s" % cmd)
-            assert os.system(cmd) == 0
+            if os.system(cmd): sys.exit(230)
 
         # Copy fonts
         click.echo("Copying fonts...")
-        os.system("rsync -avq /usr/local/lib/node_modules/font-awesome/fonts/ %s/fonts/" % assets_dir)
+        if os.system("rsync -avq /usr/local/lib/node_modules/font-awesome/fonts/ %s/fonts/" % assets_dir): sys.exit(229)
 
         # Compile nunjucks templates
         cmd = 'nunjucks-precompile --include ".html$" --include ".ps1$" --include ".sh$" --include ".svg" %s > %s.part' % (static_path, bundle_js)
         click.echo("Compiling templates: %s" % cmd)
-        assert os.system(cmd) == 0
+        if os.system(cmd): sys.exit(228)
 
         # Assemble bundle.js
         click.echo("Assembling %s" % bundle_js)

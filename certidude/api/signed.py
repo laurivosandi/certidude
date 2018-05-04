@@ -68,8 +68,8 @@ class SignedCertificateDetailResource(AuthorityHandler):
     @login_required
     @authorize_admin
     def on_delete(self, req, resp, cn):
-        logger.info("Revoked certificate %s by %s from %s",
-            cn, req.context.get("user"), req.context.get("remote_addr"))
         self.authority.revoke(cn,
-            reason=req.get_param("reason", default="key_compromise"))
+            reason=req.get_param("reason", default="key_compromise"),
+            user=req.context.get("user")
+        )
 

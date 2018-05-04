@@ -44,6 +44,8 @@ OVERWRITE_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "overwrite subnets").split(" ") if j])
 MACHINE_ENROLLMENT_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "machine enrollment subnets").split(" ") if j])
+KERBEROS_SUBNETS = set([ipaddress.ip_network(j) for j in
+    cp.get("authorization", "kerberos subnets").split(" ") if j])
 
 AUTHORITY_DIR = "/var/lib/certidude"
 AUTHORITY_PRIVATE_KEY_PATH = cp.get("authority", "private key path")

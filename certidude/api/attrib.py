@@ -1,7 +1,7 @@
 import falcon
 import logging
 import re
-from xattr import setxattr, listxattr, removexattr
+from xattr import setxattr, listxattr, removexattr, getxattr
 from certidude import push
 from certidude.decorators import serialize, csrf_protection
 from .utils.firewall import login_required, authorize_admin, whitelist_subject
@@ -21,7 +21,6 @@ class AttributeResource(object):
         Return extended attributes stored on the server.
         This not only contains tags and lease information,
         but might also contain some other sensitive information.
-        Results made available only to lease IP address.
         """
         try:
             path, buf, cert, attribs = self.authority.get_attributes(cn,
@@ -44,14 +43,22 @@ class AttributeResource(object):
                 if not re.match("[a-z0-9_\.]+$", key):
                     raise falcon.HTTPBadRequest("Invalid key %s" % key)
             valid = set()
+            modified = False
             for key, value in req.params.items():
                 identifier = ("user.%s.%s" % (self.namespace, key)).encode("ascii")
+                try:
+                    if getxattr(path, identifier).decode("utf-8") != value:
+                        modified = True
+                except OSError: # no such attribute
+                    pass
                 setxattr(path, identifier, value.encode("utf-8"))
                 valid.add(identifier)
             for key in listxattr(path):
                 if not key.startswith(namespace):
                     continue
                 if key not in valid:
+                    modified = True
                     removexattr(path, key)
-            push.publish("attribute-update", cn)
+            if modified:
+                push.publish("attribute-update", cn)
 

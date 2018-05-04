@@ -7,6 +7,12 @@
       </div>
       <form action="/api/request/" method="post">
         <div class="modal-body">
+          <h5>Certidude client</h5>
+          <p>On Ubuntu or Fedora:</p>
+          <div class="highlight">
+            <pre class="code"><code>{% include "snippets/certidude-client.sh" %}</code></pre>
+          </div>
+
           {% if "ikev2" in session.service.protocols %}
             <h5>Windows {% if session.authority.certificate.algorithm == "ec" %}10{% else %}7 and up{% endif %}</h5>
             <p>On Windows execute following PowerShell script</p>
@@ -190,6 +196,8 @@ curl http://{{authority_name}}/api/revoked/?wait=yes -L -H "Accept: application/
        {% endfor %}.
     {% endif %}
 
+    See <a href="#request_submission_modal" data-toggle="modal">here</a> for more information on manual signing request upload.
+
     {% if session.authority.autosign_subnets %}
         {% if "0.0.0.0/0" in session.authority.autosign_subnets %}
             All requests are automatically signed.
@@ -202,17 +210,16 @@ curl http://{{authority_name}}/api/revoked/?wait=yes -L -H "Accept: application/
         {% endif %}
     {% endif %}
     </p>
-
-  {% if columns >= 3 %}
-  </div>
-  <div class="col-sm-{{ column_width }}">
-  {% endif %}
     <div id="pending_requests">
       {% for request in session.authority.requests | sort(attribute="submitted", reverse=true) %}
         {% include "views/request.html" %}
       {% endfor %}
     </div>
-    <p><h1>Revoked certificates</h1></p>
+  {% if columns >= 3 %}
+  </div>
+  <div class="col-sm-{{ column_width }}">
+  {% endif %}
+    <h1>Revoked certificates</h1>
     <p>Following certificates have been revoked{% if session.features.crl %}, for more information click
     <a href="#revocation_list_modal" data-toggle="modal">here</a>{% endif %}.</p>
 

@@ -41,7 +41,7 @@ class TagResource(AuthorityHandler):
         else:
             tags.add("%s=%s" % (key,value))
         setxattr(path, "user.xdg.tags", ",".join(tags).encode("utf-8"))
-        logger.debug("Tag %s=%s set for %s" % (key, value, cn))
+        logger.info("Tag %s=%s set for %s by %s" % (key, value, cn, req.context.get("user")))
         push.publish("tag-update", cn)
 
 
@@ -68,7 +68,7 @@ class TagDetailResource(object):
         else:
             tags.add(value)
         setxattr(path, "user.xdg.tags", ",".join(tags).encode("utf-8"))
-        logger.debug("Tag %s set to %s for %s" % (tag, value, cn))
+        logger.info("Tag %s set to %s for %s by %s" % (tag, value, cn, req.context.get("user")))
         push.publish("tag-update", cn)
 
     @csrf_protection
@@ -82,5 +82,5 @@ class TagDetailResource(object):
             removexattr(path, "user.xdg.tags")
         else:
             setxattr(path, "user.xdg.tags", ",".join(tags))
-        logger.debug("Tag %s removed for %s" % (tag, cn))
+        logger.info("Tag %s removed for %s by %s" % (tag, cn, req.context.get("user")))
         push.publish("tag-update", cn)

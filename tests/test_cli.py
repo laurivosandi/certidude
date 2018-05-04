@@ -169,6 +169,12 @@ def test_cli_setup_authority():
     if not os.path.exists("/etc/pki/ca-trust/source/anchors/"):
         os.makedirs("/etc/pki/ca-trust/source/anchors/")
 
+    if not os.path.exists("/bin/systemctl"):
+        with open("/usr/bin/systemctl", "w") as fh:
+            fh.write("#!/bin/bash\n")
+            fh.write("service $2 $1\n")
+        os.chmod("/usr/bin/systemctl", 0o755)
+
     # Back up original DNS server
     if not os.path.exists("/etc/resolv.conf.orig"):
         shutil.copyfile("/etc/resolv.conf", "/etc/resolv.conf.orig")
@@ -205,7 +211,7 @@ def test_cli_setup_authority():
     assert const.HOSTNAME == "ca"
     assert const.DOMAIN == "example.lan"
 
-    os.system("certidude setup authority --elliptic-curve")
+    assert os.system("certidude setup authority --elliptic-curve") == 0
 
     assert_cleanliness()
 
@@ -289,13 +295,7 @@ def test_cli_setup_authority():
     assert r.status_code == 400, r.text
 
     r = client().simulate_get("/")
-    assert r.status_code == 200, r.text
-    r = client().simulate_get("/index.html")
-    assert r.status_code == 200, r.text
-    r = client().simulate_get("/nonexistant.html")
-    assert r.status_code == 404, r.text
-    r = client().simulate_get("/../nonexistant.html")
-    assert r.status_code == 400, r.text
+    assert r.status_code == 404, r.text # backend doesn't serve static
 
     # Test request submission
     buf = generate_csr(cn="test")
@@ -439,11 +439,6 @@ def test_cli_setup_authority():
     r = client().simulate_get("/api/revoked/",
         headers={"Accept":"text/plain"})
     assert r.status_code == 415, r.text
-
-    r = client().simulate_get("/api/revoked/",
-        query_string="wait=true",
-        headers={"Accept":"application/x-pem-file"})
-    assert r.status_code == 303, r.text
 
     # Test attribute fetching API call
     r = client().simulate_get("/api/signed/test/attr/")
@@ -1114,22 +1109,23 @@ def test_cli_setup_authority():
 
     # Bootstrap authority
     assert not os.path.exists("/var/lib/certidude/ca.example.lan/ca_key.pem")
-    os.system("certidude setup authority --skip-packages")
+    assert os.system("certidude setup authority --skip-packages") == 0
 
 
     # Make modifications to /etc/certidude/server.conf so
     # Certidude would auth against domain controller
-    os.system("sed -e 's/ldap uri = ldaps:.*/ldap uri = ldaps:\\/\\/ca.example.lan/g' -i /etc/certidude/server.conf")
-    os.system("sed -e 's/ldap uri = ldap:.*/ldap uri = ldap:\\/\\/ca.example.lan/g' -i /etc/certidude/server.conf")
-    os.system("sed -e 's/autosign subnets =.*/autosign subnets =/g' -i /etc/certidude/server.conf")
-    os.system("sed -e 's/machine enrollment subnets =.*/machine enrollment subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf")
-    os.system("sed -e 's/scep subnets =.*/scep subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf")
-    os.system("sed -e 's/ocsp subnets =.*/ocsp subnets =/g' -i /etc/certidude/server.conf")
-    os.system("sed -e 's/crl subnets =.*/crl subnets =/g' -i /etc/certidude/server.conf")
-    os.system("sed -e 's/address = certificates@example.lan/address =/g' -i /etc/certidude/server.conf")
+    assert os.system("sed -e 's/ldap uri = ldaps:.*/ldap uri = ldaps:\\/\\/ca.example.lan/g' -i /etc/certidude/server.conf") == 0
+    assert os.system("sed -e 's/ldap uri = ldap:.*/ldap uri = ldap:\\/\\/ca.example.lan/g' -i /etc/certidude/server.conf") == 0
+    assert os.system("sed -e 's/autosign subnets =.*/autosign subnets =/g' -i /etc/certidude/server.conf") == 0
+    assert os.system("sed -e 's/machine enrollment subnets =.*/machine enrollment subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf") == 0
+    assert os.system("sed -e 's/scep subnets =.*/scep subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf") == 0
+    assert os.system("sed -e 's/ocsp subnets =.*/ocsp subnets =/g' -i /etc/certidude/server.conf") == 0
+    assert os.system("sed -e 's/crl subnets =.*/crl subnets =/g' -i /etc/certidude/server.conf") == 0
+    assert os.system("sed -e 's/address = certificates@example.lan/address =/g' -i /etc/certidude/server.conf") == 0
+    assert os.system("sed -e 's/kerberos subnets =.*/kerberos subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf") == 0
 
     # Update server credential cache
-    os.system("sed -e 's/dc1/ca/g' -i /etc/cron.hourly/certidude")
+    assert os.system("sed -e 's/dc1/ca/g' -i /etc/cron.hourly/certidude") == 0
     with open("/etc/cron.hourly/certidude") as fh:
         cronjob = fh.read()
         assert "ldap/ca.example.lan" in cronjob, cronjob

@@ -1,4 +1,14 @@
 
+@keyframes fresh {
+    from { background-color: #ffc107; }
+    to { background-color: white; }
+}
+
+.fresh {
+    animation-name: fresh;
+    animation-duration: 30s;
+}
+
 .loader-container {
     margin: 20% auto 0 auto;
     text-align: center;
