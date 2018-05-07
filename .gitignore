@@ -68,3 +68,4 @@ node_modules/
 lextab.py
 yacctab.py
 .pytest_cache
+*~
