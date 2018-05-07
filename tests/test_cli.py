@@ -96,8 +96,8 @@ def clean_server():
                 pass
 
 
-    if os.path.exists("/var/lib/certidude/ca.example.lan"):
-        shutil.rmtree("/var/lib/certidude/ca.example.lan")
+    if os.path.exists("/var/lib/certidude"):
+        shutil.rmtree("/var/lib/certidude")
     if os.path.exists("/run/certidude"):
         shutil.rmtree("/run/certidude")
 
@@ -230,13 +230,13 @@ def test_cli_setup_authority():
     assert authority.public_key.algorithm == "ec"
 
     # Generate garbage
-    with open("/var/lib/certidude/ca.example.lan/bla", "w") as fh:
+    with open("/var/lib/certidude/bla", "w") as fh:
         pass
-    with open("/var/lib/certidude/ca.example.lan/requests/bla", "w") as fh:
+    with open("/var/lib/certidude/requests/bla", "w") as fh:
         pass
-    with open("/var/lib/certidude/ca.example.lan/signed/bla", "w") as fh:
+    with open("/var/lib/certidude/signed/bla", "w") as fh:
         pass
-    with open("/var/lib/certidude/ca.example.lan/revoked/bla", "w") as fh:
+    with open("/var/lib/certidude/revoked/bla", "w") as fh:
         pass
 
     # Start server before any signing operations are performed
@@ -255,7 +255,7 @@ def test_cli_setup_authority():
 
 
     # Test CA certificate fetch
-    buf = open("/var/lib/certidude/ca.example.lan/ca_cert.pem").read()
+    buf = open("/var/lib/certidude/ca_cert.pem").read()
     r = requests.get("http://ca.example.lan/api/certificate")
     assert r.status_code == 200
     assert r.headers.get('content-type') == "application/x-x509-ca-cert"
@@ -308,7 +308,7 @@ def test_cli_setup_authority():
         headers={"content-type":"application/pkcs10"})
     assert r.status_code == 202 # success
     assert "Stored request " in inbox.pop(), inbox
-    assert os.path.exists("/var/lib/certidude/ca.example.lan/requests/test.pem")
+    assert os.path.exists("/var/lib/certidude/requests/test.pem")
 
     # Test request deletion
     r = client().simulate_delete("/api/request/test/")
@@ -319,7 +319,7 @@ def test_cli_setup_authority():
     r = client().simulate_delete("/api/request/test/",
         headers={"User-Agent":UA_FEDORA_FIREFOX, "Authorization":admintoken})
     assert r.status_code == 403, r.text # CSRF prevented
-    assert os.path.exists("/var/lib/certidude/ca.example.lan/requests/test.pem")
+    assert os.path.exists("/var/lib/certidude/requests/test.pem")
     r = client().simulate_delete("/api/request/test/",
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text
@@ -507,19 +507,19 @@ def test_cli_setup_authority():
 
     r = client().simulate_post("/api/lease/",
         query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8",
-        headers={"X-SSL-CERT":open("/var/lib/certidude/ca.example.lan/signed/ca.example.lan.pem").read() })
+        headers={"X-SSL-CERT":open("/var/lib/certidude/signed/ca.example.lan.pem").read() })
     assert r.status_code == 200, r.text # lease update ok
 
     # Attempt to fetch and execute default.sh script
     from xattr import listxattr, getxattr
-    assert not [j for j in listxattr("/var/lib/certidude/ca.example.lan/signed/test.pem") if j.startswith(b"user.machine.")]
+    assert not [j for j in listxattr("/var/lib/certidude/signed/test.pem") if j.startswith(b"user.machine.")]
     #os.system("curl http://ca.example.lan/api/signed/test/script | bash")
     r = client().simulate_post("/api/signed/test/attr", body="cpu=i5&mem=512M&dist=Ubunt",
         headers={"content-type": "application/x-www-form-urlencoded"})
     assert r.status_code == 200, r.text
-    assert getxattr("/var/lib/certidude/ca.example.lan/signed/test.pem", "user.machine.cpu") == b"i5"
-    assert getxattr("/var/lib/certidude/ca.example.lan/signed/test.pem", "user.machine.mem") == b"512M"
-    assert getxattr("/var/lib/certidude/ca.example.lan/signed/test.pem", "user.machine.dist") == b"Ubunt"
+    assert getxattr("/var/lib/certidude/signed/test.pem", "user.machine.cpu") == b"i5"
+    assert getxattr("/var/lib/certidude/signed/test.pem", "user.machine.mem") == b"512M"
+    assert getxattr("/var/lib/certidude/signed/test.pem", "user.machine.dist") == b"Ubunt"
 
     # Test tagging integration in scripting framework
     r = client().simulate_get("/api/signed/test/script/")
@@ -572,11 +572,11 @@ def test_cli_setup_authority():
     # Test lease update
     r = client().simulate_post("/api/lease/",
         query_string = "client=test&inner_address=127.0.0.1&outer_address=8.8.8.8&serial=0",
-        headers={"X-SSL-CERT":open("/var/lib/certidude/ca.example.lan/signed/ca.example.lan.pem").read() })
+        headers={"X-SSL-CERT":open("/var/lib/certidude/signed/ca.example.lan.pem").read() })
     assert r.status_code == 403, r.text # invalid serial number supplied
     r = client().simulate_post("/api/lease/",
         query_string = "client=test&inner_address=1.2.3.4&outer_address=8.8.8.8",
-        headers={"X-SSL-CERT":open("/var/lib/certidude/ca.example.lan/signed/ca.example.lan.pem").read() })
+        headers={"X-SSL-CERT":open("/var/lib/certidude/signed/ca.example.lan.pem").read() })
     assert r.status_code == 200, r.text # lease update ok
 
 
@@ -717,11 +717,11 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
     assert "(autosign not requested)" in result.output, result.output
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
-    assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/vpn.example.lan.pem")
+    assert not os.path.exists("/var/lib/certidude/signed/vpn.example.lan.pem")
 
     child_pid = os.fork()
     if not child_pid:
-        assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/vpn.example.lan.pem")
+        assert not os.path.exists("/var/lib/certidude/signed/vpn.example.lan.pem")
         result = runner.invoke(cli, ["sign", "vpn.example.lan", "--profile", "srv"])
         assert not result.exception, result.output
         assert "overwrit" not in result.output, result.output
@@ -912,20 +912,20 @@ def test_cli_setup_authority():
     # Setup gateway
 
     clean_client()
-    assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/ipsec.example.lan.pem")
+    assert not os.path.exists("/var/lib/certidude/signed/ipsec.example.lan.pem")
 
     result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec", "ca.example.lan"])
     assert result.exception, result.output # FQDN required
-    assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/ipsec.example.lan.pem")
+    assert not os.path.exists("/var/lib/certidude/signed/ipsec.example.lan.pem")
 
     result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
     assert not result.exception, result.output
     assert open("/etc/ipsec.secrets").read() == ": RSA /etc/certidude/authority/ca.example.lan/server_key.pem\n"
-    assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/ipsec.example.lan.pem")
+    assert not os.path.exists("/var/lib/certidude/signed/ipsec.example.lan.pem")
 
     result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
     assert not result.exception, result.output # client conf already exists, remove to regenerate
-    assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/ipsec.example.lan.pem")
+    assert not os.path.exists("/var/lib/certidude/signed/ipsec.example.lan.pem")
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("autosign = false\n")
@@ -934,11 +934,11 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
     assert "(autosign not requested)" in result.output, result.output
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
-    assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/ipsec.example.lan.pem")
+    assert not os.path.exists("/var/lib/certidude/signed/ipsec.example.lan.pem")
 
     child_pid = os.fork()
     if not child_pid:
-        assert not os.path.exists("/var/lib/certidude/ca.example.lan/signed/ipsec.example.lan.pem")
+        assert not os.path.exists("/var/lib/certidude/signed/ipsec.example.lan.pem")
         result = runner.invoke(cli, ["sign", "ipsec.example.lan", "--profile", "srv"])
         assert not result.exception, result.output
         assert "overwrit" not in result.output, result.output
@@ -1024,13 +1024,13 @@ def test_cli_setup_authority():
     assert r.status_code == 400
 
 
-    assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_cert.pem -CAfile /var/lib/certidude/ca.example.lan/ca_cert.pem -cert /var/lib/certidude/ca.example.lan/signed/roadwarrior2.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp1.log") == 0
-    assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_cert.pem -CAfile /var/lib/certidude/ca.example.lan/ca_cert.pem -cert /var/lib/certidude/ca.example.lan/ca_cert.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp2.log") == 0
+    assert os.system("openssl ocsp -issuer /var/lib/certidude/ca_cert.pem -CAfile /var/lib/certidude/ca_cert.pem -cert /var/lib/certidude/signed/roadwarrior2.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp1.log") == 0
+    assert os.system("openssl ocsp -issuer /var/lib/certidude/ca_cert.pem -CAfile /var/lib/certidude/ca_cert.pem -cert /var/lib/certidude/ca_cert.pem -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp2.log") == 0
 
-    for filename in os.listdir("/var/lib/certidude/ca.example.lan/revoked"):
+    for filename in os.listdir("/var/lib/certidude/revoked"):
         if not filename.endswith(".pem"):
             continue
-        assert os.system("openssl ocsp -issuer /var/lib/certidude/ca.example.lan/ca_cert.pem -CAfile /var/lib/certidude/ca.example.lan/ca_cert.pem -cert /var/lib/certidude/ca.example.lan/revoked/%s -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp3.log" % filename) == 0
+        assert os.system("openssl ocsp -issuer /var/lib/certidude/ca_cert.pem -CAfile /var/lib/certidude/ca_cert.pem -cert /var/lib/certidude/revoked/%s -text -url http://ca.example.lan/api/ocsp/ -out /tmp/ocsp3.log" % filename) == 0
         break
 
     with open("/tmp/ocsp1.log") as fh:
@@ -1108,7 +1108,7 @@ def test_cli_setup_authority():
 
 
     # Bootstrap authority
-    assert not os.path.exists("/var/lib/certidude/ca.example.lan/ca_key.pem")
+    assert not os.path.exists("/var/lib/certidude/ca_key.pem")
     assert os.system("certidude setup authority --skip-packages") == 0
 
 

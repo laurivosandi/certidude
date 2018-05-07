@@ -50,6 +50,7 @@ KERBEROS_SUBNETS = set([ipaddress.ip_network(j) for j in
 AUTHORITY_DIR = "/var/lib/certidude"
 AUTHORITY_PRIVATE_KEY_PATH = cp.get("authority", "private key path")
 AUTHORITY_CERTIFICATE_PATH = cp.get("authority", "certificate path")
+SELF_KEY_PATH = cp.get("authority", "self key path")
 REQUESTS_DIR = cp.get("authority", "requests dir")
 SIGNED_DIR = cp.get("authority", "signed dir")
 SIGNED_BY_SERIAL_DIR = os.path.join(SIGNED_DIR, "by-serial")

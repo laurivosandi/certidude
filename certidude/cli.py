@@ -1001,12 +1001,14 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
 @click.option("--organization", "-o", default=None, help="Company or organization name")
 @click.option("--organizational-unit", "-ou", default="Certificate Authority")
 @click.option("--push-server", help="Push server, by default http://%s" % const.FQDN)
-@click.option("--directory", help="Directory for authority files")
+@click.option("--directory", default="/var/lib/certidude", help="Directory for authority files")
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
+@click.option("--skip-assets", is_flag=True, help="Don't attempt to assemble JS/CSS/font assets")
 @click.option("--skip-packages", is_flag=True, help="Don't attempt to install apt/pip/npm packages")
 @click.option("--elliptic-curve", "-e", is_flag=True, help="Generate EC instead of RSA keypair")
+@click.option("--subordinate", is_flag=True, help="Set up subordinate CA instead of root CA")
 @fqdn_required
-def certidude_setup_authority(username, kerberos_keytab, nginx_config, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, title, skip_packages, elliptic_curve):
+def certidude_setup_authority(username, kerberos_keytab, nginx_config, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, title, skip_assets, skip_packages, elliptic_curve, subordinate):
     assert subprocess.check_output(["/usr/bin/lsb_release", "-cs"]) in (b"trusty\n", b"xenial\n", b"bionic\n"), "Only Ubuntu 16.04 supported at the moment"
     assert os.getuid() == 0 and os.getgid() == 0, "Authority can be set up only by root"
 
@@ -1052,8 +1054,6 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
     template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates", "profile")
     click.echo("Using templates from %s" % template_path)
 
-    if not directory:
-        directory = os.path.join("/var/lib/certidude", common_name)
     click.echo("Placing authority files in %s" % directory)
 
     certificate_url = "http://%s/api/certificate/" % common_name
@@ -1065,8 +1065,11 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
     # Expand variables
     assets_dir = os.path.join(directory, "assets")
     ca_key = os.path.join(directory, "ca_key.pem")
+    ca_req = os.path.join(directory, "ca_req.pem")
     ca_cert = os.path.join(directory, "ca_cert.pem")
+    self_key = os.path.join(directory, "self_key.pem")
     sqlite_path = os.path.join(directory, "meta", "db.sqlite")
+    distinguished_name = cn_to_dn("Certidude at %s" % common_name, common_name, o=organization, ou=organizational_unit)
 
     # Builder variables
     dhgroup = "ecp384" if elliptic_curve else "modp2048"
@@ -1164,35 +1167,38 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
             click.echo("Installing JavaScript packages: %s" % cmd)
             if os.system(cmd): sys.exit(230)
 
-        # Copy fonts
-        click.echo("Copying fonts...")
-        if os.system("rsync -avq /usr/local/lib/node_modules/font-awesome/fonts/ %s/fonts/" % assets_dir): sys.exit(229)
+        if skip_assets:
+            click.echo("Not attempting to assemble assets as requested...")
+        else:
+            # Copy fonts
+            click.echo("Copying fonts...")
+            if os.system("rsync -avq /usr/local/lib/node_modules/font-awesome/fonts/ %s/fonts/" % assets_dir): sys.exit(229)
 
-        # Compile nunjucks templates
-        cmd = 'nunjucks-precompile --include ".html$" --include ".ps1$" --include ".sh$" --include ".svg" %s > %s.part' % (static_path, bundle_js)
-        click.echo("Compiling templates: %s" % cmd)
-        if os.system(cmd): sys.exit(228)
+            # Compile nunjucks templates
+            cmd = 'nunjucks-precompile --include ".html$" --include ".ps1$" --include ".sh$" --include ".svg" %s > %s.part' % (static_path, bundle_js)
+            click.echo("Compiling templates: %s" % cmd)
+            if os.system(cmd): sys.exit(228)
 
-        # Assemble bundle.js
-        click.echo("Assembling %s" % bundle_js)
-        with open(bundle_js + ".part", "a") as fh:
-            for pkg in "qrcode-svg/dist/qrcode.min.js", "jquery/dist/jquery.min.js", "timeago/*.js", "nunjucks/browser/nunjucks-slim.min.js", "tether/dist/js/*.min.js", "bootstrap/dist/js/*.min.js":
-                for j in glob(os.path.join("/usr/local/lib/node_modules", pkg)):
-                    click.echo("- Merging: %s" % j)
-                    with open(j) as ih:
-                        fh.write(ih.read())
+            # Assemble bundle.js
+            click.echo("Assembling %s" % bundle_js)
+            with open(bundle_js + ".part", "a") as fh:
+                for pkg in "qrcode-svg/dist/qrcode.min.js", "jquery/dist/jquery.min.js", "timeago/*.js", "nunjucks/browser/nunjucks-slim.min.js", "tether/dist/js/*.min.js", "bootstrap/dist/js/*.min.js":
+                    for j in glob(os.path.join("/usr/local/lib/node_modules", pkg)):
+                        click.echo("- Merging: %s" % j)
+                        with open(j) as ih:
+                            fh.write(ih.read())
 
-        # Assemble bundle.css
-        click.echo("Assembling %s" % bundle_css)
-        with open(bundle_css + ".part", "w") as fh:
-            for pkg in "tether/dist/css/*.min.css", "bootstrap/dist/css/*.min.*css", "font-awesome/css/font-awesome.min.css":
-                for j in glob(os.path.join("/usr/local/lib/node_modules", pkg)):
-                    click.echo("- Merging: %s" % j)
-                    with open(j) as ih:
-                        fh.write(ih.read())
+            # Assemble bundle.css
+            click.echo("Assembling %s" % bundle_css)
+            with open(bundle_css + ".part", "w") as fh:
+                for pkg in "tether/dist/css/*.min.css", "bootstrap/dist/css/*.min.*css", "font-awesome/css/font-awesome.min.css":
+                    for j in glob(os.path.join("/usr/local/lib/node_modules", pkg)):
+                        click.echo("- Merging: %s" % j)
+                        with open(j) as ih:
+                            fh.write(ih.read())
 
-        os.rename(bundle_css + ".part", bundle_css)
-        os.rename(bundle_js + ".part", bundle_js)
+            os.rename(bundle_css + ".part", bundle_css)
+            os.rename(bundle_js + ".part", bundle_js)
 
         assert os.getuid() == 0 and os.getgid() == 0
         _, _, uid, gid, gecos, root, shell = pwd.getpwnam("certidude")
@@ -1203,7 +1209,8 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
             click.echo("Creating %s" % const.CONFIG_DIR)
             os.makedirs(const.CONFIG_DIR)
 
-        os.umask(0o137) # 640
+        os.umask(0o177) # 600
+
         if os.path.exists(const.SERVER_CONFIG_PATH):
             click.echo("Configuration file %s already exists, remove to regenerate" % const.SERVER_CONFIG_PATH)
         else:
@@ -1250,7 +1257,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
                 pass
 
         # Generate and sign CA key
-        if not os.path.exists(ca_key):
+        if not os.path.exists(ca_key) or subordinate and not os.path.exists(ca_req):
             if elliptic_curve:
                 click.echo("Generating %s EC key for CA ..." % const.CURVE_NAME)
                 public_key, private_key = asymmetric.generate_pair("ec", curve=const.CURVE_NAME)
@@ -1258,12 +1265,38 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
                 click.echo("Generating %d-bit RSA key for CA ..." % const.KEY_SIZE)
                 public_key, private_key = asymmetric.generate_pair("rsa", bit_size=const.KEY_SIZE)
 
+            # Set permission bits to 600
+            os.umask(0o177)
+            with open(ca_key, 'wb') as f:
+                f.write(asymmetric.dump_private_key(private_key, None))
+
+            if subordinate:
+                builder = CSRBuilder(distinguished_name, public_key)
+                request = builder.build(private_key)
+                with open(ca_req + ".part", 'wb') as f:
+                    f.write(pem_armor_csr(request))
+                os.rename(ca_req + ".part", ca_req)
+
+        if not os.path.exists(ca_cert):
+            if subordinate:
+                click.echo("Request has been written to %s" % ca_req)
+                click.echo()
+                click.echo(open(ca_req).read())
+                click.echo()
+                click.echo("Get it signed and insert signed certificate into %s" % ca_cert)
+                click.echo()
+                click.echo("  cat > %s" % ca_cert)
+                click.echo()
+                click.echo("Paste contents and press Ctrl-D, adjust permissions:")
+                click.echo()
+                click.echo("  chown root:root %s" % ca_cert)
+                click.echo("  chmod 0644 %s" % ca_cert)
+                click.echo()
+                click.echo("To finish setup procedure run 'certidude setup authority' again")
+                sys.exit(1)
+
             # https://technet.microsoft.com/en-us/library/aa998840(v=exchg.141).aspx
-            builder = CertificateBuilder(
-                cn_to_dn("Certidude at %s" % common_name, common_name,
-                    o=organization, ou=organizational_unit),
-                public_key
-            )
+            builder = CertificateBuilder(distinguished_name, public_key)
             builder.self_signed = True
             builder.ca = True
             builder.serial_number = random.randint(
@@ -1280,22 +1313,20 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, organizat
             with open(ca_cert, 'wb') as f:
                 f.write(pem_armor_certificate(certificate))
 
-            # Set permission bits to 600
-            os.umask(0o177)
-            with open(ca_key, 'wb') as f:
-                f.write(asymmetric.dump_private_key(private_key, None))
-
         sys.exit(0) # stop this fork here
-
-        assert os.stat(sqlite_path).st_mode == 0o100640
-        assert os.stat(ca_cert).st_mode == 0o100640
-        assert os.stat(ca_key).st_mode == 0o100600
-        assert os.stat("/etc/nginx/sites-available/certidude.conf").st_mode == 0o100640
     else:
-        os.waitpid(bootstrap_pid, 0)
+        _, exitcode = os.waitpid(bootstrap_pid, 0)
+        if exitcode:
+            return 0
         from certidude import authority
         authority.self_enroll(skip_notify=True)
         assert os.getuid() == 0 and os.getgid() == 0, "Enroll contaminated environment"
+        assert os.stat(sqlite_path).st_mode == 0o100660
+        assert os.stat(ca_cert).st_mode == 0o100640
+        assert os.stat(ca_key).st_mode == 0o100600
+        assert os.stat("/etc/nginx/sites-available/certidude.conf").st_mode == 0o100600
+        assert os.stat("/etc/certidude/server.conf").st_mode == 0o100600
+
         click.echo("Enabling and starting Certidude backend")
         os.system("systemctl enable certidude")
         os.system("systemctl restart certidude")

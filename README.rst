@@ -60,6 +60,7 @@ Features
 Common:
 
 * Standard request, sign, revoke workflow via web interface.
+* RSA and Elliptic Curve Cryptography both supported, use ``certidude setup authority --elliptic-curve`` for the second
 * `OCSP <https://tools.ietf.org/html/rfc4557>`_ and `SCEP <https://tools.ietf.org/html/draft-nourse-scep-23>`_ support.
 * PAM and Active Directory compliant authentication backends: Kerberos single sign-on, LDAP simple bind.
 * POSIX groups and Active Directory (LDAP) group membership based authorization.
@@ -93,12 +94,8 @@ System dependencies for Ubuntu 16.04:
 
 .. code:: bash
 
-    apt install -y \
-        python3-click \
-        python3-jinja2 python3-markdown \
-        python3-pip \
-        python3-mysql.connector python3-requests \
-        python3-pyxattr
+    apt install -y python3-click python3-jinja2 python3-markdown \
+        python3-pip python3-mysql.connector python3-requests python3-pyxattr
 
 System dependencies for Fedora 25+:
 
@@ -122,7 +119,6 @@ You can check it with:
     hostname -f
 
 The command should return ``ca.example.com``.
-
 If necessary tweak machine's fully qualified hostname in ``/etc/hosts``:
 
 .. code::
@@ -130,8 +126,15 @@ If necessary tweak machine's fully qualified hostname in ``/etc/hosts``:
     127.0.0.1 localhost
     127.0.1.1 ca.example.com ca
 
+Certidude will submit e-mail notifications to locally running MTA.
+Install Postfix and configure it as Satellite system:
+
+.. code:: bash
+
+    apt install postfix
+
 Certidude can set up certificate authority relatively easily.
-Following will set up certificate authority in ``/var/lib/certidude/hostname.domain.tld``,
+Following will set up certificate authority in ``/var/lib/certidude/``,
 configure systemd service for your platform,
 nginx in ``/etc/nginx/sites-available/certidude.conf``,
 cronjobs in ``/etc/cron.hourly/certidude`` and much more:
@@ -140,19 +143,12 @@ cronjobs in ``/etc/cron.hourly/certidude`` and much more:
 
     certidude setup authority
 
-Tweak the configuration in ``/etc/certidude/server.conf`` until you meet your requirements
-and start the services:
+Tweak the configuration in ``/etc/certidude/server.conf`` until you meet your requirements,
+to apply changes run:
 
 .. code:: bash
 
     systemctl restart certidude
-
-Certidude will submit e-mail notifications to locally running MTA.
-Install Postfix and configure it as Satellite system:
-
-.. code:: bash
-
-    apt install postfix
 
 
 Setting up PAM authentication
@@ -247,7 +243,6 @@ Setting up services
 -------------------
 
 Set up services as usual (OpenVPN, Strongswan, etc), when setting up certificates
-generate signing request with TLS server flag set.
 See Certidude admin interface how to submit CSR-s and retrieve signed certificates.
 
 
@@ -262,26 +257,31 @@ Configure Certidude client in ``/etc/certidude/client.conf``:
 .. code:: ini
 
     [ca.example.com]
-    insecure = true
     trigger = interface up
+    hostname = $HOSTNAME
 
 Configure services in ``/etc/certidude/services.conf``:
 
 .. code:: bash
 
-    [gateway.example.com]
+    [OpenVPN to gateway.example.com]
     authority = ca.example.com
     service = network-manager/openvpn
+    remote = gateway.example.com
+
+    [IPSec to gateway.example.com]
+    authority = ca.example.com
+    service = network-manager/strongswan
     remote = gateway.example.com
 
 To request certificate:
 
 .. code:: bash
 
-    certidude request
+    certidude enroll
 
 The keys, signing requests, certificates and CRL-s are placed under
-/var/lib/certidude/ca.example.com/
+/etc/certidude/authority/ca.example.com/
 
 The VPN connection should immideately become available under network connections.
 
@@ -293,10 +293,8 @@ To use dependencies from pip:
 
 .. code:: bash
 
-    apt install \
-        build-essential python-dev cython libffi-dev libssl-dev libkrb5-dev \
-        ldap-utils krb5-user \
-        libsasl2-modules-gssapi-mit \
+    apt install build-essential python-dev cython libffi-dev libssl-dev \
+        libkrb5-dev ldap-utils krb5-user libsasl2-modules-gssapi-mit \
         libsasl2-dev libldap2-dev
 
 Clone the repository:
@@ -324,7 +322,7 @@ To run tests and measure code coverage grab a clean VM or container:
 
     pip3 install codecov pytest-cov
     rm .coverage*
-    TRAVIS=1 coverage run --parallel-mode --source certidude -m py.test tests
+    COVERAGE_FILE=/tmp/.coverage    TRAVIS=1 coverage run --parallel-mode --source certidude -m py.test tests --capture=sys
     coverage combine
     coverage report
 
@@ -335,23 +333,34 @@ To uninstall:
     pip3 uninstall certidude
 
 
-Certificate attributes
-----------------------
+Offline install
+---------------
 
-Certificates have a lot of fields that can be filled in.
-In any case country, state, locality, organization, organizational unit are not filled in
-as this information will already exist in AD and duplicating it in the certificate management
-doesn't make sense. Additionally the information will get out of sync if
-attributes are changed in AD but certificates won't be updated.
+To set up certificate authority in an isolated environment use a
+vanilla Ubuntu 16.04 or container to collect the artifacts:
 
-If machine is enrolled, eg by running ``certidude request`` as root on Ubuntu/Fedora/Mac OS X:
+.. code:: bash
 
-* If Kerberos credentials are presented machine can be automatically enrolled depending on the ``machine enrollment`` setting
-* Common name is set to short ``hostname``
-* It is tricky to determine user who is triggering the action so given name, surname and e-mail attributes are not filled in
+    add-apt-repository -y ppa:nginx/stable
+    apt-get update -q
+    rm -fv /var/cache/apt/archives/*.deb /var/cache/certidude/wheels/*.whl
+    apt install --download-only python3-markdown python3-pyxattr python3-jinja2 python3-cffi software-properties-common libnginx-mod-nchan nginx-full
+    pip3 wheel --wheel-dir=/var/cache/certidude/wheels -r requirements.txt
+    pip3 wheel --wheel-dir=/var/cache/certidude/wheels falcon humanize ipaddress simplepam user-agents python-ldap gssapi
+    pip3 wheel --wheel-dir=/var/cache/certidude/wheels .
+    tar -cf certidude-assets.tar /var/lib/certidude/assets/ /var/cache/apt/archives/ /var/cache/certidude/wheels
 
-If user enrolls, eg by clicking generate bundle button in the web interface:
+Transfer certidude-artifacts.tar to the target machine and execute:
 
-* Common name is either set to ``username`` or ``username@device-identifier`` depending on the ``user enrollment`` setting
-* Given name and surname are not filled in because Unicode characters cause issues in OpenVPN Connect app
-* E-mail is not filled in because it might change in AD
+.. code:: bash
+
+    rm -fv /var/cache/apt/archives/*.deb /var/cache/certidude/wheels/*.whl
+    tar -xvf certidude-artifacts.tar -C /
+    dpkg -i /var/cache/apt/archives/*.deb
+    pip3 install  --use-wheel --no-index --find-links /var/cache/certidude/wheels/*.whl
+
+Proceed to bootstrap authority without installing packages or assembling assets:
+
+    certidude setup authority  --skip-packages --skip-assets [--elliptic-curve] [--organization "Mycorp LLC"]
+
+Note it's highly recommended to enable nginx PPA in the target machine

@@ -53,17 +53,15 @@ with open(config.AUTHORITY_PRIVATE_KEY_PATH, "rb") as fh:
 def self_enroll(skip_notify=False):
     assert os.getuid() == 0 and os.getgid() == 0, "Can self-enroll only as root"
 
-    from certidude import const
+    from certidude import const, config
     common_name = const.FQDN
-    directory = os.path.join("/var/lib/certidude", const.FQDN)
-    self_key_path = os.path.join(directory, "self_key.pem")
 
     try:
         path, buf, cert, signed, expires = get_signed(common_name)
         self_public_key = asymmetric.load_public_key(path)
-        private_key = asymmetric.load_private_key(self_key_path)
+        private_key = asymmetric.load_private_key(config.SELF_KEY_PATH)
     except FileNotFoundError: # certificate or private key not found
-        with open(self_key_path, 'wb') as fh:
+        with open(config.SELF_KEY_PATH, 'wb') as fh:
             if public_key.algorithm == "ec":
                 self_public_key, private_key = asymmetric.generate_pair("ec", curve=public_key.curve)
             elif public_key.algorithm == "rsa":
@@ -81,11 +79,11 @@ def self_enroll(skip_notify=False):
     request = builder.build(private_key)
     pid = os.fork()
     if not pid:
-        from certidude import authority
+        from certidude import authority, config
         from certidude.common import drop_privileges
         drop_privileges()
         assert os.getuid() != 0 and os.getgid() != 0
-        path = os.path.join(directory, "requests", common_name + ".pem")
+        path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
         click.echo("Writing request to %s" % path)
         with open(path, "wb") as fh:
             fh.write(pem_armor_csr(request)) # Write CSR with certidude permissions
@@ -93,10 +91,7 @@ def self_enroll(skip_notify=False):
         sys.exit(0)
     else:
         os.waitpid(pid, 0)
-        if os.path.exists("/etc/systemd"):
-            os.system("systemctl reload nginx")
-        else:
-            os.system("service nginx reload")
+        os.system("systemctl reload nginx")
 
 
 def get_request(common_name):
