@@ -399,8 +399,9 @@ def _sign(csr, buf, profile, skip_notify=False, skip_push=False, overwrite=False
 
         if overwrite:
             # TODO: is this the best approach?
+            # TODO: why didn't unittest detect bugs here?
             prev_serial_hex = "%x" % prev.serial_number
-            revoked_path = os.path.join(config.REVOKED_DIR, "%s.pem" % prev_serial_hex)
+            revoked_path = os.path.join(config.REVOKED_DIR, "%040x.pem" % prev.serial_number)
             os.rename(cert_path, revoked_path)
             attachments += [(prev_buf, "application/x-pem-file", "deprecated.crt" if renew else "overwritten.crt")]
             overwritten = True
