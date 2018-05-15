@@ -1,3 +1,5 @@
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
 # Install CA certificate
 @"
 {{ session.authority.certificate.blob }}"@ | Out-File ca_cert.pem
