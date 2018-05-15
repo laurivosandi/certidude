@@ -22,6 +22,8 @@ class User(object):
         return hash(self.mail)
 
     def __eq__(self, other):
+        if other == None:
+            return False
         assert isinstance(other, User), "%s is not instance of User" % repr(other)
         return self.mail == other.mail
 
@@ -90,7 +92,7 @@ class ActiveDirectoryUserManager(object):
         # TODO: Sanitize username
         with DirectoryConnection() as conn:
             ft = config.LDAP_USER_FILTER % username
-            attribs = "cn", "givenName", "sn", "mail", "userPrincipalName"
+            attribs = "cn", "givenName", "sn", config.LDAP_MAIL_ATTRIBUTE, "userPrincipalName"
             r = conn.search_s(config.LDAP_BASE, 2, ft, attribs)
             for dn, entry in r:
                 if not dn:
@@ -105,21 +107,21 @@ class ActiveDirectoryUserManager(object):
                     else:
                         given_name, surname = cn, b""
 
-                mail, = entry.get("mail") or entry.get("userPrincipalName") or ((username + "@" + const.DOMAIN).encode("ascii"),)
+                mail, = entry.get(config.LDAP_MAIL_ATTRIBUTE) or ((username + "@" + const.DOMAIN).encode("ascii"),)
                 return User(username, mail.decode("ascii"),
                     given_name.decode("utf-8"), surname.decode("utf-8"))
             raise User.DoesNotExist("User %s does not exist" % username)
 
     def filter(self, ft):
         with DirectoryConnection() as conn:
-            attribs = "givenName", "surname", "samaccountname", "cn", "mail", "userPrincipalName"
+            attribs = "givenName", "surname", "samaccountname", "cn", config.LDAP_MAIL_ATTRIBUTE, "userPrincipalName"
             r = conn.search_s(config.LDAP_BASE, 2, ft, attribs)
             for dn,entry in r:
                 if not dn:
                     continue
                 username, = entry.get("sAMAccountName")
                 cn, = entry.get("cn")
-                mail, = entry.get("mail") or entry.get("userPrincipalName") or (username + b"@" + const.DOMAIN.encode("ascii"),)
+                mail, = entry.get(config.LDAP_MAIL_ATTRIBUTE) or entry.get("userPrincipalName") or (username + b"@" + const.DOMAIN.encode("ascii"),)
                 if entry.get("givenName") and entry.get("sn"):
                     given_name, = entry.get("givenName")
                     surname, = entry.get("sn")

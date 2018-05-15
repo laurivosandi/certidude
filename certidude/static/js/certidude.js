@@ -1,15 +1,8 @@
 
 'use strict';
 
-const KEYWORDS = [
-    ["Android", "android"],
-    ["iPhone", "iphone"],
-    ["iPad", "ipad"],
-    ["Ubuntu", "ubuntu"],
-    ["Fedora", "fedora"],
-    ["Linux", "linux"],
-    ["Macintosh", "mac"],
-];
+const KEY_SIZE = 2048;
+const DEVICE_KEYWORDS = ["Android", "iPhone", "iPad", "Windows", "Ubuntu", "Fedora", "Mac", "Linux"];
 
 jQuery.timeago.settings.allowFuture = true;
 
@@ -17,18 +10,185 @@ function normalizeCommonName(j) {
     return j.replace("@", "--").split(".").join("-"); // dafuq ?!
 }
 
+function onShowAll() {
+  var options = document.querySelectorAll(".option");
+  for (i = 0; i < options.length; i++) {
+      options[i].style.display = "block";
+  }
+}
+
+function onKeyGen() {
+  if (window.navigator.userAgent.indexOf(" Edge/") >= 0) {
+    $("#enroll .loader-container").hide();
+    $("#enroll .edge-broken").show();
+    return;
+  }
+
+  window.keys = forge.pki.rsa.generateKeyPair(KEY_SIZE);
+  console.info('Key-pair created.');
+
+  // Device identifier
+  var dig = forge.md.sha384.create();
+  dig.update(window.navigator.userAgent);
+
+  var prefix = "unknown";
+  for (i in DEVICE_KEYWORDS) {
+    var keyword = DEVICE_KEYWORDS[i];
+    if (window.navigator.userAgent.indexOf(keyword) >= 0) {
+      prefix = keyword.toLowerCase();
+      break;
+    }
+  }
+
+  window.identifier = prefix + "-" + dig.digest().toHex().substring(0, 8);
+  console.info("Device identifier:", identifier);
+
+  window.common_name = query.subject + "@" + identifier;
+
+  window.csr = forge.pki.createCertificationRequest();
+  csr.publicKey = keys.publicKey;
+  csr.setSubject([{
+    name: 'commonName', value: common_name
+  }]);
+
+  csr.sign(keys.privateKey, forge.md.sha384.create());
+  console.info('Certification request created');
+
+
+  $("#enroll .loader-container").hide();
+
+  var prefix = null;
+  for (i in DEVICE_KEYWORDS) {
+    var keyword = DEVICE_KEYWORDS[i];
+    if (window.navigator.userAgent.indexOf(keyword) >= 0) {
+      prefix = keyword.toLowerCase();
+      break;
+    }
+  }
+
+  if (prefix == null) {
+      $(".option").show();
+      return;
+  }
+
+  var protocols = query.protocols.split(",");
+  console.info("Showing snippets for:", protocols);
+  for (var j = 0; j < protocols.length; j++) {
+      var options = document.querySelectorAll(".option." + protocols[j] + "." + prefix);
+      for (i = 0; i < options.length; i++) {
+          options[i].style.display = "block";
+      }
+  }
+}
+
+function onEnroll(encoding) {
+  console.info("User agent:", window.navigator.userAgent);
+  var xhr = new XMLHttpRequest();
+  xhr.open('GET', "/api/certificate");
+  xhr.onload = function() {
+    if (xhr.status === 200) {
+      var ca = forge.pki.certificateFromPem(xhr.responseText);
+      console.info("Got CA certificate:");
+      var xhr2 = new XMLHttpRequest();
+      xhr2.open("PUT", "/api/token/?token=" + query.token );
+      xhr2.onload = function() {
+        if (xhr2.status === 200) {
+          var a = document.createElement("a");
+          var cert = forge.pki.certificateFromPem(xhr2.responseText);
+          console.info("Got signed certificate:", xhr2.responseText);
+          var p12 = forge.pkcs12.toPkcs12Asn1(
+            keys.privateKey, [cert, ca], "", {algorithm: '3des'});
+
+          switch(encoding) {
+            case 'p12':
+              var buf = forge.asn1.toDer(p12).getBytes();
+              var mimetype = "application/x-pkcs12"
+              a.download = query.router + ".p12";
+              break
+            case 'sswan':
+              var buf = JSON.stringify({
+                  uuid: "a061d140-d3f9-4db7-b2f8-32d6703f4618",
+                  name: identifier,
+                  type: "ikev2-cert",
+                  'ike-proposal': 'aes256-sha384-prfsha384-modp2048',
+                  'esp-proposal': 'aes128gcm16-aes128gmac-modp2048',
+                  remote: { addr: query.router },
+                  local: { p12: forge.util.encode64(forge.asn1.toDer(p12).getBytes()) }
+              });
+              console.info("Buf is:", buf);
+              var mimetype = "application/vnd.strongswan.profile"
+              a.download = query.router + ".sswan";
+              break
+            case 'ovpn':
+              var buf = nunjucks.render('snippets/openvpn-client.conf', {
+                  session: {
+                      authority: {
+                          certificate: {
+                              common_name: "Certidude at " + window.location.hostname,
+                              algorithm: "rsa"
+                          }
+                      },
+                      service: {
+                          protocols: query.protocols.split(","),
+                          routers: [query.router],
+                      }
+                  },
+                  key: forge.pki.privateKeyToPem(keys.privateKey),
+                  cert: xhr2.responseText,
+                  ca: xhr.responseText
+              });
+              var mimetype = "application/x-openvpn-profile";
+              a.download = query.router + ".ovpn";
+              break
+            case 'mobileconfig':
+              var p12 = forge.pkcs12.toPkcs12Asn1(
+                  keys.privateKey, [cert, ca], "1234", {algorithm: '3des'});
+              var buf = nunjucks.render('snippets/ios.mobileconfig', {
+                  session: {
+                      authority: {
+                          certificate: {
+                              common_name: "Certidude at " + window.location.hostname,
+                              algorithm: "rsa"
+                          }
+                      }
+                  },
+                  common_name: common_name,
+                  gateway: query.router,
+                  p12: forge.util.encode64(forge.asn1.toDer(p12).getBytes()),
+                  ca: forge.util.encode64(forge.asn1.toDer(forge.pki.certificateToAsn1(ca)).getBytes())
+              });
+              var mimetype = "application/x-apple-aspen-config";
+              a.download = query.router + ".mobileconfig";
+              break
+          }
+          a.href = "data:" + mimetype + ";base64," + forge.util.encode64(buf);
+          console.info("Offering bundle for download");
+          document.body.appendChild(a); // Firefox needs this!
+          a.click();
+        } else {
+          if (xhr2.status == 403) { alert("Token used or expired"); }
+          console.info('Request failed.  Returned status of ' + xhr2.status);
+          try {
+            var r = JSON.parse(xhr2.responseText);
+            console.info("Server said: " + r.title);
+            console.info(r.description);
+          } catch(e) {
+             console.info("Server said: " + xhr2.statusText);
+          }
+        }
+      };
+      xhr2.send(forge.pki.certificationRequestToPem(csr));
+    }
+  }
+  xhr.send();
+}
+
 function onHashChanged() {
-    var query = {};
+    window.query = {};
     var a = location.hash.substring(1).split('&');
     for (var i = 0; i < a.length; i++) {
         var b = a[i].split('=');
         query[decodeURIComponent(b[0])] = decodeURIComponent(b[1] || '');
-    }
-
-    if (query.columns) { query.columns = parseInt(query.columns) };
-
-    if (query.columns < 2 || query.columns > 4) {
-        query.columns = 2;
     }
 
     console.info("Hash is now:", query);
@@ -36,19 +196,31 @@ function onHashChanged() {
     if (window.location.protocol != "https:") {
         $.get("/api/certificate/", function(blob) {
             $("#view-dashboard").html(env.render('views/insecure.html', { window: window,
-                authority_name: window.location.hostname,
-                session: { authority: { certificate: { blob: blob }}}
+                session: { authority: {
+                    hostname: window.location.hostname,
+                    certificate: { blob: blob }}}
             }));
         });
     } else {
-        loadAuthority(query);
+        if (query.action == "enroll") {
+            $("#view-dashboard").html(env.render('views/enroll.html'));
+            var options = document.querySelectorAll(".option");
+            for (i = 0; i < options.length; i++) {
+                options[i].style.display = "none";
+            }
+            setTimeout(onKeyGen, 100);
+            console.info("Generating key pair...");
+        } else {
+            loadAuthority(query);
+        }
     }
 }
 
-function onTagClicked(tag) {
-    var cn = $(tag).attr("data-cn");
-    var id = $(tag).attr("title");
-    var value = $(tag).html();
+function onTagClicked(e) {
+    e.preventDefault();
+    var cn = $(e.target).attr("data-cn");
+    var id = $(e.target).attr("title");
+    var value = $(e.target).html();
     var updated = prompt("Enter new tag or clear to remove the tag", value);
     if (updated == "") {
         $(event.target).addClass("disabled");
@@ -57,7 +229,7 @@ function onTagClicked(tag) {
             url: "/api/signed/" + cn + "/tag/" + id + "/"
         });
     } else if (updated && updated != value) {
-        $(tag).addClass("disabled");
+        $(e.target).addClass("disabled");
         $.ajax({
             method: "PUT",
             url: "/api/signed/" + cn + "/tag/" + id + "/",
@@ -77,9 +249,10 @@ function onTagClicked(tag) {
     return false;
 }
 
-function onNewTagClicked(menu) {
-    var cn = $(menu).attr("data-cn");
-    var key = $(menu).attr("data-key");
+function onNewTagClicked(e) {
+    e.preventDefault();
+    var cn = $(e.target).attr("data-cn");
+    var key = $(e.target).attr("data-key");
     var value = prompt("Enter new " + key + " tag for " + cn);
     if (!value) return;
     if (value.length == 0) return;
@@ -101,6 +274,7 @@ function onNewTagClicked(menu) {
             alert(e);
         }
     });
+    return false;
 }
 
 function onTagFilterChanged() {
@@ -121,6 +295,7 @@ function onLogEntry (e) {
                 message: e.message,
                 severity: e.severity,
                 fresh: e.fresh,
+                keywords: e.message.toLowerCase().split(/,?[ <>/]+/).join("|")
             }
         }));
     }
@@ -270,7 +445,7 @@ function onServerStopped() {
 
 }
 
-function onSendToken() {
+function onIssueToken() {
     $.ajax({
         method: "POST",
         url: "/api/token/",
@@ -316,20 +491,16 @@ function loadAuthority(query) {
 
             console.info("Loaded:", session);
             $("#login").hide();
-
-            if (!query.columns) {
-                query.columns = 2;
-            }
+            $("#search").show();
 
             /**
              * Render authority views
              **/
             $("#view-dashboard").html(env.render('views/authority.html', {
                 session: session,
-                window: window,
-                columns: query.columns,
-                column_width: 12 / query.columns,
-                authority_name: window.location.hostname }));
+                window: window
+            }));
+
             $("time").timeago();
             if (session.authority) {
                 $("#log input").each(function(i, e) {
@@ -414,11 +585,7 @@ function loadAuthority(query) {
             $("#search").on("keyup", function() {
                 if (window.searchTimeout) { clearTimeout(window.searchTimeout); }
                 window.searchTimeout = setTimeout(function() { $(window).trigger("search"); }, 500);
-                console.info("Setting timeout", window.searchTimeout);
-
             });
-
-            console.log("Features enabled:", session.features);
 
             if (session.request_submission_allowed) {
                 $("#request_submit").click(function() {
@@ -442,10 +609,8 @@ function loadAuthority(query) {
                             alert(e);
                         }
                     });
-
                 });
             }
-
 
             $("nav .nav-link.dashboard").removeClass("disabled").click(function() {
                 $("#column-requests").show();
@@ -458,31 +623,36 @@ function loadAuthority(query) {
              * Fetch log entries
              */
             if (session.features.logging) {
-                if (query.columns == 4) {
+                if ($("#column-log:visible").length) {
                     loadLog();
-                } else {
-                    $("nav .nav-link.log").removeClass("disabled").click(function() {
-                        $("#column-requests").show();
-                        $("#column-signed").show();
-                        $("#column-revoked").show();
-                        $("#column-log").hide();
-                    });
                 }
+                $("nav .nav-link.log").removeClass("disabled").click(function() {
+                    loadLog();
+                    $("#column-requests").show();
+                    $("#column-signed").show();
+                    $("#column-revoked").show();
+                    $("#column-log").hide();
+                });
+            } else {
+                console.info("Log disabled");
             }
         }
     });
 }
 
 function loadLog() {
-    if (window.log_initialized) return;
+    if (window.log_initialized) {
+        console.info("Log already loaded");
+        return;
+    }
+    console.info("Loading log...");
     window.log_initialized = true;
     $.ajax({
         method: "GET",
-        url: "/api/log/",
+        url: "/api/log/?limit=100",
         dataType: "json",
         success: function(entries, status, xhr) {
             console.info("Got", entries.length, "log entries");
-            console.info("j=", entries.length-1);
             for (var j = entries.length-1; j--; ) {
                 onLogEntry(entries[j]);
             };

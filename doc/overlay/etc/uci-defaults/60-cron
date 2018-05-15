@@ -1,6 +1,11 @@
+# Randomize restart time
+OFFSET=$(awk -v min=1 -v max=59 'BEGIN{srand(); print int(min+rand()*(max-min+1))}')
+
+# wtf?! https://wiki.strongswan.org/issues/1501#note-7
 cat << EOF > /etc/crontabs/root
-15 1 * * * sleep 70 && touch /etc/banner && reboot
-10 1 1 */2 * /usr/bin/certidude-enroll-renew
+#$OFFSET 2 * * * sleep 70 && touch /etc/banner && reboot
+$OFFSET 2 * * * ipsec restart
+5 1 1 */2 * /usr/bin/certidude-enroll-renew
 EOF
 
 chmod 0600 /etc/crontabs/root

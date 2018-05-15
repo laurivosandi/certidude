@@ -4,8 +4,8 @@ import os
 from asn1crypto.util import timezone
 from asn1crypto import ocsp
 from base64 import b64decode
-from certidude import config
-from datetime import datetime
+from certidude import config, const
+from datetime import datetime, timedelta
 from oscrypto import asymmetric
 from .utils import AuthorityHandler
 from .utils.firewall import whitelist_subnets
@@ -88,7 +88,8 @@ class OCSPResource(AuthorityHandler):
                     'serial_number': serial,
                 },
                 'cert_status': status,
-                'this_update': now,
+                'this_update': now - const.CLOCK_SKEW_TOLERANCE,
+                'next_update': now + timedelta(minutes=15) + const.CLOCK_SKEW_TOLERANCE,
                 'single_extensions': []
             })
 

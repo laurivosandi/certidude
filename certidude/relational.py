@@ -14,6 +14,9 @@ class RelationalMixin(object):
 
     SQL_CREATE_TABLES = ""
 
+    class DoesNotExist(Exception):
+        pass
+
     def __init__(self, uri):
         self.uri = urlparse(uri)
 
@@ -29,7 +32,8 @@ class RelationalMixin(object):
             if self.uri.netloc:
                 raise ValueError("Malformed database URI %s" % self.uri)
             import sqlite3
-            conn = sqlite3.connect(self.uri.path)
+            conn = sqlite3.connect(self.uri.path,
+                detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
         else:
             raise NotImplementedError("Unsupported database scheme %s, currently only mysql://user:pass@host/database or sqlite:///path/to/database.sqlite is supported" % o.scheme)
 
@@ -74,7 +78,6 @@ class RelationalMixin(object):
         conn.close()
         return rowid
 
-
     def iterfetch(self, query, *args):
         conn = self.sql_connect()
         cursor = conn.cursor()
@@ -86,3 +89,24 @@ class RelationalMixin(object):
             cursor.close()
             conn.close()
         return tuple(g())
+
+    def get(self, query, *args):
+        conn = self.sql_connect()
+        cursor = conn.cursor()
+        cursor.execute(query, args)
+        row = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        if not row:
+            raise self.DoesNotExist("No matches for query '%s' with parameters %s" % (query, repr(args)))
+        return row
+
+    def execute(self, query, *args):
+        conn = self.sql_connect()
+        cursor = conn.cursor()
+        cursor.execute(query, args)
+        affected_rows = cursor.rowcount
+        cursor.close()
+        conn.commit()
+        conn.close()
+        return affected_rows

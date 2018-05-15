@@ -336,26 +336,28 @@ To uninstall:
 Offline install
 ---------------
 
-To set up certificate authority in an isolated environment use a
-vanilla Ubuntu 16.04 or container to collect the artifacts:
+To prepare packages for offline installation use following snippet on a
+vanilla Ubuntu 16.04 or container:
 
 .. code:: bash
 
+    rm -fv /var/cache/apt/archives/*.deb /var/cache/certidude/wheels/*.whl
+    apt install --download-only python3-pip
+    pip3 wheel --wheel-dir=/var/cache/certidude/wheels -r requirements.txt
+    pip3 wheel --wheel-dir=/var/cache/certidude/wheels .
+    tar -cf certidude-client.tar /var/cache/certidude/wheels
     add-apt-repository -y ppa:nginx/stable
     apt-get update -q
-    rm -fv /var/cache/apt/archives/*.deb /var/cache/certidude/wheels/*.whl
     apt install --download-only python3-markdown python3-pyxattr python3-jinja2 python3-cffi software-properties-common libnginx-mod-nchan nginx-full
-    pip3 wheel --wheel-dir=/var/cache/certidude/wheels -r requirements.txt
     pip3 wheel --wheel-dir=/var/cache/certidude/wheels falcon humanize ipaddress simplepam user-agents python-ldap gssapi
-    pip3 wheel --wheel-dir=/var/cache/certidude/wheels .
-    tar -cf certidude-assets.tar /var/lib/certidude/assets/ /var/cache/apt/archives/ /var/cache/certidude/wheels
+    tar -cf certidude-server.tar /var/lib/certidude/assets/ /var/cache/apt/archives/ /var/cache/certidude/wheels
 
-Transfer certidude-artifacts.tar to the target machine and execute:
+Transfer certidude-server.tar or certidude-client.tar to the target machine and execute:
 
 .. code:: bash
 
     rm -fv /var/cache/apt/archives/*.deb /var/cache/certidude/wheels/*.whl
-    tar -xvf certidude-artifacts.tar -C /
+    tar -xvf certidude-*.tar -C /
     dpkg -i /var/cache/apt/archives/*.deb
     pip3 install  --use-wheel --no-index --find-links /var/cache/certidude/wheels/*.whl
 

@@ -6,11 +6,12 @@ test -e /etc/strongswan && test -e /etc/ipsec.d || ln -s strongswan/ipsec.d /etc
 test -e /etc/strongswan && test -e /etc/ipsec.secrets || ln -s strongswan/ipsec.secrets /etc/ipsec.secrets
 
 # Set SELinux context
-chcon --type=home_cert_t /etc/certidude/authority/{{ authority_name }}/ca_cert.pem /etc/ipsec.d/cacerts/{{ authority_name }}.pem
-chcon --type=home_cert_t  /etc/certidude/authority/{{ authority_name }}/host_cert.pem /etc/ipsec.d/certs/{{ authority_name }}.pem
-chcon --type=home_cert_t  /etc/certidude/authority/{{ authority_name }}/host_key.pem /etc/ipsec.d/private/{{ authority_name }}.pem
+chcon --type=home_cert_t /etc/certidude/authority/{{ session.authority.hostname }}/ca_cert.pem /etc/ipsec.d/cacerts/{{ session.authority.hostname }}.pem
+chcon --type=home_cert_t  /etc/certidude/authority/{{ session.authority.hostname }}/host_cert.pem /etc/ipsec.d/certs/{{ session.authority.hostname }}.pem
+chcon --type=home_cert_t  /etc/certidude/authority/{{ session.authority.hostname }}/host_key.pem /etc/ipsec.d/private/{{ session.authority.hostname }}.pem
 
 # Patch AppArmor
 cat << EOF > /etc/apparmor.d/local/usr.lib.ipsec.charon
-/etc/certidude/authority/**
+/etc/certidude/authority/** r,
 EOF
+systemctl restart

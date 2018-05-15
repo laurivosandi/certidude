@@ -103,8 +103,9 @@ uci set uhttpd.main.listen_http=0.0.0.0:8080
 EOF
 
 make -C $BUILD/$BASENAME image FILES=$OVERLAY PROFILE=$PROFILE PACKAGES="openssl-util curl ca-certificates htop \
-    iftop tcpdump nmap nano mtr patch diffutils ipset usbutils luci dropbear kmod-tun \
+    iftop tcpdump nmap nano mtr patch diffutils ipset usbutils luci dropbear kmod-tun netdata \
     strongswan-default strongswan-mod-kernel-libipsec strongswan-mod-openssl strongswan-mod-curl strongswan-mod-ccm strongswan-mod-gcm \
-    pciutils -odhcpd -odhcp6c -kmod-ath9k picocom libustream-openssl kmod-crypto-gcm bc"
-
+    -odhcpd -odhcp6c -kmod-ath9k picocom libustream-openssl kmod-crypto-gcm \
+    -pppd -luci-proto-ppp -kmod-ppp -ppp -ppp-mod-pppoe \
+    -kmod-ip6tables -ip6tables -luci-proto-ipv6 -kmod-iptunnel6 -kmod-ipsec6"
 

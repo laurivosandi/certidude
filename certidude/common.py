@@ -2,6 +2,16 @@
 import os
 import click
 import subprocess
+from random import SystemRandom
+
+random = SystemRandom()
+
+try:
+    from time import time_ns
+except ImportError:
+    from time import time
+    def time_ns():
+        return int(time() * 10**9) # 64 bits integer, 32 ns bits
 
 MAPPING = dict(
     common_name="CN",
@@ -121,4 +131,7 @@ def pip(packages):
     import pip
     pip.main(['install'] + packages.split(" "))
     return True
+
+def generate_serial():
+    return time_ns() << 56 | random.randint(0, 2**56-1)
 

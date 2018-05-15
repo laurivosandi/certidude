@@ -1,4 +1,5 @@
 create table if not exists log (
+    id integer primary key autoincrement,
     created datetime,
     facility varchar(30),
     level int,

@@ -1,9 +1,9 @@
-Token for {{ user.name }}
+Token for {{ subject }}
 
-{% if issuer == user %}
-Token has been issued for {{ user }} for retrieving profile from link below.
+{% if issuer == subject %}
+Token has been issued for {{ subject }} for retrieving profile from link below.
 {% else %}
-{{ issuer }} has provided {{ user }} a token for retrieving
+{{ issuer }} has provided {{ subject }} a token for retrieving
 profile from the link below.
 {% endif %}
 

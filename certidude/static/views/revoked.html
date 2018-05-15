@@ -29,15 +29,15 @@
         <p>To fetch certificate:</p>
 
         <div class="bd-example">
-          <pre><code class="language-sh" data-lang="sh">wget <a href="/api/revoked/{{ certificate.serial }}/">http://{{ window.location.hostname }}/api/revoked/{{ certificate.serial }}/</a>
-curl http://{{ window.location.hostname }}/api/revoked/{{ certificate.serial }}/ \
+          <pre><code class="language-sh" data-lang="sh">wget <a href="/api/revoked/{{ certificate.serial }}/">http://{{ session.authority.hostname }}/api/revoked/{{ certificate.serial }}/</a>
+curl http://{{ session.authority.hostname }}/api/revoked/{{ certificate.serial }}/ \
   | openssl x509 -text -noout</code></pre>
         </div>
 
         <p>To perform online certificate status request</p>
-        <pre><code class="language-bash" data-lang="bash">curl http://{{ window.location.hostname }}/api/certificate/ > session.pem
+        <pre><code class="language-bash" data-lang="bash">curl http://{{ session.authority.hostname }}/api/certificate/ > session.pem
 openssl ocsp -issuer session.pem -CAfile session.pem \
-  -url http://{{ window.location.hostname }}/api/ocsp/ \
+  -url http://{{ session.authority.hostname }}/api/ocsp/ \
   -serial 0x{{ certificate.serial }}</span></code></pre>
 
         <p>

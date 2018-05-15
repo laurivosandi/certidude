@@ -1,0 +1,97 @@
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- https://developer.apple.com/library/content/featuredarticles/iPhoneConfigurationProfileRef/Introduction/Introduction.html -->
+    <key>PayloadDisplayName</key>
+    <string>{{ gateway }}</string>
+    <!-- This is a reverse-DNS style unique identifier used to detect duplicate profiles -->
+    <key>PayloadIdentifier</key>
+    <string>org.example.vpn2</string>
+    <key>PayloadUUID</key>
+    <string>9f93912b-5fd2-4455-99fd-13b9a47b4581</string>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>PayloadIdentifier</key>
+            <string>org.example.vpn2.conf1</string>
+            <key>PayloadUUID</key>
+            <string>29e4456d-3f03-4f15-b46f-4225d89465b7</string>
+            <key>PayloadType</key>
+            <string>com.apple.vpn.managed</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>UserDefinedName</key>
+            <string>{{ gateway }}</string>
+            <key>VPNType</key>
+            <string>IKEv2</string>
+            <key>IKEv2</key>
+            <dict>
+                <key>RemoteAddress</key>
+                <string>{{ gateway }}</string>
+                <key>RemoteIdentifier</key>
+                <string>{{ gateway }}</string>
+                <key>LocalIdentifier</key>
+                <string>{{ common_name }}</string>
+                <key>ServerCertificateIssuerCommonName</key>
+                <string>{{ session.authority.certificate.common_name }}</string>
+                <key>ServerCertificateCommonName</key>
+                <string>{{ gateway }}</string>
+                <key>AuthenticationMethod</key>
+                <string>Certificate</string>
+                <key>IKESecurityAssociationParameters</key>
+                <dict>
+                    <key>EncryptionAlgorithm</key>
+                    <string>AES-256</string>
+                    <key>IntegrityAlgorithm</key>
+                    <string>SHA2-384</string>
+                    <key>DiffieHellmanGroup</key>
+                    <integer>14</integer>
+                </dict>
+                <key>ChildSecurityAssociationParameters</key>
+                <dict>
+                    <key>EncryptionAlgorithm</key>
+                    <string>AES-128-GCM</string>
+                    <key>IntegrityAlgorithm</key>
+                    <string>SHA2-256</string>
+                    <key>DiffieHellmanGroup</key>
+                    <integer>14</integer>
+                </dict>
+                <key>EnablePFS</key>
+                <integer>1</integer>
+                <key>PayloadCertificateUUID</key>
+                <string>d60488c6-328e-4944-9c8d-61db8095c865</string>
+            </dict>
+        </dict>
+        <dict>
+            <key>PayloadIdentifier</key>
+            <string>ee.k-space.ca2.client</string>
+            <key>PayloadUUID</key>
+            <string>d60488c6-328e-4944-9c8d-61db8095c865</string>
+            <key>PayloadType</key>
+            <string>com.apple.security.pkcs12</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>PayloadContent</key>
+            <data>{{ p12 }}</data>
+        </dict>
+        <dict>
+            <key>PayloadIdentifier</key>
+            <string>org.example.ca</string>
+            <key>PayloadUUID</key>
+            <string>64988b2c-33e0-4adf-a432-6fbcae543408</string>
+            <key>PayloadType</key>
+            <string>com.apple.security.root</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <!-- This is the Base64 (PEM) encoded CA certificate -->
+            <key>PayloadContent</key>
+            <data>{{ ca }}</data>
+        </dict>
+    </array>
+</dict>
+</plist>
+

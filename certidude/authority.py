@@ -13,26 +13,14 @@ from asn1crypto.csr import CertificationRequest
 from certbuilder import CertificateBuilder
 from certidude import config, push, mailer, const
 from certidude import errors
-from certidude.common import cn_to_dn
+from certidude.common import cn_to_dn, generate_serial, random
 from crlbuilder import CertificateListBuilder, pem_armor_crl
 from csrbuilder import CSRBuilder, pem_armor_csr
 from datetime import datetime, timedelta
 from jinja2 import Template
-from random import SystemRandom
 from xattr import getxattr, listxattr, setxattr
 
 logger = logging.getLogger(__name__)
-random = SystemRandom()
-
-try:
-    from time import time_ns
-except ImportError:
-    from time import time
-    def time_ns():
-        return int(time() * 10**9) # 64 bits integer, 32 ns bits
-
-def generate_serial():
-    return time_ns() << 56 | random.randint(0, 2**56-1)
 
 # https://securityblog.redhat.com/2014/06/18/openssl-privilege-separation-analysis/
 # https://jamielinux.com/docs/openssl-certificate-authority/
@@ -61,13 +49,14 @@ def self_enroll(skip_notify=False):
         self_public_key = asymmetric.load_public_key(path)
         private_key = asymmetric.load_private_key(config.SELF_KEY_PATH)
     except FileNotFoundError: # certificate or private key not found
+        click.echo("Generating private key for frontend: %s" % config.SELF_KEY_PATH)
         with open(config.SELF_KEY_PATH, 'wb') as fh:
             if public_key.algorithm == "ec":
                 self_public_key, private_key = asymmetric.generate_pair("ec", curve=public_key.curve)
             elif public_key.algorithm == "rsa":
                 self_public_key, private_key = asymmetric.generate_pair("rsa", bit_size=public_key.bit_size)
             else:
-                NotImplemented
+                raise NotImplemented("CA certificate public key algorithm %s not supported" % public_key.algorithm)
             fh.write(asymmetric.dump_private_key(private_key, None))
     else:
         now = datetime.utcnow()
@@ -84,10 +73,11 @@ def self_enroll(skip_notify=False):
         drop_privileges()
         assert os.getuid() != 0 and os.getgid() != 0
         path = os.path.join(config.REQUESTS_DIR, common_name + ".pem")
-        click.echo("Writing request to %s" % path)
+        click.echo("Writing certificate signing request for frontend: %s" % path)
         with open(path, "wb") as fh:
             fh.write(pem_armor_csr(request)) # Write CSR with certidude permissions
         authority.sign(common_name, skip_notify=skip_notify, skip_push=True, overwrite=True, profile=config.PROFILES["srv"])
+        click.echo("Frontend certificate signed")
         sys.exit(0)
     else:
         os.waitpid(pid, 0)
@@ -409,13 +399,15 @@ def _sign(csr, buf, profile, skip_notify=False, skip_push=False, overwrite=False
     builder.serial_number = generate_serial()
 
     now = datetime.utcnow()
-    builder.begin_date = now - timedelta(minutes=5)
+    builder.begin_date = now - const.CLOCK_SKEW_TOLERANCE
     builder.end_date = now + timedelta(days=profile.lifetime)
     builder.issuer = certificate
     builder.ca = profile.ca
     builder.key_usage = profile.key_usage
     builder.extended_key_usage = profile.extended_key_usage
     builder.subject_alt_domains = [common_name]
+    builder.ocsp_url = profile.responder_url
+    builder.crl_url = profile.revoked_url
 
     end_entity_cert = builder.build(private_key)
     end_entity_cert_buf = asymmetric.dump_certificate(end_entity_cert)

@@ -29,9 +29,7 @@ AUTHORITY=$(hostname -f)
 mkdir -p $OVERLAY/etc/config
 mkdir -p $OVERLAY/etc/uci-defaults
 mkdir -p $OVERLAY/etc/certidude/authority/$AUTHORITY/
-cp /var/lib/certidude/$AUTHORITY/ca_cert.pem $OVERLAY/etc/certidude/authority/$AUTHORITY/
-
-echo /etc/certidude >> $OVERLAY/etc/sysupgrade.conf
+cp /var/lib/certidude/ca_cert.pem $OVERLAY/etc/certidude/authority/$AUTHORITY/
 
 cat <<EOF > $OVERLAY/etc/config/certidude
 

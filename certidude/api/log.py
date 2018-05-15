@@ -11,4 +11,5 @@ class LogResource(RelationalMixin):
     @authorize_admin
     def on_get(self, req, resp):
         # TODO: Add last id parameter
-        return self.iterfetch("select * from log order by created desc")
+        return self.iterfetch("select * from log order by created desc limit ?",
+            req.get_param_as_int("limit"))

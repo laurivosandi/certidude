@@ -65,9 +65,9 @@ for section in s2c_tcp s2c_udp; do
 # Common paths
 uci set openvpn.$section.script_security=2
 uci set openvpn.$section.client_connect='/etc/certidude/updown'
-uci set openvpn.$section.key='/etc/certidude/authority/{{ authority_name }}/host_key.pem'
-uci set openvpn.$section.cert='/etc/certidude/authority/{{ authority_name }}/host_cert.pem'
-uci set openvpn.$section.ca='/etc/certidude/authority/{{ authority_name }}/ca_cert.pem'
+uci set openvpn.$section.key='/etc/certidude/authority/{{ session.authority.hostname }}/host_key.pem'
+uci set openvpn.$section.cert='/etc/certidude/authority/{{ session.authority.hostname }}/host_cert.pem'
+uci set openvpn.$section.ca='/etc/certidude/authority/{{ session.authority.hostname }}/ca_cert.pem'
 {% if session.authority.certificate.algorithm != "ec" %}uci set openvpn.$section.dh='/etc/certidude/dh.pem'{% endif %}
 uci set openvpn.$section.enabled=1
 

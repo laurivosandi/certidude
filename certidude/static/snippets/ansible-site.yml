@@ -1,0 +1,15 @@
+- hosts:  {% for router in session.service.routers %}
+  {{ router }}{% endfor %}
+
+  roles:
+    - role: certidude
+      authority_name: {{ session.authority.hostname }}
+
+    - role: ipsec_mesh
+      mesh_name: mymesh
+      authority_name: {{ session.authority.hostname }}
+      ike: aes256-sha384-{% if session.authority.certificate.algorithm == "ec" %}ecp384{% else %}modp2048{% endif %}!
+      esp: aes128gcm16-aes128gmac-{% if session.authority.certificate.algorithm == "ec" %}ecp384{% else %}modp2048{% endif %}!
+      auto: start
+      nodes:{% for router in session.service.routers %}
+        {{ router }}: 172.27.{{ loop.index }}.0/24{% endfor %}

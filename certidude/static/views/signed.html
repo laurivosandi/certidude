@@ -56,7 +56,7 @@
 
     <div class="btn-group">
       {% if session.authority.tagging %}
-        <button type="button" class="btn btn-default" onclick="onNewTagClicked(this);" data-key="other" data-cn="{{ certificate.common_name }}">
+        <button type="button" class="btn btn-default" onclick="onNewTagClicked(event);" data-key="other" data-cn="{{ certificate.common_name }}">
          <i class="fa fa-tag"></i> Tag</button>
         <button type="button" class="btn btn-default dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
           <span class="sr-only">Toggle Dropdown</span>
@@ -64,7 +64,7 @@
         <div class="dropdown-menu">
           {% for tag_category in session.authority.tagging %}
           <a class="dropdown-item" href="#" data-key="{{ tag_category.name }}" data-cn="{{ certificate.common_name }}"
-            onclick="onNewTagClicked(this);">{{ tag_category.title }}</a>
+            onclick="onNewTagClicked(event);">{{ tag_category.title }}</a>
           {% endfor %}
         </div>
       {% endif %}
@@ -74,24 +74,29 @@
       <p>To fetch certificate:</p>
 
       <div class="bd-example">
-        <pre><code class="language-sh" data-lang="sh">wget <a href="/api/signed/{{ certificate.common_name }}/">http://{{ window.location.hostname }}/api/signed/{{ certificate.common_name }}/</a>
-curl http://{{ window.location.hostname }}/api/signed/{{ certificate.common_name }}/ \
+        <pre><code class="language-sh" data-lang="sh">wget <a href="/api/signed/{{ certificate.common_name }}/">http://{{ session.authority.hostname }}/api/signed/{{ certificate.common_name }}/</a>
+curl --cert-status http://{{ session.authority.hostname }}/api/signed/{{ certificate.common_name }}/ \
   | openssl x509 -text -noout</code></pre>
       </div>
 
-      {% if session.features.ocsp %}
-      <p>To perform online certificate status request:</p>
-      <pre><code class="language-bash" data-lang="bash">curl http://{{ window.location.hostname }}/api/certificate/ > session.pem
+      {% if session.authorization.ocsp_subnets %}
+      {% if certificate.responder_url %}
+      <p>To perform online certificate status request{% if "0.0.0.0/0" not in session.authorization.ocsp_subnets %}
+      from whitelisted {{ session.authorization.ocsp_subnets }} subnets{% endif %}:</p>
+      <pre><code class="language-bash" data-lang="bash">curl http://{{ session.authority.hostname }}/api/certificate > session.pem
 openssl ocsp -issuer session.pem -CAfile session.pem \
-  -url http://{{ window.location.hostname }}/api/ocsp/ \
+  -url {{ certificate.responder_url }} \
   -serial 0x{{ certificate.serial }}</code></pre>
+      {% else %}
+      <p>Querying OCSP responder disabled for this certificate, see /etc/certidude/profile.conf how to enable if that's desired</p>
+      {% endif %}
       {% endif %}
 
       <p>To fetch script:</p>
-      <pre><code class="language-bash" data-lang="bash">curl https://{{ window.location.hostname }}:8443/api/signed/{{ certificate.common_name }}/script/ \
-    --cacert /etc/certidude/authority/{{ window.location.hostname }}/ca_cert.pem \
-    --key /etc/certidude/authority/{{ window.location.hostname }}/host_key.pem \
-    --cert /etc/certidude/authority/{{ window.location.hostname }}/host_cert.pem</pre></code>
+      <pre><code class="language-bash" data-lang="bash">curl --cert-status https://{{ session.authority.hostname }}:8443/api/signed/{{ certificate.common_name }}/script/ \
+    --cacert /etc/certidude/authority/{{ session.authority.hostname }}/ca_cert.pem \
+    --key /etc/certidude/authority/{{ session.authority.hostname }}/host_key.pem \
+    --cert /etc/certidude/authority/{{ session.authority.hostname }}/host_cert.pem</pre></code>
 
       <div style="overflow: auto; max-width: 100%;">
         <table class="table" id="signed_certificates">
@@ -112,8 +117,11 @@ openssl ocsp -issuer session.pem -CAfile session.pem \
             <tr><th>SHA1</th><td>{{ certificate.sha1sum }}</td></tr>
             -->
             <tr><th>SHA256</th><td style="word-wrap:break-word;  overflow-wrap: break-word;  ">{{ certificate.sha256sum }}</td></tr>
-            {% if certificate.extensions.extended_key_usage %}
-            <tr><th>Extended key usage</th><td>{{ certificate.extensions.extended_key_usage | join(", ") }}</td></tr>
+            {% if certificate.key_usage %}
+            <tr><th>Key usage</th><td>{{ certificate.key_usage | join(", ") | replace("_", " ") }}</td></tr>
+            {% endif %}
+            {% if certificate.extended_key_usage %}
+            <tr><th>Extended key usage</th><td>{{ certificate.extended_key_usage | join(", ") | replace("_", " ") }}</td></tr>
             {% endif %}
           </tbody>
         </table>

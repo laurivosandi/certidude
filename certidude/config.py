@@ -23,6 +23,7 @@ LDAP_AUTHENTICATION_URI = cp.get("authentication", "ldap uri")
 LDAP_GSSAPI_CRED_CACHE = cp.get("accounts", "ldap gssapi credential cache")
 LDAP_ACCOUNTS_URI = cp.get("accounts", "ldap uri")
 LDAP_BASE = cp.get("accounts", "ldap base")
+LDAP_MAIL_ATTRIBUTE = cp.get("accounts", "ldap mail attribute")
 
 USER_SUBNETS = set([ipaddress.ip_network(j) for j in
     cp.get("authorization", "user subnets").split(" ") if j])
@@ -71,8 +72,7 @@ USER_MULTIPLE_CERTIFICATES = {
 
 REQUEST_SUBMISSION_ALLOWED = cp.getboolean("authority", "request submission allowed")
 AUTHORITY_CERTIFICATE_URL = cp.get("signature", "authority certificate url")
-AUTHORITY_CRL_URL = cp.get("signature", "revoked url")
-AUTHORITY_OCSP_URL = cp.get("signature", "responder url")
+AUTHORITY_CRL_URL = "http://%s/api/revoked" % const.FQDN
 
 REVOCATION_LIST_LIFETIME = cp.getint("signature", "revocation list lifetime")
 
@@ -88,6 +88,8 @@ USERS_GROUP = cp.get("authorization", "posix user group")
 ADMIN_GROUP = cp.get("authorization", "posix admin group")
 LDAP_USER_FILTER = cp.get("authorization", "ldap user filter")
 LDAP_ADMIN_FILTER = cp.get("authorization", "ldap admin filter")
+LDAP_COMPUTER_FILTER = cp.get("authorization", "ldap computer filter")
+
 if "%s" not in LDAP_USER_FILTER: raise ValueError("No placeholder %s for username in 'ldap user filter'")
 if "%s" not in LDAP_ADMIN_FILTER: raise ValueError("No placeholder %s for username in 'ldap admin filter'")
 
@@ -95,9 +97,9 @@ TAG_TYPES = [j.split("/", 1) + [cp.get("tagging", j)] for j in cp.options("taggi
 
 # Tokens
 TOKEN_URL = cp.get("token", "url")
-TOKEN_LIFETIME = cp.getint("token", "lifetime") * 60 # Convert minutes to seconds
-TOKEN_SECRET = cp.get("token", "secret").encode("ascii")
-
+TOKEN_BACKEND = cp.get("token", "backend")
+TOKEN_LIFETIME = timedelta(minutes=cp.getint("token", "lifetime")) # Convert minutes to seconds
+TOKEN_DATABASE = cp.get("token", "database")
 # TODO: Check if we don't have base or servers
 
 # The API call for looking up scripts uses following directory as root
@@ -115,11 +117,13 @@ PROFILES = dict([(key, SignatureProfile(key,
     profile_config.get(key, "key usage"),
     profile_config.get(key, "extended key usage"),
     profile_config.get(key, "common name"),
-    )) for key in profile_config.sections()])
+    profile_config.get(key,  "revoked url"),
+    profile_config.get(key, "responder url")
+)) for key in profile_config.sections() if profile_config.getboolean(key, "enabled")])
 
 cp2 = configparser.RawConfigParser()
 cp2.readfp(open(const.BUILDER_CONFIG_PATH, "r"))
-IMAGE_BUILDER_PROFILES = [(j, cp2.get(j, "title"), cp2.get(j, "rename")) for j in cp2.sections()]
+IMAGE_BUILDER_PROFILES = [(j, cp2.get(j, "title"), cp2.get(j, "rename")) for j in cp2.sections() if cp2.getboolean(j, "enabled")]
 
 TOKEN_OVERWRITE_PERMITTED=True
 

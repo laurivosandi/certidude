@@ -40,8 +40,8 @@
     <div class="collapse" id="details-{{ request.sha256sum }}">
       <p>Use following to fetch the signing request:</p>
       <div class="bd-example">
-        <pre><code class="language-sh" data-lang="sh">wget <a href="/api/request/{{ request.common_name }}/">http://{{ window.location.hostname }}/api/request/{{ request.common_name }}/</a>
-curl http://{{ window.location.hostname }}/api/request/{{ request.common_name }}/ \
+        <pre><code class="language-sh" data-lang="sh">wget <a href="/api/request/{{ request.common_name }}/">http://{{ session.authority.hostname }}/api/request/{{ request.common_name }}/</a>
+curl http://{{ session.authority.hostname }}/api/request/{{ request.common_name }}/ \
   | openssl req -text -noout</code></pre>
       </div>
 

@@ -122,6 +122,11 @@ logger -t certidude -s "Certificate md5sum: $(md5sum -b $CERTIFICATE_PATH.part)"
 
 uci commit
 
+echo $AUTHORITY_PATH >> /etc/sysupgrade.conf
+echo $CERTIFICATE_PATH >> /etc/sysupgrade.conf
+echo $KEY_PATH >> /etc/sysupgrade.conf
+echo $REQUEST_PATH >> /etc/sysupgrade.conf
+
 mv $CERTIFICATE_PATH.part $CERTIFICATE_PATH
 
 # Start services

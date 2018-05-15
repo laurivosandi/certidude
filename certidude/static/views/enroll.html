@@ -1,0 +1,238 @@
+<!-- https://wiki.strongswan.org/projects/strongswan/wiki/AppleIKEv2Profile#Certificate-authentication -->
+
+<!--
+
+Browser status
+
+- Edge doesn't work because they think data: urls are insecure
+- iphone QR code scanner's webview is constrained, cant download data: links
+- outlook.com via iphone mail client works
+- android gmail app works
+- chrome works
+- firefox works
+
+OS/soft status
+
+- OpenVPN works on everything
+- StrongSwan app works on Android
+- NetworkManager doesn't support importing .sswan files yet, so no IPSec support for Ubuntu or Fedora here yet
+
+-->
+
+<div id="enroll" class="row">
+  <div class="loader-container">
+    <div class="loader"></div>
+    <p>Generating RSA keypair, this will take a while...</p>
+  </div>
+
+  <div class="col-sm-12 mt-3 edge-broken" style="display:none;">
+    <!-- https://stackoverflow.com/questions/33154646/data-uri-link-a-href-data-doesnt-work-in-microsoft-edge?utm_medium=organic&utm_source=google_rich_qa&utm_campaign=google_rich_qa -->
+    Microsoft Edge not supported, open the link with Chrome or Firefox
+  </div>
+
+  <div class="col-sm-12 mt-3 option ubuntu linux openvpn">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">Ubuntu 16.04+</h3>
+        <p class="card-text">Install OpenVPN plugin for NetworkManager by executing following two command in the terminal:
+
+        <pre><code># Ubuntu 16.04 ships with older OpenVPN 2.3, to support newer ciphers add OpenVPN's repo
+if [ $(lsb_relase -cs) == "xenial" ]; then
+  wget -O - https://swupdate.openvpn.net/repos/repo-public.gpg|apt-key add -
+  echo "deb http://build.openvpn.net/debian/openvpn/release/2.4 xenial main" > /etc/apt/sources.list.d/openvpn-aptrepo.list
+  apt update
+  apt install openvpn
+fi
+
+sudo apt install -y network-manager-openvpn-gnome
+sudo systemctl restart network-manager
+</code></pre>
+
+        <p>
+          <a href="javascript:onEnroll('ovpn');" class="btn btn-primary">Fetch OpenVPN profile</a>
+          <button class="btn btn-secondary" type="button" data-toggle="collapse" data-target="#ubuntu-screenshots" aria-expanded="false" aria-controls="ubuntu-screenshots">
+            Screenshots
+          </button>
+        </p>
+
+        <div class="collapse" id="ubuntu-screenshots">
+            <p>Open up network connections:</p>
+            <p><img src="/img/ubuntu-01-edit-connections.png"/></p>
+            <p>Hit <i>Add button</i>:</p>
+            <p><img src="/img/ubuntu-02-network-connections.png"/></p>
+            <p>Select <i>Import a saved VPN configuration...</i>:</p>
+            <p><img src="/img/ubuntu-03-import-saved-config.png"/></p>
+            <p>Select downloaded file:</p>
+            <p><img src="/img/ubuntu-04-select-file.png"/></p>
+            <p>Once profile is successfully imported following dialog appears:</p>
+            <p><img src="/img/ubuntu-05-profile-imported.png"/></p>
+            <p>By default all traffic is routed via VPN gateway, route only intranet subnets to the gateway select <i>Routes...</i> under <i>IPv4 Settings</i>:</p>
+            <p><img src="/img/ubuntu-06-ipv4-settings.png"/></p>
+            <p>Check <i>Use this connection only for resources on its network</i>:</p>
+            <p><img src="/img/ubuntu-07-disable-default-route.png"/></p>
+            <p>To activate the connection select it under <i>VPN Connections</i>:</p>
+            <p><img src="/img/ubuntu-08-activate-connection.png"/></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="col-sm-12 mt-3 option fedora linux openvpn">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">Fedora</h3>
+        <p class="card-text">Install OpenVPN plugin for NetworkManager by running following two commands:</p>
+        <pre><code>dnf install NetworkManager-openvpn-gnome
+systemctl restart NetworkManager</code></pre>
+          Right click in the NetworkManager icon, select network settings. Hit the + button and select <i>Import from file...</i>, select the downloaded .ovpn file.
+          Remove the .ovpn file from the Downloads folder.</p>
+        <a href="javascript:onEnroll('ovpn');" class="btn btn-primary">Fetch OpenVPN profile</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-12 mt-3 option windows ipsec">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">Windows</h3>
+        <p class="card-text">
+          Import PKCS#12 container to your machine trust store.
+          Import VPN connection profile by moving the downloaded .pbk file to
+        <pre><code>%userprofile%\AppData\Roaming\Microsoft\Network\Connections\PBK</code></pre>
+        or
+        <pre><code>C:\ProgramData\Microsoft\Network\Connections\Pbk</code></pre></p>
+        <a href="javascript:onEnroll('p12');" class="btn btn-primary">Fetch PKCS#12 container</a>
+        <a href="#" class="btn btn-secondary">Fetch VPN profile</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-12 mt-3 option windows openvpn">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">Windows</h3>
+        <p class="card-text">
+          Install OpenVPN community edition client.
+          Move the downloaded .ovpn file to C:\Program Files\OpenVPN\config and
+          right click in the system tray on OpenVPN icon and select Connect from the menu.
+          For finishing touch adjust the file permissions so only local
+          administrator can read that file, remove regular user access to the file.
+        </p>
+        <a href="https://openvpn.net/index.php/download/community-downloads.html" class="btn btn-secondary">Get OpenVPN community edition</a>
+        <a href="javascript:onEnroll('ovpn');" class="btn btn-primary">Fetch OpenVPN profile</a>
+        <button class="btn btn-secondary" type="button" data-toggle="collapse" data-target="#windows-screenshots" aria-expanded="false" aria-controls="windows-screenshots">
+            Screenshots
+         </button>
+
+        <div class="collapse" id="windows-screenshots">
+          <p>Download OpenVPN from the link supplied above:</p>
+          <p><img src="/img/windows-01-download-openvpn.png"/></p>
+
+          <p>Install OpenVPN:</p>
+          <p><img src="/img/windows-02-install-openvpn.png"/></p>
+
+          <p>Move the configuraiton file downloaded from the second button above:</p>
+          <p><img src="/img/windows-03-move-config-file.png"/></p>
+
+          <p>Connect from system tray:</p>
+          <p><img src="/img/windows-04-connect.png"/></p>
+
+          <p>Connection is successfully configured:</p>
+          <p><img src="/img/windows-05-connected.png"/></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-12 mt-3 option mac openvpn">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">Mac OS X</h3>
+        <p class="card-text">Download Tunnelblick. Tap on the button above and import the profile.</p>
+        <a  href="https://tunnelblick.net/" target="_blank" class="btn btn-secondary">Get Tunnelblick</a>
+        <a href="javascript:onEnroll('ovpn');" class="btn btn-primary">Fetch OpenVPN profile</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-12 mt-3 option iphone ipad openvpn">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">iPhone/iPad</h3>
+        <p class="card-text">Install OpenVPN Connect app, tap on the button below.</p>
+        <a href="https://itunes.apple.com/us/app/openvpn-connect/id590379981?mt=8" target="_blank" class="btn btn-secondary">Get OpenVPN Connect app</a>
+        <a href="javascript:onEnroll('ovpn');" class="btn btn-primary">Fetch OpenVPN profile</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-12 mt-3 option iphone ipad ikev2">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">iPhone/iPad</h3>
+        <p class="card-text">
+          Tap the button below, you'll be prompted about configuration profile, tap <i>Allow</i>.
+          Hit <i>Install</i> in the top-right corner.
+          Enter your passcode to unlock trust store.
+          Tap <i>Install</i> and confirm by hitting <i>Install</i>.
+          Where password for the certificate is prompted, enter 1234.
+          Hit <i>Done</i>. Go to <i>Settings</i>, open VPN submenu and tap on the VPN profile to connect.
+        </p>
+        <a href="javascript:onEnroll('mobileconfig');" class="btn btn-primary">Fetch VPN profile</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-12 mt-3 option mac ikev2">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">Mac OS X</h3>
+        <p class="card-text">
+          Click on the button below, you'll be prompted about configuration profile, tap <i>Allow</i>.
+          Hit <i>Install</i> in the top-right corner.
+          Enter your passcode to unlock trust store.
+          Tap <i>Install</i> and confirm by hitting <i>Install</i>.
+          Where password for the certificate is prompted, enter 1234.
+          Hit <i>Done</i>. Go to <i>Settings</i>, open VPN submenu and tap on the VPN profile to connect.
+        </p>
+        <a href="javascript:onEnroll('mobileconfig');" class="btn btn-primary">Fetch VPN profile</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-12 mt-3 option android openvpn">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">Android</h3>
+        <p class="card-text">Intall OpenVPN Connect app on your device.
+          Tap on the downloaded .ovpn file, OpenVPN Connect should prompt for import.
+          Hit <i>Accept</i> and then <i>Connect</i>.
+          Remember to delete any remaining .ovpn files under the <i>Downloads</i>.
+        </p>
+        <a href="https://play.google.com/store/apps/details?id=net.openvpn.openvpn" target="_blank" class="btn btn-secondary">Get OpenVPN Connect app</a>
+        <a href="javascript:onEnroll('ovpn');" class="btn btn-primary">Fetch OpenVPN profile</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-12 mt-3 option android ikev2">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">Android</h3>
+        <p class="card-text">
+          Install strongSwan Client app on your device.
+          Tap on the downloaded .sswan file, StrongSwan Client should prompt for import.
+          Hit <i>Import certificate from VPN profile</i> and then <i>Import</i> in the top-right corner.
+          Remember to delete any remaining .sswan files under the <i>Downloads</i>.
+        </p>
+        <a href="https://play.google.com/store/apps/details?id=org.strongswan.android" class="btn btn-secondary">Get strongSwan VPN Client app</a>
+        <a href="javascript:onEnroll('sswan');" class="btn btn-primary">Fetch StrongSwan profile</a>
+      </div>
+    </div>
+  </div>
+  <!--
+    <a href="javascript:onShowAll();">I did't find an appropriate option for me, show all options</a>
+  -->
+
+</div>

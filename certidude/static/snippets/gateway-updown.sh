@@ -1,8 +1,8 @@
 # Create VPN gateway up/down script for reporting client IP addresses to CA
-cat <<\EOF > /etc/certidude/authority/{{ authority_name }}/updown
+cat <<\EOF > /etc/certidude/authority/{{ session.authority.hostname }}/updown
 #!/bin/sh
 
-CURL="curl -m 3 -f --key /etc/certidude/authority/{{ authority_name }}/host_key.pem --cert /etc/certidude/authority/{{ authority_name }}/host_cert.pem --cacert /etc/certidude/authority/{{ authority_name }}/ca_cert.pem https://{{ authority_name }}:8443/api/lease/"
+CURL="curl -m 3 -f --key /etc/certidude/authority/{{ session.authority.hostname }}/host_key.pem --cert /etc/certidude/authority/{{ session.authority.hostname }}/host_cert.pem --cacert /etc/certidude/authority/{{ session.authority.hostname }}/ca_cert.pem https://{{ session.authority.hostname }}:8443/api/lease/"
 
 case $PLUTO_VERB in
     up-client) $CURL --data-urlencode "outer_address=$PLUTO_PEER" --data-urlencode "inner_address=$PLUTO_PEER_SOURCEIP" --data-urlencode "client=$PLUTO_PEER_ID" ;;
@@ -15,5 +15,5 @@ case $script_type in
 esac
 EOF
 
-chmod +x /etc/certidude/authority/{{ authority_name }}/updown
+chmod +x /etc/certidude/authority/{{ session.authority.hostname }}/updown
 

@@ -10,6 +10,7 @@ from base64 import b64decode
 from certidude import config, push, errors
 from certidude.decorators import csrf_protection, MyEncoder
 from certidude.profile import SignatureProfile
+from certidude.user import DirectoryConnection
 from datetime import datetime
 from oscrypto import asymmetric
 from oscrypto.errors import SignatureError
@@ -84,13 +85,28 @@ class RequestListResource(AuthorityHandler):
                             "Bad request",
                             "Common name %s differs from Kerberos credential %s!" % (common_name, machine))
 
-                    # Automatic enroll with Kerberos machine cerdentials
-                    resp.set_header("Content-Type", "application/x-pem-file")
-                    cert, resp.body = self.authority._sign(csr, body,
-                        profile=config.PROFILES["rw"], overwrite=overwrite_allowed)
-                    logger.info("Automatically enrolled Kerberos authenticated machine %s from %s",
-                        machine, req.context.get("remote_addr"))
-                    return
+                    hit = False
+                    with DirectoryConnection() as conn:
+                        ft = config.LDAP_COMPUTER_FILTER % ("%s$" % machine)
+                        attribs = "cn",
+                        r = conn.search_s(config.LDAP_BASE, 2, ft, attribs)
+                        for dn, entry in r:
+                            if not dn:
+                                continue
+                            else:
+                                hit = True
+                                break
+
+                    if hit:
+                        # Automatic enroll with Kerberos machine cerdentials
+                        resp.set_header("Content-Type", "application/x-pem-file")
+                        cert, resp.body = self.authority._sign(csr, body,
+                            profile=config.PROFILES["rw"], overwrite=overwrite_allowed)
+                        logger.info("Automatically enrolled Kerberos authenticated machine %s (%s) from %s",
+                            machine, dn, req.context.get("remote_addr"))
+                        return
+                    else:
+                        logger.error("Kerberos authenticated machine %s didn't fit the 'ldap computer filter' criteria %s" % (machine, ft))
 
 
         """

@@ -1,6 +1,8 @@
 import pwd
+from asn1crypto import pem, x509
 from oscrypto import asymmetric
 from csrbuilder import CSRBuilder, pem_armor_csr
+from asn1crypto.util import OrderedDict
 from subprocess import check_output
 from importlib import reload
 from click.testing import CliRunner
@@ -86,6 +88,9 @@ def clean_client():
 
 
 def clean_server():
+    # Stop Samba
+    os.system("systemctl stop samba-ad-dc")
+
     os.umask(0o22)
 
     if os.path.exists("/run/certidude/server.pid"):
@@ -134,14 +139,9 @@ def clean_server():
         if os.path.exists("/etc/openvpn/keys"):
             shutil.rmtree("/etc/openvpn/keys")
 
-    # Stop samba
-    if os.path.exists("/run/samba/samba.pid"):
-        with open("/run/samba/samba.pid") as fh:
-            try:
-                os.kill(int(fh.read()), 15)
-            except OSError:
-                pass
+    # Remove Samba stuff
     os.system("rm -Rfv /var/lib/samba/*")
+    assert not os.path.exists("/var/lib/samba/private/secrets.keytab")
 
     # Restore initial resolv.conf
     shutil.copyfile("/etc/resolv.conf.orig", "/etc/resolv.conf")
@@ -156,7 +156,7 @@ def test_cli_setup_authority():
     assert os.getuid() == 0, "Run tests as root in a clean VM or container"
     assert check_output(["/bin/hostname", "-f"]) == b"ca.example.lan\n", "As a safety precaution, unittests only run in a machine whose hostanme -f  is ca.example.lan"
 
-    os.system("DEBIAN_FRONTEND=noninteractive apt-get install -qq -y git build-essential python-dev libkrb5-dev samba krb5-user winbind bc")
+    os.system("DEBIAN_FRONTEND=noninteractive apt-get install -qq -y git build-essential python-dev libkrb5-dev samba krb5-user")
 
     assert_cleanliness()
 
@@ -211,10 +211,19 @@ def test_cli_setup_authority():
     assert const.HOSTNAME == "ca"
     assert const.DOMAIN == "example.lan"
 
+    # Bootstrap authority again with:
+    # - ECDSA certificates
+    # - POSIX auth
+    # - OCSP enabled
+    # - SCEP disabled
+    # - CRL enabled
+
     assert os.system("certidude setup authority --elliptic-curve") == 0
 
     assert_cleanliness()
 
+    assert os.path.exists("/var/lib/certidude/signed/ca.example.lan.pem"), "provisioning failed"
+    assert not os.path.exists("/etc/cron.hourly/certidude")
 
     # Make sure nginx is running
     assert os.system("nginx -t") == 0, "invalid nginx configuration"
@@ -222,12 +231,6 @@ def test_cli_setup_authority():
 
     # Make sure we generated legit CA certificate
     from certidude import config, authority, user
-    assert authority.certificate.serial_number >= 0x100000000000000000000000000000000000000
-    assert authority.certificate.serial_number <= 0xfffffffffffffffffffffffffffffffffffffff
-    assert authority.certificate["tbs_certificate"]["validity"]["not_before"].native.replace(tzinfo=None) < datetime.utcnow()
-    assert authority.certificate["tbs_certificate"]["validity"]["not_after"].native.replace(tzinfo=None) > datetime.utcnow() + timedelta(days=7000)
-    assert authority.certificate["tbs_certificate"]["validity"]["not_before"].native.replace(tzinfo=None) < datetime.utcnow()
-    assert authority.public_key.algorithm == "ec"
 
     # Generate garbage
     with open("/var/lib/certidude/bla", "w") as fh:
@@ -240,7 +243,6 @@ def test_cli_setup_authority():
         pass
 
     # Start server before any signing operations are performed
-    config.CERTIFICATE_RENEWAL_ALLOWED = True
     assert_cleanliness()
 
     import requests
@@ -255,16 +257,40 @@ def test_cli_setup_authority():
 
 
     # Test CA certificate fetch
-    buf = open("/var/lib/certidude/ca_cert.pem").read()
     r = requests.get("http://ca.example.lan/api/certificate")
     assert r.status_code == 200
     assert r.headers.get('content-type') == "application/x-x509-ca-cert"
-    assert r.text == buf
+    header, _, certificate_der_bytes = pem.unarmor(r.text.encode("ascii"))
+    cert = x509.Certificate.load(certificate_der_bytes)
 
-    r = client().simulate_get("/api/certificate")
-    assert r.status_code == 200
-    assert r.headers.get('content-type') == "application/x-x509-ca-cert"
-    assert r.text == buf
+    assert cert.subject.native.get("common_name") == "Certidude at ca.example.lan"
+    assert cert.subject.native.get("organizational_unit_name") == "Certificate Authority"
+    assert cert.serial_number >= 0x150000000000000000000000000000
+    assert cert.serial_number <= 0xfffffffffffffffffffffffffffffffffffffff
+    assert cert["tbs_certificate"]["validity"]["not_before"].native.replace(tzinfo=None) < datetime.utcnow()
+    assert cert["tbs_certificate"]["validity"]["not_after"].native.replace(tzinfo=None) > datetime.utcnow() + timedelta(days=7000)
+    assert cert["tbs_certificate"]["validity"]["not_before"].native.replace(tzinfo=None) < datetime.utcnow()
+
+    extensions = cert["tbs_certificate"]["extensions"].native
+    assert extensions[0] == OrderedDict([
+        ('extn_id', 'basic_constraints'),
+        ('critical', True),
+        ('extn_value', OrderedDict([
+            ('ca', True),
+            ('path_len_constraint', None)]
+        ))]), extensions[0]
+#    assert extensions[1][0] == "key_identifier", extensions[1]
+
+    assert extensions[2] == OrderedDict([
+        ('extn_id', 'key_usage'),
+        ('critical', True),
+        ('extn_value', {'key_cert_sign', 'crl_sign'})]), extensions[3]
+    assert len(extensions) == 3
+
+    public_key = asymmetric.load_public_key(cert["tbs_certificate"]["subject_public_key_info"])
+    assert public_key.algorithm == "ec"
+
+
 
     # Password is bot, users created by Travis
     usertoken = "Basic dXNlcmJvdDpib3Q="
@@ -418,6 +444,38 @@ def test_cli_setup_authority():
     r = client().simulate_get("/api/signed/test/")
     assert r.status_code == 200, r.text
     assert r.headers.get('content-type') == "application/x-pem-file"
+
+    header, _, certificate_der_bytes = pem.unarmor(r.text.encode("ascii"))
+    cert = x509.Certificate.load(certificate_der_bytes)
+    assert cert.subject.native.get("common_name") == "test"
+    assert cert.subject.native.get("organizational_unit_name") == "Roadwarrior"
+    assert cert.serial_number >= 0x150000000000000000000000000000
+    assert cert.serial_number <= 0xfffffffffffffffffffffffffffffffffffffff
+    assert cert["tbs_certificate"]["validity"]["not_before"].native.replace(tzinfo=None) < datetime.utcnow()
+    assert cert["tbs_certificate"]["validity"]["not_after"].native.replace(tzinfo=None) > datetime.utcnow() + timedelta(days=100)
+    assert cert["tbs_certificate"]["validity"]["not_before"].native.replace(tzinfo=None) < datetime.utcnow()
+
+    public_key = asymmetric.load_public_key(cert["tbs_certificate"]["subject_public_key_info"])
+    assert public_key.algorithm == "ec"
+    """
+    extensions = cert["tbs_certificate"]["extensions"].native
+    assert extensions[0] == OrderedDict([
+        ('extn_id', 'basic_constraints'),
+        ('critical', True),
+        ('extn_value', OrderedDict([
+            ('ca', True),
+            ('path_len_constraint', None)]
+        ))]), extensions[0]
+#    assert extensions[1][0] == "key_identifier", extensions[1]
+
+    assert extensions[2] == OrderedDict([
+        ('extn_id', 'key_usage'),
+        ('critical', True),
+        ('extn_value', {'key_cert_sign', 'crl_sign'})]), extensions[3]
+    assert len(extensions) == 3
+
+    """
+
 
     r = client().simulate_get("/api/signed/test/", headers={"Accept":"application/json"})
     assert r.status_code == 200, r.text
@@ -628,12 +686,7 @@ def test_cli_setup_authority():
     assert ev_url.startswith("http://ca.example.lan/ev/sub/")
 
 
-    #######################
-    ### Token mechanism ###
-    #######################
-
-    # TODO
-
+    # TODO: issue token, should fail because there are no routers
 
     #############
     ### nginx ###
@@ -766,6 +819,19 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "Writing certificate to:" in result.output, result.output
+
+
+
+    #######################
+    ### Token mechanism ###
+    #######################
+
+    r = client().simulate_post("/api/token/",
+        body="username=userbot",
+        headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
+    assert r.status_code == 200
+
+    # TODO: check consume
 
 
     #################################
@@ -1055,8 +1121,9 @@ def test_cli_setup_authority():
     clean_server()
 
     # Bootstrap domain controller here,
-    # Samba startup takes some timec
+    # Samba startup takes some time
     os.system("samba-tool domain provision --server-role=dc --domain=EXAMPLE --realm=EXAMPLE.LAN --host-name=ca")
+    os.system("systemctl restart samba-ad-dc")
     os.system("samba-tool user add userbot S4l4k4l4 --given-name='User' --surname='Bot'")
     os.system("samba-tool user add adminbot S4l4k4l4 --given-name='Admin' --surname='Bot'")
     os.system("samba-tool group addmembers 'Domain Admins' adminbot")
@@ -1069,7 +1136,7 @@ def test_cli_setup_authority():
     with open("/etc/resolv.conf", "w") as fh:
         fh.write("nameserver 127.0.0.1\nsearch example.lan\n")
     # TODO: dig -t srv perhaps?
-    os.system("samba")
+
 
     # Samba bind 636 late (probably generating keypair)
     # so LDAPS connections below will fail
@@ -1088,28 +1155,29 @@ def test_cli_setup_authority():
     assert os.system("echo S4l4k4l4 | kinit administrator") == 0
     assert os.path.exists("/tmp/krb5cc_0")
 
-    # Fork to not contaminate environment while creating service principal
-    spn_pid = os.fork()
-    if not spn_pid:
-        os.system("sed -e 's/CA/CA\\nkerberos method = system keytab/' -i /etc/samba/smb.conf ")
-        os.environ["KRB5_KTNAME"] = "FILE:/etc/certidude/server.keytab"
-        assert os.system("net ads keytab add HTTP -k") == 0
-        assert os.path.exists("/etc/certidude/server.keytab")
-        os.system("chown root:certidude /etc/certidude/server.keytab")
-        os.system("chmod 640 /etc/certidude/server.keytab")
-        return
-    else:
-        os.waitpid(spn_pid, 0)
+    # Set up HTTP service principal
+    os.system("sed -e 's/CA/CA\\nkerberos method = system keytab/' -i /etc/samba/smb.conf ")
+    assert os.system("KRB5_KTNAME=FILE:/etc/certidude/server.keytab net ads keytab add HTTP -k") == 0
+    assert os.path.exists("/etc/certidude/server.keytab")
+    os.system("chown root:certidude /etc/certidude/server.keytab")
+    os.system("chmod 640 /etc/certidude/server.keytab")
 
     assert_cleanliness()
     r = requests.get("http://ca.example.lan/api/")
     assert r.status_code == 502, r.text
 
 
+    # Bootstrap authority again with:
+    # - RSA certificates
+    # - Kerberos auth
+    # - OCSP disabled
+    # - SCEP enabled
+    # - CRL disabled
 
-    # Bootstrap authority
     assert not os.path.exists("/var/lib/certidude/ca_key.pem")
     assert os.system("certidude setup authority --skip-packages") == 0
+    assert os.path.exists("/var/lib/certidude/ca_key.pem")
+    assert os.path.exists("/etc/cron.hourly/certidude")
 
 
     # Make modifications to /etc/certidude/server.conf so
@@ -1289,12 +1357,11 @@ def test_cli_setup_authority():
 
     assert os.system("systemctl stop certidude") == 0
 
-    # Note: STORAGE_PATH was mangled above, hence it's /tmp not /var/lib/certidude
     assert open("/etc/apparmor.d/local/usr.lib.ipsec.charon").read() == \
        "/etc/certidude/authority/ca.example.lan/client_key.pem r,\n" + \
        "/etc/certidude/authority/ca.example.lan/ca_cert.pem r,\n" + \
        "/etc/certidude/authority/ca.example.lan/client_cert.pem r,\n"
-    assert len(inbox) == 0, inbox # Make sure all messages were checked
+    # TODO: pop mails from /var/mail and check content
 
     os.system("service nginx stop")
     os.system("service openvpn stop")

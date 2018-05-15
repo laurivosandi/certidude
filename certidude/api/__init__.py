@@ -17,6 +17,7 @@ class NormalizeMiddleware(object):
 
 def certidude_app(log_handlers=[]):
     from certidude import authority, config
+    from certidude.tokens import TokenManager
     from .signed import SignedCertificateDetailResource
     from .request import RequestListResource, RequestDetailResource
     from .lease import LeaseResource, LeaseDetailResource
@@ -36,10 +37,20 @@ def certidude_app(log_handlers=[]):
     app.add_route("/api/signed/{cn}/", SignedCertificateDetailResource(authority))
     app.add_route("/api/request/{cn}/", RequestDetailResource(authority))
     app.add_route("/api/request/", RequestListResource(authority))
-    app.add_route("/api/", SessionResource(authority))
 
+    token_resource = None
+    token_manager = None
     if config.USER_ENROLLMENT_ALLOWED: # TODO: add token enable/disable flag for config
-        app.add_route("/api/token/", TokenResource(authority))
+        if config.TOKEN_BACKEND == "sql":
+            token_manager = TokenManager(config.TOKEN_DATABASE)
+            token_resource = TokenResource(authority, token_manager)
+            app.add_route("/api/token/", token_resource)
+        elif not config.TOKEN_BACKEND:
+            pass
+        else:
+            raise NotImplementedError("Token backend '%s' not supported" % config.TOKEN_BACKEND)
+
+    app.add_route("/api/", SessionResource(authority, token_manager))
 
     # Extended attributes for scripting etc.
     app.add_route("/api/signed/{cn}/attr/", AttributeResource(authority, namespace="machine"))
