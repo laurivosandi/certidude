@@ -39,6 +39,9 @@ class LeaseResource(AuthorityHandler):
 
         path, buf, cert, signed, expires = self.authority.get_signed(client_common_name) # TODO: catch exceptions
         if req.get_param("serial") and cert.serial_number != req.get_param_as_int("serial"): # OCSP-ish solution for OpenVPN, not exposed for StrongSwan
+            logger.info("Gateway %s attempted to submit lease information for %s with expired/unknown serial %x, expected %x" % (
+                req.context["machine"], client_common_name,
+                req.get_param_as_int("serial"), cert.serial_number))
             raise falcon.HTTPForbidden("Forbidden", "Invalid serial number supplied")
         now = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
 
