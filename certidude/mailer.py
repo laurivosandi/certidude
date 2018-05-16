@@ -8,6 +8,7 @@ from jinja2 import Environment, PackageLoader
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
+from email.header import Header
 from urllib.parse import urlparse
 
 env = Environment(loader=PackageLoader("certidude", "templates/mail"))
@@ -30,9 +31,18 @@ def send(template, to=None, secondary=None, include_admins=True, attachments=(),
     html = markdown(text)
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = "%s <%s>" % (config.MAILER_NAME, config.MAILER_ADDRESS)
-    msg["To"] = ", ".join([str(j) for j in recipients])
+    msg["Subject"] = Header(subject)
+    msg["From"] = Header(config.MAILER_NAME)
+    msg["From"].append("<%s>" % config.MAILER_ADDRESS)
+
+    msg["To"] = Header()
+    for user in recipients:
+        if isinstance(user, User):
+            full_name, user = user.format()
+            if full_name:
+                msg["To"].append(full_name)
+        msg["To"].append(user)
+        msg["To"].append(", ")
 
     part1 = MIMEText(text, "plain", "utf-8")
     part2 = MIMEText(html, "html", "utf-8")
@@ -49,4 +59,4 @@ def send(template, to=None, secondary=None, include_admins=True, attachments=(),
     if config.MAILER_ADDRESS:
         click.echo("Sending to: %s" % msg["to"])
         conn = smtplib.SMTP("localhost")
-        conn.sendmail(config.MAILER_ADDRESS, [str(u) for u in recipients], msg.as_string())
+        conn.sendmail(config.MAILER_ADDRESS, [u.mail if isinstance(u, User) else u for u in recipients], msg.as_string())

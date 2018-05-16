@@ -12,11 +12,14 @@ class User(object):
         self.given_name = given_name
         self.surname = surname
 
-    def __repr__(self):
-        if self.given_name and self.surname:
-            return "%s %s <%s>" % (self.given_name, self.surname, self.mail)
+    def format(self):
+        if self.given_name or self.surname:
+            return " ".join([j for j in [self.given_name, self.surname] if j]), "<%s>" % self.mail
         else:
-            return self.mail
+            return None, self.mail
+
+    def __repr__(self):
+        return " ".join([j for j in self.format() if j])
 
     def __hash__(self):
         return hash(self.mail)
