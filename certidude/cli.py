@@ -1123,10 +1123,15 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
     if os.path.exists(kerberos_keytab):
         click.echo("Service principal keytab found in '%s'" % kerberos_keytab)
     else:
-        click.echo("To use 'kerberos' authentication backend join the domain and create service principal with:")
+        click.echo("To use 'kerberos' authentication backend join the domain , create service principal and provision authority again:")
         click.echo()
+        click.echo("  kinit administrator@EXAMPLE.LAN")
+        click.echo("  net ads join -k")
         click.echo("  KRB5_KTNAME=FILE:%s net ads keytab add HTTP -P" % kerberos_keytab)
+        click.echo("  kdestroy")
         click.echo("  chown %s %s" % (username, kerberos_keytab))
+        click.echo("  mv /etc/certidude/server.conf /etc/certidude/server.backup")
+        click.echo("  certidude setup authority")
         click.echo()
 
 
@@ -1152,7 +1157,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
     letsencrypt_privkey = "/etc/letsencrypt/live/%s/privkey.pem" % common_name
     letsencrypt = os.path.exists(letsencrypt_fullchain)
 
-    doc_path = os.path.join(os.path.realpath(os.path.dirname(os.path.dirname(__file__))), "doc")
+    builder_path = os.path.join(os.path.realpath(os.path.dirname(__file__)), "builder")
     script_dir = os.path.join(os.path.realpath(os.path.dirname(__file__)), "templates", "script")
 
     static_path = os.path.join(os.path.realpath(os.path.dirname(__file__)), "static")

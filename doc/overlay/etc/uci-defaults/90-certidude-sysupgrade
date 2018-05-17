@@ -1,6 +1,0 @@
-#!/bin/sh
-echo $AUTHORITY_PATH >> /etc/sysupgrade.conf
-echo $CERTIFICATE_PATH >> /etc/sysupgrade.conf
-echo $KEY_PATH >> /etc/sysupgrade.conf
-echo $REQUEST_PATH >> /etc/sysupgrade.conf
-
