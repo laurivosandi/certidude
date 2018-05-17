@@ -24,6 +24,16 @@ from glob import glob
 from ipaddress import ip_network
 from oscrypto import asymmetric
 
+try:
+    import coverage
+    cov = coverage.process_startup()
+    if cov:
+        click.echo("Enabling coverage tracking")
+    else:
+        click.echo("Coverage tracking not requested")
+except ImportError:
+    pass
+
 logger = logging.getLogger(__name__)
 
 # http://www.mad-hacking.net/documentation/linux/security/ssl-tls/creating-ca.xml
@@ -55,7 +65,7 @@ def setup_client(prefix="client_", dh=False):
                 if not os.path.exists(path):
                     rpm("openssl")
                     apt("openssl")
-                    cmd = "openssl", "dhparam", "-out", path, ("1024" if os.getenv("TRAVIS") else "2048")
+                    cmd = "openssl", "dhparam", "-out", path, str(const.KEY_SIZE)
                     subprocess.check_call(cmd)
                 arguments["dhparam_path"] = path
 
@@ -1008,10 +1018,11 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
 @click.option("--outbox", default="smtp://smtp.%s" % const.DOMAIN, help="SMTP server, smtp://smtp.%s by default" % const.DOMAIN)
 @click.option("--skip-assets", is_flag=True, help="Don't attempt to assemble JS/CSS/font assets")
 @click.option("--skip-packages", is_flag=True, help="Don't attempt to install apt/pip/npm packages")
+@click.option("--packages-only", is_flag=True, help="Install only apt/pip/npm packages")
 @click.option("--elliptic-curve", "-e", is_flag=True, help="Generate EC instead of RSA keypair")
 @click.option("--subordinate", is_flag=True, help="Set up subordinate CA instead of root CA")
 @fqdn_required
-def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_config, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, title, skip_assets, skip_packages, elliptic_curve, subordinate):
+def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_config, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, title, skip_assets, skip_packages, elliptic_curve, subordinate, packages_only):
     assert subprocess.check_output(["/usr/bin/lsb_release", "-cs"]) in (b"trusty\n", b"xenial\n", b"bionic\n"), "Only Ubuntu 16.04 supported at the moment"
     assert os.getuid() == 0 and os.getgid() == 0, "Authority can be set up only by root"
 
@@ -1055,8 +1066,11 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         else:
             click.echo("Web server nginx already installed")
 
-        if not os.path.exists("/usr/bin/node"):
-            os.symlink("/usr/bin/nodejs", "/usr/bin/node")
+    if not os.path.exists("/usr/bin/node"):
+        os.symlink("/usr/bin/nodejs", "/usr/bin/node")
+
+    if packages_only:
+        return
 
     # Generate secret for tokens
     token_url = "https://" + const.FQDN + "/#action=enroll&token=%(token)s&router=%(router)s&protocol=ovpn"
@@ -1150,8 +1164,9 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
             with open("/etc/systemd/system/certidude.service", "w") as fh:
                 fh.write(env.get_template("server/systemd.service").render(vars()))
             click.echo("File /etc/systemd/system/certidude.service created")
+            os.system("systemctl daemon-reload")
     else:
-        click.echo("Not systemd based OS, don't know how to set up initscripts")
+        raise NotImplementedError("Not systemd based OS, don't know how to set up initscripts")
 
     # Set umask to 0022
     os.umask(0o022)
@@ -1231,7 +1246,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         os.umask(0o177) # 600
 
         if not os.path.exists(dhparam_path):
-            cmd = "openssl", "dhparam", "-out", dhparam_path, ("1024" if os.getenv("TRAVIS") else str(const.KEY_SIZE))
+            cmd = "openssl", "dhparam", "-out", dhparam_path, str(const.KEY_SIZE)
             subprocess.check_call(cmd)
 
         if os.path.exists(tls_config.name):
@@ -1362,15 +1377,6 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         assert os.stat("/etc/nginx/sites-available/certidude.conf").st_mode == 0o100600
         assert os.stat("/etc/certidude/server.conf").st_mode == 0o100600
 
-        click.echo("Enabling and starting Certidude backend")
-        os.system("systemctl enable certidude")
-        os.system("systemctl restart certidude")
-        click.echo("Enabling and starting nginx")
-        os.system("systemctl enable nginx")
-        os.system("systemctl start nginx")
-        os.system("systemctl reload nginx")
-        click.echo()
-
         click.echo("To enable e-mail notifications install Postfix as sattelite system and set mailer address in %s" % const.SERVER_CONFIG_PATH)
         click.echo()
         click.echo("Use following commands to inspect the newly created files:")
@@ -1383,6 +1389,15 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         click.echo()
         click.echo("  echo 'select * from log;' | sqlite3 /var/lib/certidude/meta/db.sqlite")
         click.echo("  echo 'select * from token;' | sqlite3 /var/lib/certidude/meta/db.sqlite")
+        click.echo()
+        click.echo("Enabling Certidude backend and nginx...")
+        os.system("systemctl enable certidude")
+        os.system("systemctl enable nginx")
+        click.echo("To (re)start services:")
+        click.echo()
+        click.echo("  systemctl restart certidude")
+        click.echo("  systemctl restart nginx")
+        click.echo()
         return 0
 
 
@@ -1598,14 +1613,6 @@ def certidude_serve(port, listen, fork):
         with open(const.SERVER_PID_PATH, "w") as pidfile:
             pidfile.write("%d\n" % pid)
 
-        def cleanup_handler(*args):
-            push.publish("server-stopped")
-            logger.debug("Shutting down Certidude")
-            sys.exit(0) # TODO: use another code, needs test refactor
-
-        import signal
-        signal.signal(signal.SIGTERM, cleanup_handler) # Handle SIGTERM from systemd
-
         push.publish("server-started")
         logger.debug("Started Certidude at %s", const.FQDN)
 
@@ -1613,7 +1620,10 @@ def certidude_serve(port, listen, fork):
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
-            cleanup_handler() # FIXME
+            click.echo("Caught Ctrl-C, exiting...")
+            push.publish("server-stopped")
+            logger.debug("Shutting down Certidude")
+            return
 
 
 @click.command("yubikey", help="Set up Yubikey as client authentication token")
@@ -1676,7 +1686,7 @@ def certidude_token_list():
     token_manager = TokenManager(config.TOKEN_DATABASE)
     cols = "uuid", "expires", "subject", "state"
     now = datetime.utcnow()
-    for token in token_manager.list(expired=True, used=True, token=True):
+    for token in token_manager.list(expired=True, used=True):
         token["state"] = "used" if token.get("used") else ("valid" if token.get("expires") > now  else "expired")
         print(";".join([str(token.get(col)) for col in cols]))
 

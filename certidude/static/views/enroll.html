@@ -103,7 +103,17 @@ systemctl restart NetworkManager</code></pre>
         or
         <pre><code>C:\ProgramData\Microsoft\Network\Connections\Pbk</code></pre></p>
         <a href="javascript:onEnroll('p12');" class="btn btn-primary">Fetch PKCS#12 container</a>
-        <a href="#" class="btn btn-secondary">Fetch VPN profile</a>
+        <a href="#" class="btn btn-secondary">Fetch IPSec IKEv2 VPN profile</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-12 mt-3 option windows ikev2">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">Windows</h3>
+        <p>To configure IPSec IKEv2 tunnel on Windows, open PowerShell as administrator and copy-paste following:</p>
+        <div class="highlight"><pre class="code"><code>{% include "snippets/windows.ps1" %}</code></pre></div>
       </div>
     </div>
   </div>
@@ -179,7 +189,7 @@ systemctl restart NetworkManager</code></pre>
           Where password for the certificate is prompted, enter 1234.
           Hit <i>Done</i>. Go to <i>Settings</i>, open VPN submenu and tap on the VPN profile to connect.
         </p>
-        <a href="javascript:onEnroll('mobileconfig');" class="btn btn-primary">Fetch VPN profile</a>
+        <a href="javascript:onEnroll('mobileconfig');" class="btn btn-primary">Fetch IPSec IKEv2 VPN profile</a>
       </div>
     </div>
   </div>
@@ -231,8 +241,8 @@ systemctl restart NetworkManager</code></pre>
       </div>
     </div>
   </div>
-  <!--
-    <a href="javascript:onShowAll();">I did't find an appropriate option for me, show all options</a>
-  -->
+  <div class="col-sm-12 mt-3 option any">
+    <a href="javascript:$('.option').show();">I did't find an appropriate option for me, show all options</a>
+  </div>
 
 </div>

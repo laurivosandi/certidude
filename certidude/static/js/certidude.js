@@ -40,7 +40,7 @@ function onKeyGen() {
     }
   }
 
-  window.identifier = prefix + "-" + dig.digest().toHex().substring(0, 8);
+  window.identifier = prefix + "-" + dig.digest().toHex().substring(0, 5);
   console.info("Device identifier:", identifier);
 
   window.common_name = query.subject + "@" + identifier;
@@ -79,9 +79,21 @@ function onKeyGen() {
           options[i].style.display = "block";
       }
   }
+  $(".option.any").show();
 }
 
 function onEnroll(encoding) {
+  console.info("Service name:", query.title);
+  var md = forge.md.md5.create();
+  md.update(query.title);
+  var digest = md.digest().toHex();
+  var service_uuid = digest.substring(0, 8) + "-" +
+      digest.substring(8, 12) + "-" +
+      digest.substring(12, 16) + "-" +
+      digest.substring(16,20) + "-" +
+      digest.substring(20)
+  console.info("Service UUID:", service_uuid);
+
   console.info("User agent:", window.navigator.userAgent);
   var xhr = new XMLHttpRequest();
   xhr.open('GET', "/api/certificate");
@@ -103,62 +115,45 @@ function onEnroll(encoding) {
             case 'p12':
               var buf = forge.asn1.toDer(p12).getBytes();
               var mimetype = "application/x-pkcs12"
-              a.download = query.router + ".p12";
+              a.download = query.title + ".p12";
               break
             case 'sswan':
               var buf = JSON.stringify({
-                  uuid: "a061d140-d3f9-4db7-b2f8-32d6703f4618",
-                  name: identifier,
+                  uuid: service_uuid,
+                  name: query.title,
                   type: "ikev2-cert",
                   'ike-proposal': 'aes256-sha384-prfsha384-modp2048',
-                  'esp-proposal': 'aes128gcm16-aes128gmac-modp2048',
+                  'esp-proposal': 'aes128gcm16-modp2048',
                   remote: { addr: query.router },
                   local: { p12: forge.util.encode64(forge.asn1.toDer(p12).getBytes()) }
               });
               console.info("Buf is:", buf);
               var mimetype = "application/vnd.strongswan.profile"
-              a.download = query.router + ".sswan";
+              a.download = query.title + ".sswan";
               break
             case 'ovpn':
               var buf = nunjucks.render('snippets/openvpn-client.conf', {
-                  session: {
-                      authority: {
-                          certificate: {
-                              common_name: "Certidude at " + window.location.hostname,
-                              algorithm: "rsa"
-                          }
-                      },
-                      service: {
-                          protocols: query.protocols.split(","),
-                          routers: [query.router],
-                      }
-                  },
+                  session: session,
                   key: forge.pki.privateKeyToPem(keys.privateKey),
                   cert: xhr2.responseText,
                   ca: xhr.responseText
               });
               var mimetype = "application/x-openvpn-profile";
-              a.download = query.router + ".ovpn";
+              a.download = query.title + ".ovpn";
               break
             case 'mobileconfig':
               var p12 = forge.pkcs12.toPkcs12Asn1(
                   keys.privateKey, [cert, ca], "1234", {algorithm: '3des'});
               var buf = nunjucks.render('snippets/ios.mobileconfig', {
-                  session: {
-                      authority: {
-                          certificate: {
-                              common_name: "Certidude at " + window.location.hostname,
-                              algorithm: "rsa"
-                          }
-                      }
-                  },
+                  session: session,
+                  title: query.title,
                   common_name: common_name,
                   gateway: query.router,
                   p12: forge.util.encode64(forge.asn1.toDer(p12).getBytes()),
                   ca: forge.util.encode64(forge.asn1.toDer(forge.pki.certificateToAsn1(ca)).getBytes())
               });
               var mimetype = "application/x-apple-aspen-config";
-              a.download = query.router + ".mobileconfig";
+              a.download = query.title + ".mobileconfig";
               break
           }
           a.href = "data:" + mimetype + ";base64," + forge.util.encode64(buf);
@@ -193,27 +188,55 @@ function onHashChanged() {
 
     console.info("Hash is now:", query);
 
-    if (window.location.protocol != "https:") {
-        $.get("/api/certificate/", function(blob) {
-            $("#view-dashboard").html(env.render('views/insecure.html', { window: window,
-                session: { authority: {
-                    hostname: window.location.hostname,
-                    certificate: { blob: blob }}}
-            }));
-        });
-    } else {
-        if (query.action == "enroll") {
-            $("#view-dashboard").html(env.render('views/enroll.html'));
-            var options = document.querySelectorAll(".option");
-            for (i = 0; i < options.length; i++) {
-                options[i].style.display = "none";
+    $.get({
+        method: "GET",
+        url: "/api/certificate",
+        error: function(response) {
+            if (response.responseJSON) {
+                var msg = response.responseJSON
+            } else {
+                var msg = { title: "Error " + response.status, description: response.statusText }
             }
-            setTimeout(onKeyGen, 100);
-            console.info("Generating key pair...");
-        } else {
-            loadAuthority(query);
+            $("#view-dashboard").html(env.render('views/error.html', { message: msg }));
+        },
+        success: function(blob) {
+          window.session = {
+            authority: {
+              hostname: window.location.hostname,
+              certificate: {
+                common_name: "Certidude at " + window.location.hostname,
+                algorithm: "rsa",
+                blob: blob
+              }
+            },
+            service: {
+              title: query.title ? query.title : query.router,
+              protocols: query.protocols ? query.protocols.split(",") : null,
+              routers: query.router ? [query.router] : null,
+            }
+          }
+
+          if (window.location.protocol != "https:") {
+              $("#view-dashboard").html(env.render('views/insecure.html', {session:session}));
+          } else {
+              if (query.action == "enroll") {
+                  $("#view-dashboard").html(env.render('views/enroll.html', {
+                    session:session,
+                    token: query.token,
+                  }));
+                  var options = document.querySelectorAll(".option");
+                  for (i = 0; i < options.length; i++) {
+                      options[i].style.display = "none";
+                  }
+                  setTimeout(onKeyGen, 100);
+                  console.info("Generating key pair...");
+              } else {
+                  loadAuthority(query);
+              }
+          }
         }
-    }
+    });
+
 }
 
 function onTagClicked(e) {

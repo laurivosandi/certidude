@@ -301,8 +301,8 @@ Clone the repository:
 
 .. code:: bash
 
-    git clone https://github.com/laurivosandi/certidude
-    cd certidude
+    git clone https://github.com/laurivosandi/certidude /srv/certidude
+    cd /srv/certidude
 
 Install dependencies as shown above and additionally:
 
@@ -316,15 +316,17 @@ To install the package from the source tree:
 
     pip3 install -e .
 
-To run tests and measure code coverage grab a clean VM or container:
+To run tests and measure code coverage grab a clean VM or container,
+set hostname to ca.example.lan, export environment variable COVERAGE_PROCESS_START globally and run:
 
 .. code:: bash
 
     pip3 install codecov pytest-cov
-    rm .coverage*
-    COVERAGE_FILE=/tmp/.coverage    TRAVIS=1 coverage run --parallel-mode --source certidude -m py.test tests --capture=sys
+    rm /tmp/.coverage*
+    COVERAGE_PROCESS_START=/srv/certidude/.coveragerc  py.test tests --capture=sys
     coverage combine
     coverage report
+    coverage html -i
 
 To uninstall:
 
@@ -342,7 +344,7 @@ vanilla Ubuntu 16.04 or container:
 .. code:: bash
 
     rm -fv /var/cache/apt/archives/*.deb /var/cache/certidude/wheels/*.whl
-    apt install --download-only python3-pip
+    apt install python3-pip
     pip3 wheel --wheel-dir=/var/cache/certidude/wheels -r requirements.txt
     pip3 wheel --wheel-dir=/var/cache/certidude/wheels .
     tar -cf certidude-client.tar /var/cache/certidude/wheels
@@ -362,6 +364,8 @@ Transfer certidude-server.tar or certidude-client.tar to the target machine and 
     pip3 install  --use-wheel --no-index --find-links /var/cache/certidude/wheels/*.whl
 
 Proceed to bootstrap authority without installing packages or assembling assets:
+
+.. code:: bash
 
     certidude setup authority  --skip-packages --skip-assets [--elliptic-curve] [--organization "Mycorp LLC"]
 

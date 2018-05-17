@@ -69,3 +69,7 @@ lextab.py
 yacctab.py
 .pytest_cache
 *~
+certidude/static/coverage/
+*.tar
+*.bz2
+*.gz

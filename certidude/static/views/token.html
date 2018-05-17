@@ -1,0 +1,10 @@
+<li id="token-{{ token.subject }}-{{ token.uuid }}" class="list-group-item filterable" data-keywords="">
+  <span>
+  <i class="fas fa-ticket-alt"></i>
+  {{ token.uuid }}...
+  <a href="mailto:{{ token.mail }}">{{ token.subject }}</a>
+  {% if token.issuer %}{% if token.issuer != token.subject %}by {{ token.issuer }}{% else %}by himself{% endif %}{% else %}via shell{% endif %},
+  expires
+  <time class="timeago" datetime="{{ token.expires }}">{{ token.expires }}</time>
+  </span>
+</li>

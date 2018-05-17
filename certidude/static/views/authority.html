@@ -231,14 +231,9 @@ curl http://{{ session.authority.hostname }}/api/revoked/?wait=yes -L -H "Accept
       </p>
 
       <p>Issued tokens:</p>
-      <ul>
+      <ul class="list-group">
         {% for token in session.authority.tokens %}
-          <li>
-          <a href="mailto:{{ token.mail }}">{{ token.subject }}</a>
-          {% if token.issuer %}{% if token.issuer != token.subject %}by {{ token.issuer }}{% else %}by himself{% endif %}{% else %}via shell{% endif %},
-          expires
-          <time class="timeago" datetime="{{ token.expires }}">{{ token.expires }}</time>
-          </li>
+          {% include "views/token.html" %}
         {% endfor %}
       </ul>
 

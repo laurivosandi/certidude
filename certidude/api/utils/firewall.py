@@ -231,7 +231,7 @@ def authorize_server(func):
     def wrapped(resource, req, resp, *args, **kwargs):
         buf = req.get_header("X-SSL-CERT")
         if not buf:
-            logger.info("No TLS certificate presented to access administrative API call")
+            logger.info("No TLS certificate presented to access administrative API call from %s" % req.context.get("remote_addr"))
             raise falcon.HTTPForbidden("Forbidden", "Machine not authorized to perform the operation")
 
         header, _, der_bytes = pem.unarmor(buf.replace("\t", "").encode("ascii"))

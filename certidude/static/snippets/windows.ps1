@@ -26,7 +26,7 @@ KeyAlgorithm = ECDSA_P384
 KeyLength = 2048
 {% endif %}"@ | Out-File req.inf
 C:\Windows\system32\certreq.exe -new -f -q req.inf host_csr.pem
-Invoke-WebRequest -TimeoutSec 900 -Uri 'https://{{ session.authority.hostname }}:8443/api/request/?wait=yes&autosign=yes' -InFile host_csr.pem -ContentType application/pkcs10 -Method POST  -MaximumRedirection 3 -OutFile host_cert.pem
+Invoke-WebRequest -TimeoutSec 900 -Uri 'https://{{ session.authority.hostname }}:8443/api/{% if token %}token/?uuid={{ token }}{% else %}request/?wait=yes&autosign=yes{% endif %}' -InFile host_csr.pem -ContentType application/pkcs10 -Method POST  -MaximumRedirection 3 -OutFile host_cert.pem
 
 # Import certificate
 {% if session.authority.certificate.algorithm == "ec" %}Import-Certificate -FilePath host_cert.pem -CertStoreLocation Cert:\LocalMachine\My

@@ -5,7 +5,7 @@ import socket
 import sys
 from datetime import timedelta
 
-KEY_SIZE = 1024 if os.getenv("TRAVIS") else 4096
+KEY_SIZE = 1024 if os.getenv("COVERAGE_PROCESS_START") else 4096
 CURVE_NAME = "secp384r1"
 RE_FQDN =  "^(([a-z0-9]|[a-z0-9][a-z0-9\-_]*[a-z0-9])\.)+([a-z0-9]|[a-z0-9][a-z0-9\-_]*[a-z0-9])?$"
 RE_HOSTNAME =  "^[a-z0-9]([a-z0-9\-_]{0,61}[a-z0-9])?$"

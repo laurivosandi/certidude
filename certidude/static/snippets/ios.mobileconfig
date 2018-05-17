@@ -8,7 +8,7 @@
     <key>PayloadIdentifier</key>
     <string>org.example.vpn2</string>
     <key>PayloadUUID</key>
-    <string>9f93912b-5fd2-4455-99fd-13b9a47b4581</string>
+    <string>{{ service_uuid }}</string>
     <key>PayloadType</key>
     <string>Configuration</string>
     <key>PayloadVersion</key>

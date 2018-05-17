@@ -3,10 +3,14 @@ Description=Certidude server
 After=network.target
 
 [Service]
+Type=simple
+EnvironmentFile=/etc/environment
+Environment=LANG=C.UTF-8
 Environment=PYTHON_EGG_CACHE=/tmp/.cache
 PIDFile=/run/certidude/server.pid
-ExecStop=/bin/kill -s TERM $MAINPID
+KillSignal=SIGINT
 ExecStart={{ certidude_path }} serve
+TimeoutSec=15
 
 [Install]
 WantedBy=multi-user.target

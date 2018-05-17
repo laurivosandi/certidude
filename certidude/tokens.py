@@ -58,11 +58,8 @@ class TokenManager(RelationalMixin):
             "url": url,
         }
 
-    def list(self, expired=False, used=False, token=False):
-        stmt = "select created as 'created[timestamp]', expires as 'expires[timestamp]', used as 'used[timestamp]', issuer, mail, subject"
-        if token:
-            stmt += ", uuid"
-        stmt += " from token"
+    def list(self, expired=False, used=False):
+        stmt = "select created as 'created[timestamp]', expires as 'expires[timestamp]', used as 'used[timestamp]', issuer, mail, subject, substr(uuid, 0, 8) as uuid from token"
         where = []
         args = []
         if not expired:
@@ -73,7 +70,6 @@ class TokenManager(RelationalMixin):
         if where:
             stmt = stmt + " where " + (" and ".join(where))
         stmt += " order by expires"
-
         return self.iterfetch(stmt, *args)
 
     def purge(self, all=False):

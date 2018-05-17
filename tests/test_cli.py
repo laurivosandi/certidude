@@ -1,3 +1,4 @@
+import coverage
 import pwd
 from asn1crypto import pem, x509
 from oscrypto import asymmetric
@@ -13,6 +14,8 @@ import pytest
 import shutil
 import sys
 import os
+
+coverage.process_startup()
 
 UA_FEDORA_FIREFOX = "Mozilla/5.0 (X11; Fedora; Linux x86_64) " \
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36"
@@ -69,6 +72,8 @@ def clean_client():
         "/etc/certidude/authority/ca.example.lan/server_req.pem",
         "/etc/certidude/authority/ca.example.lan/client_cert.pem",
         "/etc/certidude/authority/ca.example.lan/server_cert.pem",
+        "/etc/NetworkManager/system-connections/IPSec to ipsec.example.lan",
+        "/etc/NetworkManager/system-connections/OpenVPN to vpn.example.lan",
     ]
     for path in files:
         if os.path.exists(path):
@@ -92,14 +97,6 @@ def clean_server():
     os.system("systemctl stop samba-ad-dc")
 
     os.umask(0o22)
-
-    if os.path.exists("/run/certidude/server.pid"):
-        with open("/run/certidude/server.pid") as fh:
-            try:
-                os.kill(int(fh.read()), 15)
-            except OSError:
-                pass
-
 
     if os.path.exists("/var/lib/certidude"):
         shutil.rmtree("/var/lib/certidude")
@@ -125,11 +122,14 @@ def clean_server():
         "/tmp/key.pem",
         "/tmp/req.pem",
         "/tmp/cert.pem",
+        "/usr/bin/node",
     ]
 
     for filename in files:
-        if os.path.exists(filename):
+        try:
             os.unlink(filename)
+        except:
+            pass
 
     # Remove OpenVPN stuff
     if os.path.exists("/etc/openvpn"):
@@ -142,6 +142,7 @@ def clean_server():
     # Remove Samba stuff
     os.system("rm -Rfv /var/lib/samba/*")
     assert not os.path.exists("/var/lib/samba/private/secrets.keytab")
+    assert not os.path.exists("/etc/krb5.keytab")
 
     # Restore initial resolv.conf
     shutil.copyfile("/etc/resolv.conf.orig", "/etc/resolv.conf")
@@ -227,6 +228,8 @@ def test_cli_setup_authority():
 
     # Make sure nginx is running
     assert os.system("nginx -t") == 0, "invalid nginx configuration"
+    os.system("systemctl restart certidude")
+    os.system("systemctl restart nginx")
     assert os.path.exists("/run/nginx.pid"), "nginx wasn't started up properly"
 
     # Make sure we generated legit CA certificate
@@ -623,7 +626,7 @@ def test_cli_setup_authority():
     assert r.text == "[]", r.text
 
     # Test script without tags
-    r = client().simulate_get("/api/signed/test/script/")
+    r = requests.get("http://ca.example.lan/api/signed/test/script/")
     assert r.status_code == 200, r.text # script render ok
     assert "# No tags" in r.text, r.text
 
@@ -648,19 +651,17 @@ def test_cli_setup_authority():
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text
     assert "Revoked " in inbox.pop(), inbox
-    """
 
     # Log can be read only by admin
-    r = client().simulate_get("/api/log/")
+    r = requests.get("http://ca.example.lan/api/log/?limit=100")
     assert r.status_code == 401, r.text
-    r = client().simulate_get("/api/log/",
+    r = requests.get("http://ca.example.lan/api/log/?limit=100",
         headers={"Authorization":usertoken})
     assert r.status_code == 403, r.text
-    r = client().simulate_get("/api/log/",
+    r = requests.get("http://ca.example.lan/api/log/?limit=100",
         headers={"Authorization":admintoken})
     assert r.status_code == 200, r.text
     assert r.headers.get('content-type') == "application/json; charset=UTF-8"
-    """
 
     # Test session API call
     r = client().simulate_get("/api/")
@@ -698,7 +699,7 @@ def test_cli_setup_authority():
     clean_client()
 
     result = runner.invoke(cli, ["setup", "nginx", "-cn", "www", "ca.example.lan"])
-    assert result.exception # FQDN required
+    assert result.exception
 
     result = runner.invoke(cli, ["setup", "nginx", "-cn", "www.example.lan", "ca.example.lan"])
     assert not result.exception, result.output
@@ -819,7 +820,24 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "Writing certificate to:" in result.output, result.output
+    assert os.path.exists("/etc/NetworkManager/system-connections/OpenVPN to vpn.example.lan")
 
+
+    # Issue token, needs legit router ^
+    os.system("certidude token issue userbot")
+
+    ########################
+    # Test image builder ###
+    ########################
+
+    r = client().simulate_get("/api/build/ar150-mfp-sysupgrade/mfp-gl-ar150-squashfs-sysupgrade.bin")
+    assert r.status_code == 401, r.text
+    r = client().simulate_get("/api/build/ar150-mfp-sysupgrade/mfp-gl-ar150-squashfs-sysupgrade.bin",
+        headers={"Authorization":usertoken})
+    assert r.status_code == 403, r.text
+    r = client().simulate_get("/api/build/ar150-mfp-sysupgrade/mfp-gl-ar150-squashfs-sysupgrade.bin",
+        headers={"Authorization":admintoken})
+    assert r.status_code == 200, r.text
 
 
     #######################
@@ -995,6 +1013,7 @@ def test_cli_setup_authority():
 
     with open("/etc/certidude/client.conf", "a") as fh:
         fh.write("autosign = false\n")
+        fh.write("system wide = yes\n")
 
     result = runner.invoke(cli, ["enroll", "--skip-self", "--no-wait"])
     assert not result.exception, result.output
@@ -1048,7 +1067,7 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "Writing certificate to:" in result.output, result.output
-
+    assert os.path.exists("/etc/NetworkManager/system-connections/IPSec to ipsec.example.lan")
 
     ######################################
     ### Test revocation on client side ###
@@ -1115,20 +1134,30 @@ def test_cli_setup_authority():
     ### Switch to Kerberos/LDAP auth ###
     ####################################
 
+    assert os.path.exists("/run/certidude/server.pid")
+    pid_certidude = int(open("/run/certidude/server.pid").read())
     os.system("systemctl stop certidude")
+    assert not os.path.exists("/run/certidude/server.pid")
 
     # Install packages
     clean_server()
 
     # Bootstrap domain controller here,
     # Samba startup takes some time
+    assert not os.path.exists("/var/lib/samba/private/secrets.keytab")
+    assert not os.path.exists("/etc/krb5.keytab")
+
     os.system("samba-tool domain provision --server-role=dc --domain=EXAMPLE --realm=EXAMPLE.LAN --host-name=ca")
+    assert not os.path.exists("/run/samba/samba.pid")
     os.system("systemctl restart samba-ad-dc")
     os.system("samba-tool user add userbot S4l4k4l4 --given-name='User' --surname='Bot'")
     os.system("samba-tool user add adminbot S4l4k4l4 --given-name='Admin' --surname='Bot'")
     os.system("samba-tool group addmembers 'Domain Admins' adminbot")
     os.system("samba-tool user setpassword administrator --newpassword=S4l4k4l4")
-    os.symlink("/var/lib/samba/private/secrets.keytab", "/etc/krb5.keytab")
+    try:
+        os.symlink("/var/lib/samba/private/secrets.keytab", "/etc/krb5.keytab")
+    except:
+        pass
     os.chmod("/var/lib/samba/private/secrets.keytab", 0o644) # To allow access to certidude server
     if os.path.exists("/etc/krb5.conf"): # Remove the one from krb5-user package
         os.unlink("/etc/krb5.conf")
@@ -1140,14 +1169,15 @@ def test_cli_setup_authority():
 
     # Samba bind 636 late (probably generating keypair)
     # so LDAPS connections below will fail
-    timeout = 0
-    while timeout < 30:
+    timeout = 30
+    while timeout > 0:
         if os.path.exists("/var/lib/samba/private/tls/cert.pem"):
             break
         sleep(1)
-        timeout += 1
+        timeout -= 1
     else:
         assert False, "Samba startup timed out"
+    assert os.path.exists("/run/samba/samba.pid")
 
     # (re)auth against DC
     assert os.system("kdestroy") == 0
@@ -1175,7 +1205,7 @@ def test_cli_setup_authority():
     # - CRL disabled
 
     assert not os.path.exists("/var/lib/certidude/ca_key.pem")
-    assert os.system("certidude setup authority --skip-packages") == 0
+    assert os.system("certidude setup authority --skip-packages -o 'Demola LLC'") == 0
     assert os.path.exists("/var/lib/certidude/ca_key.pem")
     assert os.path.exists("/etc/cron.hourly/certidude")
 
@@ -1203,6 +1233,13 @@ def test_cli_setup_authority():
 
     # Start certidude backend
     assert os.system("systemctl restart certidude") == 0
+
+    cov_finished = False
+    for path in os.listdir("/tmp/"):
+        if path.startswith(".coverage.ca.%d." % pid_certidude):
+            cov_finished = True
+    assert cov_finished, "Didn't find %d in %s" % (pid_certidude, os.listdir("/tmp"))
+
     assert_cleanliness()
 
     # Apply /etc/certidude/server.conf changes
@@ -1285,7 +1322,7 @@ def test_cli_setup_authority():
     admintoken = "Basic YWRtaW5ib3Q6UzRsNGs0bDQ="
 
     with open("/etc/ldap/ldap.conf", "w") as fh:
-        fh.write("TLS_REQCERT never\n") # TODO: Correct way
+        fh.write("TLS_CACERT /var/lib/samba/private/tls/ca.pem")
 
     # curl http://ca.example.lan/api/ -u adminbot:S4l4k4l4 -H "User-agent: Android" -H "Referer: http://ca.example.lan"
     r = requests.get("http://ca.example.lan/api/",
@@ -1355,7 +1392,14 @@ def test_cli_setup_authority():
     result = runner.invoke(cli, ['expire'])
     assert not result.exception, result.output
 
+    pid_certidude = int(open("/run/certidude/server.pid").read())
     assert os.system("systemctl stop certidude") == 0
+
+    cov_finished = False
+    for path in os.listdir("/tmp/"):
+        if path.startswith(".coverage.ca.%d." % pid_certidude):
+            cov_finished = True
+    assert cov_finished
 
     assert open("/etc/apparmor.d/local/usr.lib.ipsec.charon").read() == \
        "/etc/certidude/authority/ca.example.lan/client_key.pem r,\n" + \
@@ -1366,6 +1410,9 @@ def test_cli_setup_authority():
     os.system("service nginx stop")
     os.system("service openvpn stop")
     os.system("ipsec stop")
+
+    os.system("certidude token list")
+    os.system("certidude token purge")
 
     clean_server()
 

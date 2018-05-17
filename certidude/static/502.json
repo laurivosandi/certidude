@@ -1,0 +1,4 @@
+{
+  "title": "502 Bad Gateway",
+  "description": "It seems the server had bit of a hiccup, perhaps this helps: systemctl restart certidude && journalctl -f"
+}
