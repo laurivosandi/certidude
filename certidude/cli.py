@@ -1030,7 +1030,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
     env = Environment(loader=PackageLoader("certidude", "templates"), trim_blocks=True)
 
     if skip_packages:
-        click.echo("Not attempting to install packages from APT as requested...")
+        click.echo("Not attempting to install packages as requested...")
     else:
         click.echo("Installing packages...")
         cmd = "DEBIAN_FRONTEND=noninteractive apt-get install -qq -y \
@@ -1064,6 +1064,11 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
                 raise click.ClickException("Failed to install nginx")
         else:
             click.echo("Web server nginx already installed")
+
+        cmd = "npm install --silent --no-optional -g nunjucks@2.5.2 nunjucks-date@1.2.0 node-forge bootstrap@4.0.0-alpha.6 jquery timeago tether font-awesome qrcode-svg"
+        click.echo("Installing JavaScript packages: %s" % cmd)
+        if os.system(cmd):
+            raise click.ClickException("Failed to install JavaScript packages")
 
     if not os.path.exists("/usr/bin/node"):
         os.symlink("/usr/bin/nodejs", "/usr/bin/node")
@@ -1192,13 +1197,6 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
             if not os.path.exists(subdir):
                 click.echo("Creating directory %s" % subdir)
                 os.makedirs(subdir)
-
-        # Install JavaScript pacakges
-        if skip_packages:
-            click.echo("Not attempting to install packages from NPM as requested...")
-        else:
-            cmd = "npm install --silent --no-optional -g nunjucks@2.5.2 nunjucks-date@1.2.0 node-forge bootstrap@4.0.0-alpha.6 jquery timeago tether font-awesome qrcode-svg"
-            click.echo("Installing JavaScript packages: %s" % cmd)
 
         if skip_assets:
             click.echo("Not attempting to assemble assets as requested...")
