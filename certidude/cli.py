@@ -1021,7 +1021,6 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
 @click.option("--packages-only", is_flag=True, help="Install only apt/pip/npm packages")
 @click.option("--elliptic-curve", "-e", is_flag=True, help="Generate EC instead of RSA keypair")
 @click.option("--subordinate", is_flag=True, help="Set up subordinate CA instead of root CA")
-@fqdn_required
 def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_config, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, title, skip_assets, skip_packages, elliptic_curve, subordinate, packages_only):
     assert subprocess.check_output(["/usr/bin/lsb_release", "-cs"]) in (b"trusty\n", b"xenial\n", b"bionic\n"), "Only Ubuntu 16.04 supported at the moment"
     assert os.getuid() == 0 and os.getgid() == 0, "Authority can be set up only by root"
@@ -1072,8 +1071,13 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
     if packages_only:
         return
 
+    if "." in common_name:
+        logger.info("Using fully qualified hostname %s" % common_name)
+    else:
+        raise ValueError("Fully qualified hostname not specified as common name, make sure hostname -f works")
+
     # Generate secret for tokens
-    token_url = "https://" + const.FQDN + "/#action=enroll&token=%(token)s&router=%(router)s&protocol=ovpn"
+    token_url = "https://" + common_name + "/#action=enroll&token=%(token)s&router=%(router)s&protocol=ovpn"
 
     template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates", "profile")
     click.echo("Using templates from %s" % template_path)
@@ -1097,7 +1101,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
     ca_cert = os.path.join(directory, "ca_cert.pem")
     self_key = os.path.join(directory, "self_key.pem")
     sqlite_path = os.path.join(directory, "meta", "db.sqlite")
-    distinguished_name = cn_to_dn("Certidude at %s" % common_name, common_name, o=organization, ou=organizational_unit)
+    distinguished_name = cn_to_dn(title, common_name, o=organization, ou=organizational_unit)
     dhparam_path = "/etc/ssl/dhparam.pem"
 
     # Builder variables
@@ -1369,7 +1373,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         from certidude import authority
         authority.self_enroll(skip_notify=True)
         assert os.path.exists(self_key)
-        assert os.path.exists(os.path.join(directory, "signed", const.FQDN) + ".pem")
+        assert os.path.exists(os.path.join(directory, "signed", common_name) + ".pem")
         assert os.getuid() == 0 and os.getgid() == 0, "Enroll contaminated environment"
         assert os.stat(sqlite_path).st_mode == 0o100660
         assert os.stat(ca_cert).st_mode == 0o100640
