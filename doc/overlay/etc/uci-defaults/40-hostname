@@ -1,3 +1,5 @@
+#!/bin/sh
+
 MODEL=$(cat /etc/board.json | jsonfilter -e '@["model"]["id"]')
 
 # Hostname prefix
