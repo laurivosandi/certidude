@@ -27,7 +27,6 @@ uci set dhcp.lan.limit=1
 uci set network.vpn=interface
 uci set network.vpn.ifname='ipsec0'
 uci set network.vpn.proto='none'
-uci set network.vpn.masq='1'
 
 uci set firewall.vpn=zone
 uci set firewall.vpn.name="vpn"
@@ -35,6 +34,7 @@ uci set firewall.vpn.input="ACCEPT"
 uci set firewall.vpn.forward="ACCEPT"
 uci set firewall.vpn.output="ACCEPT"
 uci set firewall.vpn.network="vpn"
+uci set firewall.vpn.masq='1'
 
 uci set firewall.lan2vpn=forwarding
 uci set firewall.lan2vpn.src='lan'
