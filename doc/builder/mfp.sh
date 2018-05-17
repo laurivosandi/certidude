@@ -40,62 +40,62 @@ uci set firewall.lan2vpn=forwarding
 uci set firewall.lan2vpn.src='lan'
 uci set firewall.lan2vpn.dest='vpn'
 
-uci add firewall redirect
-uci set firewall.@redirect[-1].name="Allow IPP on MFP"
-uci set firewall.@redirect[-1].src=vpn
-uci set firewall.@redirect[-1].src_dport=631
-uci set firewall.@redirect[-1].dest=lan
-uci set firewall.@redirect[-1].dest_ip=192.168.1.100
-uci set firewall.@redirect[-1].target=DNAT
-uci set firewall.@redirect[-1].proto=tcp
+uci set firewall.allow_ipp=redirect
+uci set firewall.allow_ipp.name="Allow-IPP-on-MFP"
+uci set firewall.allow_ipp.src=vpn
+uci set firewall.allow_ipp.src_dport=631
+uci set firewall.allow_ipp.dest=lan
+uci set firewall.allow_ipp.dest_ip=192.168.1.100
+uci set firewall.allow_ipp.target=DNAT
+uci set firewall.allow_ipp.proto=tcp
 
-uci add firewall redirect
-uci set firewall.@redirect[-1].name="Allow HTTP on MFP"
-uci set firewall.@redirect[-1].src=vpn
-uci set firewall.@redirect[-1].src_dport=80
-uci set firewall.@redirect[-1].dest=lan
-uci set firewall.@redirect[-1].dest_ip=192.168.1.100
-uci set firewall.@redirect[-1].target=DNAT
-uci set firewall.@redirect[-1].proto=tcp
+uci set firewall.allow_http=redirect
+uci set firewall.allow_http.name="Allow-HTTP-on-MFP"
+uci set firewall.allow_http.src=vpn
+uci set firewall.allow_http.src_dport=80
+uci set firewall.allow_http.dest=lan
+uci set firewall.allow_http.dest_ip=192.168.1.100
+uci set firewall.allow_http.target=DNAT
+uci set firewall.allow_http.proto=tcp
 
-uci add firewall redirect
-uci set firewall.@redirect[-1].name="Allow HTTPS on MFP"
-uci set firewall.@redirect[-1].src=vpn
-uci set firewall.@redirect[-1].src_dport=443
-uci set firewall.@redirect[-1].dest=lan
-uci set firewall.@redirect[-1].dest_ip=192.168.1.100
-uci set firewall.@redirect[-1].target=DNAT
-uci set firewall.@redirect[-1].proto=tcp
+uci set firewall.allow_https=redirect
+uci set firewall.allow_https.name="Allow-HTTPS-on-MFP"
+uci set firewall.allow_https.src=vpn
+uci set firewall.allow_https.src_dport=443
+uci set firewall.allow_https.dest=lan
+uci set firewall.allow_https.dest_ip=192.168.1.100
+uci set firewall.allow_https.target=DNAT
+uci set firewall.allow_https.proto=tcp
 
-uci add firewall redirect
-uci set firewall.@redirect[-1].name="Allow JetDirect on MFP"
-uci set firewall.@redirect[-1].src=vpn
-uci set firewall.@redirect[-1].src_dport=9100
-uci set firewall.@redirect[-1].dest=lan
-uci set firewall.@redirect[-1].dest_ip=192.168.1.100
-uci set firewall.@redirect[-1].target=DNAT
-uci set firewall.@redirect[-1].proto=tcp
-uci set firewall.@redirect[-1].enabled=0
+uci set firewall.allow_jetdirect=redirect
+uci set firewall.allow_jetdirect.name="Allow-JetDirect-on-MFP"
+uci set firewall.allow_jetdirect.src=vpn
+uci set firewall.allow_jetdirect.src_dport=9100
+uci set firewall.allow_jetdirect.dest=lan
+uci set firewall.allow_jetdirect.dest_ip=192.168.1.100
+uci set firewall.allow_jetdirect.target=DNAT
+uci set firewall.allow_jetdirect.proto=tcp
+uci set firewall.allow_jetdirect.enabled=0
 
-uci add firewall redirect
-uci set firewall.@redirect[-1].name="Allow SNMP on MFP"
-uci set firewall.@redirect[-1].src=vpn
-uci set firewall.@redirect[-1].src_dport=161
-uci set firewall.@redirect[-1].dest=lan
-uci set firewall.@redirect[-1].dest_ip=192.168.1.100
-uci set firewall.@redirect[-1].target=DNAT
-uci set firewall.@redirect[-1].proto=udp
-uci set firewall.@redirect[-1].enabled=0
+uci set firewall.allow_snmp=redirect
+uci set firewall.allow_snmp.name="Allow-SNMP-on-MFP"
+uci set firewall.allow_snmp.src=vpn
+uci set firewall.allow_snmp.src_dport=161
+uci set firewall.allow_snmp.dest=lan
+uci set firewall.allow_snmp.dest_ip=192.168.1.100
+uci set firewall.allow_snmp.target=DNAT
+uci set firewall.allow_snmp.proto=udp
+uci set firewall.allow_snmp.enabled=0
 
-uci add firewall redirect
-uci set firewall.@redirect[-1].name="Allow LPD on MFP"
-uci set firewall.@redirect[-1].src=vpn
-uci set firewall.@redirect[-1].src_dport=515
-uci set firewall.@redirect[-1].dest=lan
-uci set firewall.@redirect[-1].dest_ip=192.168.1.100
-uci set firewall.@redirect[-1].target=DNAT
-uci set firewall.@redirect[-1].proto=tcp
-uci set firewall.@redirect[-1].enabled=0
+uci set firewall.allow_lpd=redirect
+uci set firewall.allow_lpd.name="Allow-LPD-on-MFP"
+uci set firewall.allow_lpd.src=vpn
+uci set firewall.allow_lpd.src_dport=515
+uci set firewall.allow_lpd.dest=lan
+uci set firewall.allow_lpd.dest_ip=192.168.1.100
+uci set firewall.allow_lpd.target=DNAT
+uci set firewall.allow_lpd.proto=tcp
+uci set firewall.allow_lpd.enabled=0
 
 /etc/init.d/dropbear disable
 
