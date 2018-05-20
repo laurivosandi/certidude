@@ -25,4 +25,4 @@ EOF
 
 echo ": {% if session.authority.certificate.algorithm == "ec" %}ECDSA{% else %}RSA{% endif %} {{ session.authority.hostname }}.pem" > /etc/ipsec.secrets
 
-ipsec restart apparmor
+ipsec restart

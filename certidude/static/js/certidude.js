@@ -6,6 +6,24 @@ const DEVICE_KEYWORDS = ["Android", "iPhone", "iPad", "Windows", "Ubuntu", "Fedo
 
 jQuery.timeago.settings.allowFuture = true;
 
+function onRejectRequest(e, common_name, sha256sum) {
+  $(this).button('loading');
+  $.ajax({
+    url: "/api/request/" + common_name + "/?sha256sum=" + sha256sum,
+    type: "delete"
+  });
+}
+
+function onSignRequest(e, common_name, sha256sum) {
+  e.preventDefault();
+  $(e.target).button('loading');
+  $.ajax({
+    url: "/api/request/" + common_name + "/?sha256sum=" + sha256sum,
+    type: "post"
+  });
+  return false;
+}
+
 function normalizeCommonName(j) {
     return j.replace("@", "--").split(".").join("-"); // dafuq ?!
 }
@@ -26,24 +44,6 @@ function onKeyGen() {
 
   window.keys = forge.pki.rsa.generateKeyPair(KEY_SIZE);
   console.info('Key-pair created.');
-
-  // Device identifier
-  var dig = forge.md.sha384.create();
-  dig.update(window.navigator.userAgent);
-
-  var prefix = "unknown";
-  for (i in DEVICE_KEYWORDS) {
-    var keyword = DEVICE_KEYWORDS[i];
-    if (window.navigator.userAgent.indexOf(keyword) >= 0) {
-      prefix = keyword.toLowerCase();
-      break;
-    }
-  }
-
-  window.identifier = prefix + "-" + dig.digest().toHex().substring(0, 5);
-  console.info("Device identifier:", identifier);
-
-  window.common_name = query.subject + "@" + identifier;
 
   window.csr = forge.pki.createCertificationRequest();
   csr.publicKey = keys.publicKey;
@@ -82,17 +82,19 @@ function onKeyGen() {
   $(".option.any").show();
 }
 
-function onEnroll(encoding) {
-  console.info("Service name:", query.title);
+function blobToUuid(blob) {
   var md = forge.md.md5.create();
-  md.update(query.title);
+  md.update(blob);
   var digest = md.digest().toHex();
-  var service_uuid = digest.substring(0, 8) + "-" +
+  return digest.substring(0, 8) + "-" +
       digest.substring(8, 12) + "-" +
       digest.substring(12, 16) + "-" +
       digest.substring(16,20) + "-" +
-      digest.substring(20)
-  console.info("Service UUID:", service_uuid);
+      digest.substring(20);
+}
+
+function onEnroll(encoding) {
+  console.info("Service name:", query.title);
 
   console.info("User agent:", window.navigator.userAgent);
   var xhr = new XMLHttpRequest();
@@ -108,8 +110,8 @@ function onEnroll(encoding) {
           var a = document.createElement("a");
           var cert = forge.pki.certificateFromPem(xhr2.responseText);
           console.info("Got signed certificate:", xhr2.responseText);
-          var p12 = forge.pkcs12.toPkcs12Asn1(
-            keys.privateKey, [cert, ca], "", {algorithm: '3des'});
+          var p12 = forge.asn1.toDer(forge.pkcs12.toPkcs12Asn1(
+            keys.privateKey, [cert, ca], "", {algorithm: '3des'})).getBytes();
 
           switch(encoding) {
             case 'p12':
@@ -119,13 +121,13 @@ function onEnroll(encoding) {
               break
             case 'sswan':
               var buf = JSON.stringify({
-                  uuid: service_uuid,
+                  uuid: blobToUuid(query.title),
                   name: query.title,
                   type: "ikev2-cert",
                   'ike-proposal': 'aes256-sha384-prfsha384-modp2048',
                   'esp-proposal': 'aes128gcm16-modp2048',
                   remote: { addr: query.router },
-                  local: { p12: forge.util.encode64(forge.asn1.toDer(p12).getBytes()) }
+                  local: { p12: forge.util.encode64(p12) }
               });
               console.info("Buf is:", buf);
               var mimetype = "application/vnd.strongswan.profile"
@@ -142,14 +144,18 @@ function onEnroll(encoding) {
               a.download = query.title + ".ovpn";
               break
             case 'mobileconfig':
-              var p12 = forge.pkcs12.toPkcs12Asn1(
-                  keys.privateKey, [cert, ca], "1234", {algorithm: '3des'});
+              var p12 = forge.asn1.toDer(forge.pkcs12.toPkcs12Asn1(
+                  keys.privateKey, [cert, ca], "1234", {algorithm: '3des'})).getBytes();
               var buf = nunjucks.render('snippets/ios.mobileconfig', {
                   session: session,
+                  service_uuid: blobToUuid(query.title),
+                  conf_uuid: blobToUuid(query.title + " conf1"),
                   title: query.title,
                   common_name: common_name,
                   gateway: query.router,
-                  p12: forge.util.encode64(forge.asn1.toDer(p12).getBytes()),
+                  p12_uuid: blobToUuid(p12),
+                  p12: forge.util.encode64(p12),
+                  ca_uuid: blobToUuid(forge.pki.certificateToAsn1(ca)).getBytes()),
                   ca: forge.util.encode64(forge.asn1.toDer(forge.pki.certificateToAsn1(ca)).getBytes())
               });
               var mimetype = "application/x-apple-aspen-config";
@@ -179,6 +185,7 @@ function onEnroll(encoding) {
 }
 
 function onHashChanged() {
+
     window.query = {};
     var a = location.hash.substring(1).split('&');
     for (var i = 0; i < a.length; i++) {
@@ -200,6 +207,23 @@ function onHashChanged() {
             $("#view-dashboard").html(env.render('views/error.html', { message: msg }));
         },
         success: function(blob) {
+          // Device identifier
+          var dig = forge.md.sha384.create();
+          dig.update(window.navigator.userAgent);
+
+          var prefix = "unknown";
+          for (i in DEVICE_KEYWORDS) {
+            var keyword = DEVICE_KEYWORDS[i];
+            if (window.navigator.userAgent.indexOf(keyword) >= 0) {
+              prefix = keyword.toLowerCase();
+              break;
+            }
+          }
+
+          window.identifier = prefix + "-" + dig.digest().toHex().substring(0, 5);
+          window.common_name = query.subject + "@" + identifier;
+          console.info("Device identifier:", identifier);
+
           window.session = {
             authority: {
               hostname: window.location.hostname,
@@ -221,7 +245,8 @@ function onHashChanged() {
           } else {
               if (query.action == "enroll") {
                   $("#view-dashboard").html(env.render('views/enroll.html', {
-                    session:session,
+                    common_name: common_name,
+                    session: session,
                     token: query.token,
                   }));
                   var options = document.querySelectorAll(".option");

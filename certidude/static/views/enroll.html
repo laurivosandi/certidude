@@ -77,6 +77,36 @@ sudo systemctl restart network-manager
     </div>
   </div>
 
+  <div class="col-sm-12 mt-3 option ubuntu linux openvpn advanced">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">Ubuntu 18.04+ (advanced)</h3>
+        <p class="card-text">Copy-paste follownig to terminal as root user:</p>
+        <pre><code>{% include "snippets/request-client.sh" %}
+cat << EOF > '/etc/NetworkManager/system-connections/OpenVPN to {{ session.service.title }}'
+{% include "snippets/networkmanager-openvpn.conf" %}EOF
+
+nmcli con reload
+</code></pre>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-sm-12 mt-3 option ubuntu linux ikev2 advanced">
+    <div class="card">
+      <div class="card-block">
+        <h3 class="card-title">Ubuntu 18.04+ (advanced)</h3>
+        <p class="card-text">Copy-paste follownig to terminal as root user:</p>
+        <pre><code>{% include "snippets/request-client.sh" %}
+cat << EOF > '/etc/NetworkManager/system-connections/IPSec to {{ session.service.title }}'
+{% include "snippets/networkmanager-strongswan.conf" %}EOF
+
+nmcli con reload
+</code></pre>
+      </div>
+    </div>
+  </div>
+
 
   <div class="col-sm-12 mt-3 option fedora linux openvpn">
     <div class="card">

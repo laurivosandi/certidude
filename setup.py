@@ -14,7 +14,8 @@ setup(
     url = "http://github.com/laurivosandi/certidude",
     packages=[
         "certidude",
-        "certidude.api"
+        "certidude.api",
+        "certidude.api.utils"
     ],
     long_description=open("README.rst").read(),
     # Include here only stuff required to run certidude client
@@ -24,6 +25,7 @@ setup(
         "configparser",
         "certbuilder",
         "csrbuilder",
+        "crlbuilder",
         "jinja2",
     ],
     scripts=[
@@ -31,7 +33,7 @@ setup(
     ],
     include_package_data = True,
     package_data={
-        "certidude": ["certidude/templates/*"],
+        "certidude": ["certidude/templates/*", "certidude/static/*", "certidude/builder/*"],
     },
     classifiers=[
         "Development Status :: 4 - Beta",

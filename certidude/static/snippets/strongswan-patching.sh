@@ -14,4 +14,4 @@ chcon --type=home_cert_t  /etc/certidude/authority/{{ session.authority.hostname
 cat << EOF > /etc/apparmor.d/local/usr.lib.ipsec.charon
 /etc/certidude/authority/** r,
 EOF
-systemctl restart
+systemctl restart apparmor

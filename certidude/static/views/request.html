@@ -19,11 +19,11 @@
       <button type="button" class="btn btn-secondary" data-toggle="collapse" data-target="#details-{{ request.sha256sum }}"><i class="fa fa-list"></i> Details</button>
       <button type="button" class="btn btn-danger"
         data-loading-text="<i class='fa fa-circle-o-notch fa-spin'></i> Rejecting..."
-        onclick="javascript:$(this).button('loading');$.ajax({url:'/api/request/{{request.common_name}}/?sha256sum={{ request.sha256sum }}',type:'delete'});">
+        onclick="onRejectRequest(event, '{{ request.common_name }}', '{{ request.sha256sum }}');">
         <i class="fa fa-trash"></i> Reject</button>
       <button type="button" class="btn btn-success"
         data-loading-text="<i class='fa fa-circle-o-notch fa-spin'></i> Processing Order"
-        onclick="javascript:$(this).button('loading');$.ajax({url:'/api/request/{{request.common_name}}/?sha256sum={{ request.sha256sum }}',type:'post'});">
+        onclick="onSignRequest(event, '{{ request.common_name }}', '{{ request.sha256sum }}');">
         <i class="fa fa-thumbs-up"></i> Sign</button>
       <button type="button" class="btn btn-success dropdown-toggle dropdown-toggle-split" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
         <span class="sr-only">Toggle Dropdown</span>

@@ -100,6 +100,7 @@ TOKEN_URL = cp.get("token", "url")
 TOKEN_BACKEND = cp.get("token", "backend")
 TOKEN_LIFETIME = timedelta(minutes=cp.getint("token", "lifetime")) # Convert minutes to seconds
 TOKEN_DATABASE = cp.get("token", "database")
+TOKEN_OVERWRITE_PERMITTED = cp.getboolean("token", "overwrite permitted")
 # TODO: Check if we don't have base or servers
 
 # The API call for looking up scripts uses following directory as root
@@ -124,8 +125,6 @@ PROFILES = dict([(key, SignatureProfile(key,
 cp2 = configparser.RawConfigParser()
 cp2.readfp(open(const.BUILDER_CONFIG_PATH, "r"))
 IMAGE_BUILDER_PROFILES = [(j, cp2.get(j, "title"), cp2.get(j, "rename")) for j in cp2.sections() if cp2.getboolean(j, "enabled")]
-
-TOKEN_OVERWRITE_PERMITTED=True
 
 SERVICE_PROTOCOLS = set([j.lower() for j in cp.get("service", "protocols").split(" ") if j])
 SERVICE_ROUTERS = cp.get("service", "routers")

@@ -109,8 +109,9 @@ def authenticate(optional=False):
 
             if kerberized:
                 if not req.auth.startswith("Negotiate "):
-                    raise falcon.HTTPBadRequest("Bad request",
-                        "Bad header, expected Negotiate")
+                    raise falcon.HTTPUnauthorized("Unauthorized",
+                        "Bad header, expected Negotiate",
+                        ["Negotiate"])
 
                 os.environ["KRB5_KTNAME"] = config.KERBEROS_KEYTAB
 
@@ -158,7 +159,8 @@ def authenticate(optional=False):
 
             else:
                 if not req.auth.startswith("Basic "):
-                    raise falcon.HTTPBadRequest("Bad request", "Bad header, expected Basic")
+                    raise falcon.HTTPUnauthorized("Forbidden", "Bad header, expected Basic", ("Basic",))
+
                 basic, token = req.auth.split(" ", 1)
                 user, passwd = b64decode(token).decode("ascii").split(":", 1)
 

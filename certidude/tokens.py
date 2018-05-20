@@ -11,7 +11,7 @@ class TokenManager(RelationalMixin):
     def consume(self, uuid):
         now = datetime.utcnow()
         retval = self.get(
-            "select subject, mail, created, expires, profile from token where uuid = ? and created < ? and ? < expires and used is null",
+            "select subject, mail, created, expires, profile from token where uuid = ? and created <= ? and ? <= expires and used is null",
             uuid,
             now + const.CLOCK_SKEW_TOLERANCE,
             now - const.CLOCK_SKEW_TOLERANCE)
@@ -53,10 +53,7 @@ class TokenManager(RelationalMixin):
         context.update(locals())
 
         mailer.send("token.md", to=subject_mail, **context)
-        return {
-            "token": token,
-            "url": url,
-        }
+        return token
 
     def list(self, expired=False, used=False):
         stmt = "select created as 'created[timestamp]', expires as 'expires[timestamp]', used as 'used[timestamp]', issuer, mail, subject, substr(uuid, 0, 8) as uuid from token"

@@ -6,7 +6,7 @@
     <string>{{ gateway }}</string>
     <!-- This is a reverse-DNS style unique identifier used to detect duplicate profiles -->
     <key>PayloadIdentifier</key>
-    <string>org.example.vpn2</string>
+    <string>{{ gateway }}</string>
     <key>PayloadUUID</key>
     <string>{{ service_uuid }}</string>
     <key>PayloadType</key>
@@ -17,9 +17,9 @@
     <array>
         <dict>
             <key>PayloadIdentifier</key>
-            <string>org.example.vpn2.conf1</string>
+            <string>{{ gateway }}.conf1</string>
             <key>PayloadUUID</key>
-            <string>29e4456d-3f03-4f15-b46f-4225d89465b7</string>
+            <string>{{ conf_uuid }}</string>
             <key>PayloadType</key>
             <string>com.apple.vpn.managed</string>
             <key>PayloadVersion</key>
@@ -63,14 +63,14 @@
                 <key>EnablePFS</key>
                 <integer>1</integer>
                 <key>PayloadCertificateUUID</key>
-                <string>d60488c6-328e-4944-9c8d-61db8095c865</string>
+                <string>{{ p12_uuid }}</string>
             </dict>
         </dict>
         <dict>
             <key>PayloadIdentifier</key>
-            <string>ee.k-space.ca2.client</string>
+            <string>{{ common_name }}</string>
             <key>PayloadUUID</key>
-            <string>d60488c6-328e-4944-9c8d-61db8095c865</string>
+            <string>{{ p12_uuid }}</string>
             <key>PayloadType</key>
             <string>com.apple.security.pkcs12</string>
             <key>PayloadVersion</key>
@@ -80,14 +80,13 @@
         </dict>
         <dict>
             <key>PayloadIdentifier</key>
-            <string>org.example.ca</string>
+            <string>{{ session.authority.certificate.common_name }}</string>
             <key>PayloadUUID</key>
-            <string>64988b2c-33e0-4adf-a432-6fbcae543408</string>
+            <string>{{ ca_uuid }}</string>
             <key>PayloadType</key>
             <string>com.apple.security.root</string>
             <key>PayloadVersion</key>
             <integer>1</integer>
-            <!-- This is the Base64 (PEM) encoded CA certificate -->
             <key>PayloadContent</key>
             <data>{{ ca }}</data>
         </dict>

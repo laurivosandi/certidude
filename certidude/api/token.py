@@ -24,9 +24,6 @@ class TokenResource(AuthorityHandler):
         AuthorityHandler.__init__(self, authority)
         self.manager = manager
 
-    def on_get(self, req, resp):
-        return
-
     def on_put(self, req, resp):
         try:
             username, mail, created, expires, profile = self.manager.consume(req.get_param("token", required=True))
@@ -36,7 +33,8 @@ class TokenResource(AuthorityHandler):
         header, _, der_bytes = pem.unarmor(body)
         csr = CertificationRequest.load(der_bytes)
         common_name = csr["certification_request_info"]["subject"].native["common_name"]
-        assert common_name == username or common_name.startswith(username + "@"), "Invalid common name %s" % common_name
+        if not common_name.startswith(username + "@"):
+            raise falcon.HTTPBadRequest("Bad requst", "Invalid common name %s" % common_name)
         try:
             _, resp.body = self.authority._sign(csr, body, profile=config.PROFILES.get(profile),
                 overwrite=config.TOKEN_OVERWRITE_PERMITTED)

@@ -1,37 +1,8 @@
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-# Install CA certificate
-@"
-{{ session.authority.certificate.blob }}"@ | Out-File ca_cert.pem
-{% if session.authority.certificate.algorithm == "ec" %}
-Import-Certificate -FilePath ca_cert.pem -CertStoreLocation Cert:\LocalMachine\Root
-{% else %}
-C:\Windows\system32\certutil.exe -addstore Root ca_cert.pem
-{% endif %}
+{% include "snippets/update-trust.ps1" %}
 
-# Generate keypair and submit CSR
-$hostname = $env:computername.ToLower()
-@"
-[NewRequest]
-Subject = "CN=$hostname"
-Exportable = FALSE
-KeySpec = 1
-KeyUsage = 0xA0
-MachineKeySet = True
-ProviderType = 12
-RequestType = PKCS10
-{% if session.authority.certificate.algorithm == "ec" %}ProviderName = "Microsoft Software Key Storage Provider"
-KeyAlgorithm = ECDSA_P384
-{% else %}ProviderName = "Microsoft RSA SChannel Cryptographic Provider"
-KeyLength = 2048
-{% endif %}"@ | Out-File req.inf
-C:\Windows\system32\certreq.exe -new -f -q req.inf host_csr.pem
-Invoke-WebRequest -TimeoutSec 900 -Uri 'https://{{ session.authority.hostname }}:8443/api/{% if token %}token/?uuid={{ token }}{% else %}request/?wait=yes&autosign=yes{% endif %}' -InFile host_csr.pem -ContentType application/pkcs10 -Method POST  -MaximumRedirection 3 -OutFile host_cert.pem
-
-# Import certificate
-{% if session.authority.certificate.algorithm == "ec" %}Import-Certificate -FilePath host_cert.pem -CertStoreLocation Cert:\LocalMachine\My
-{% else %}C:\Windows\system32\certutil.exe -addstore My host_cert.pem
-{% endif %}
+{% include "snippets/request-client.ps1" %}
 
 {% for router in session.service.routers %}
 # Set up IPSec VPN tunnel to {{ router }}
@@ -40,9 +11,12 @@ Add-VpnConnection `
     -Name "IPSec to {{ router }}" `
     -ServerAddress {{ router }} `
     -AuthenticationMethod MachineCertificate `
+    -EncryptionLevel Maximum `
     -SplitTunneling `
     -TunnelType ikev2 `
     -PassThru -AllUserConnection
+
+# Harden VPN configuration
 Set-VpnConnectionIPsecConfiguration `
     -ConnectionName "IPSec to {{ router }}" `
     -AuthenticationTransformConstants GCMAES128 `

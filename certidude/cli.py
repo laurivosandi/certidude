@@ -581,7 +581,7 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
                 nm_config.add_section("vpn")
                 nm_config.set("vpn", "service-type", "org.freedesktop.NetworkManager.openvpn")
                 nm_config.set("vpn", "connection-type", "tls")
-                nm_config.set("vpn", "comp-lzo", "yes")
+                nm_config.set("vpn", "comp-lzo", "no")
                 nm_config.set("vpn", "cert-pass-flags", "0")
                 nm_config.set("vpn", "tap-dev", "no")
                 nm_config.set("vpn", "remote-cert-tls", "server") # Assert TLS Server flag of X.509 certificate
@@ -717,7 +717,7 @@ def certidude_setup_openvpn_server(authority, common_name, config, subnet, route
     config.write("ca %s\n" % paths.get("authority_path"))
     config.write("crl-verify %s\n" % paths.get("revocations_path"))
     config.write("dh %s\n" % paths.get("dhparam_path"))
-    config.write("comp-lzo\n")
+    config.write(";comp-lzo\n")
     config.write("user nobody\n")
     config.write("group nogroup\n")
     config.write("persist-tun\n")
@@ -822,7 +822,7 @@ def certidude_setup_openvpn_client(authority, remote, common_name, config, proto
     config.write("cert %s\n" % paths.get("certificate_path"))
     config.write("ca %s\n" % paths.get("authority_path"))
     config.write("crl-verify %s\n" % paths.get("revocations_path"))
-    config.write("comp-lzo\n")
+    config.write(";comp-lzo\n")
     config.write("user nobody\n")
     config.write("group nogroup\n")
     config.write("persist-tun\n")
@@ -1080,9 +1080,6 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         logger.info("Using fully qualified hostname %s" % common_name)
     else:
         raise ValueError("Fully qualified hostname not specified as common name, make sure hostname -f works")
-
-    # Generate secret for tokens
-    token_url = "https://" + common_name + "/#action=enroll&token=%(token)s&router=%(router)s&protocol=ovpn"
 
     template_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "templates", "profile")
     click.echo("Using templates from %s" % template_path)

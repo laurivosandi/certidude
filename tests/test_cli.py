@@ -1,5 +1,11 @@
 import coverage
+import json
+import os
+import pytest
 import pwd
+import re
+import shutil
+import sys
 from asn1crypto import pem, x509
 from oscrypto import asymmetric
 from csrbuilder import CSRBuilder, pem_armor_csr
@@ -9,11 +15,6 @@ from importlib import reload
 from click.testing import CliRunner
 from datetime import datetime, timedelta
 from time import sleep
-import json
-import pytest
-import shutil
-import sys
-import os
 
 coverage.process_startup()
 
@@ -65,6 +66,8 @@ def clean_client():
     files = [
         "/etc/certidude/client.conf",
         "/etc/certidude/services.conf",
+        "/etc/certidude/client.conf.d/ca.conf",
+        "/etc/certidude/services.conf.d/ca.conf",
         "/etc/certidude/authority/ca.example.lan/ca_cert.pem",
         "/etc/certidude/authority/ca.example.lan/client_key.pem",
         "/etc/certidude/authority/ca.example.lan/server_key.pem",
@@ -826,6 +829,35 @@ def test_cli_setup_authority():
     # Issue token, needs legit router ^
     os.system("certidude token issue userbot")
 
+
+    clean_client()
+
+    try:
+        os.makedirs("/etc/certidude/client.conf.d")
+    except FileExistsError:
+        pass
+    try:
+        os.makedirs("/etc/certidude/services.conf.d")
+    except FileExistsError:
+        pass
+    with open("/etc/certidude/client.conf.d/ca.conf", "w") as fh:
+        fh.write("[ca.example.lan]\n")
+        fh.write("trigger = interface up\n")
+        fh.write("system wide = true\n")
+        fh.write("common name = roadwarrior5\n")
+        fh.write("autosign = false\n")
+    with open("/etc/certidude/services.conf.d/ca.conf", "w") as fh:
+        fh.write("[OpenVPN to vpn.example.lan]\n")
+        fh.write("authority = ca.example.lan\n")
+        fh.write("remote = vpn.example.lan\n")
+        fh.write("service = network-manager/openvpn\n")
+        fh.write("[IPSec to ipsec.example.lan]\n")
+        fh.write("authority = ca.example.lan\n")
+        fh.write("remote = ipsec.example.lan\n")
+        fh.write("service = network-manager/strongswan\n")
+
+    assert os.system("certidude enroll --skip-self") == 0
+
     ########################
     # Test image builder ###
     ########################
@@ -849,7 +881,40 @@ def test_cli_setup_authority():
         headers={"content-type": "application/x-www-form-urlencoded", "Authorization":admintoken})
     assert r.status_code == 200
 
-    # TODO: check consume
+    from certidude.tokens import TokenManager
+    from certidude.user import User
+    token_manager = TokenManager(config.TOKEN_DATABASE)
+    token  = token_manager.issue(None, User.objects.get("userbot"))
+    assert re.match("[A-Za-z0-9]{32}$", token), token
+
+    # TODO: submit garbage instead CSR
+
+    # Invalid common name
+    r = client().simulate_put("/api/token/",
+        body = generate_csr("random"),
+        query_string = "token=%s" % token)
+    assert r.status_code == 400, r.text
+
+    # Unknown token
+    token  = token_manager.issue(None, User.objects.get("userbot"))
+    r = client().simulate_put("/api/token/",
+        body = generate_csr("userbot@random"),
+        query_string = "token=WpPQAgbnak84QgWjbMY4230JHi0hVYJP")
+    assert r.status_code == 403, r.text
+
+    # Correct token
+    r = client().simulate_put("/api/token/",
+        body = generate_csr("userbot@random"),
+        query_string = "token=%s" % token)
+    assert r.status_code == 200, r.text
+
+    # Overwrite prohibited
+    token  = token_manager.issue(None, User.objects.get("userbot"))
+    r = client().simulate_put("/api/token/",
+        body = generate_csr("userbot@random"),
+        query_string = "token=%s" % token)
+    assert r.status_code == 409, r.text
+
 
 
     #################################
@@ -1317,7 +1382,7 @@ def test_cli_setup_authority():
     ### LDAP auth ###
     #################
 
-    # Test LDAP bind auth fallback
+    # TODO: Test LDAP bind auth fallback
     usertoken = "Basic dXNlcmJvdDpTNGw0azRsNA=="
     admintoken = "Basic YWRtaW5ib3Q6UzRsNGs0bDQ="
 
@@ -1327,7 +1392,7 @@ def test_cli_setup_authority():
     # curl http://ca.example.lan/api/ -u adminbot:S4l4k4l4 -H "User-agent: Android" -H "Referer: http://ca.example.lan"
     r = requests.get("http://ca.example.lan/api/",
         headers={"Authorization":usertoken, "User-Agent": "Android", "Referer":"http://ca.example.lan/"})
-    assert r.status_code == 400, r.text
+    assert r.status_code == 401, r.text
     assert "expected Negotiate" in r.text, r.text
 
 
@@ -1413,6 +1478,7 @@ def test_cli_setup_authority():
 
     os.system("certidude token list")
     os.system("certidude token purge")
+    os.system("certidude token purge -a")
 
     clean_server()
 
