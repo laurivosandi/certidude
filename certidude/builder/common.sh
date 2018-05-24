@@ -81,7 +81,7 @@ config setup
 ca $AUTHORITY
     auto=add
     cacert=/etc/certidude/authority/$AUTHORITY/ca_cert.pem
-    ocspuri = http://$AUTHORITY/api/ocsp/
+    # OCSP and CRL URL-s embedded in certificates
 
 conn %default
     keyingtries=%forever
@@ -94,7 +94,7 @@ conn %default
     leftca="$AUTHORITY_CERTIFICATE_DISTINGUISHED_NAME"
     rightca="$AUTHORITY_CERTIFICATE_DISTINGUISHED_NAME"
 
-conn client-to-site
+conn c2s
     auto=start
     right="$ROUTER"
     rightsubnet="$SUBNETS"
@@ -103,7 +103,4 @@ conn client-to-site
 
 EOF
 
-cat << EOF > $OVERLAY/etc/uci-defaults/99-uhttpd-disable-https
-uci delete uhttpd.main.listen_https
-uci delete uhttpd.main.redirect_https
-EOF
+# Note that auto=route is not supported at the moment with libipsec

@@ -126,5 +126,4 @@ mv $CERTIFICATE_PATH.part $CERTIFICATE_PATH
 
 # Start services
 logger -t certidude -s "Starting IPSec IKEv2 daemon..."
-/etc/init.d/ipsec enable
 /etc/init.d/ipsec restart

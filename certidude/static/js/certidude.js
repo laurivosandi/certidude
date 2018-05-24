@@ -155,7 +155,7 @@ function onEnroll(encoding) {
                   gateway: query.router,
                   p12_uuid: blobToUuid(p12),
                   p12: forge.util.encode64(p12),
-                  ca_uuid: blobToUuid(forge.pki.certificateToAsn1(ca)).getBytes()),
+                  ca_uuid: blobToUuid(forge.asn1.toDer(forge.pki.certificateToAsn1(ca)).getBytes()),
                   ca: forge.util.encode64(forge.asn1.toDer(forge.pki.certificateToAsn1(ca)).getBytes())
               });
               var mimetype = "application/x-apple-aspen-config";

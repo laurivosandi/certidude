@@ -1,5 +1,7 @@
 #!/bin/sh
 
+/etc/init.d/ipsec enable
+
 # Randomize restart time
 OFFSET=$(awk -v min=1 -v max=59 'BEGIN{srand(); print int(min+rand()*(max-min+1))}')
 
@@ -14,3 +16,4 @@ chmod 0600 /etc/crontabs/root
 
 /etc/init.d/cron enable
 
+exit 0

@@ -7,3 +7,10 @@ test -e /etc/pki/ca-trust/source/anchors \
 test -e /usr/local/share/ca-certificates/ \
  && ln -s /etc/certidude/authority/{{ session.authority.hostname }}/ca_cert.pem /usr/local/share/ca-certificates/{{ session.authority.hostname }}.crt \
  && update-ca-certificates
+
+# Patch Firefox trust store on Ubuntu
+if [ ! -h /usr/lib/firefox/libnssckbi.so ]; then
+  apt install p11-kit p11-kit-modules
+  mv /usr/lib/firefox/libnssckbi.so /usr/lib/firefox/libnssckbi.so.bak
+  ln -s /usr/lib/x86_64-linux-gnu/pkcs11/p11-kit-trust.so /usr/lib/firefox/libnssckbi.so
+fi

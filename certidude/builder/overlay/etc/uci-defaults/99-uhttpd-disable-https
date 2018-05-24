@@ -1,0 +1,3 @@
+uci delete uhttpd.main.listen_https
+uci delete uhttpd.main.redirect_https
+exit 0

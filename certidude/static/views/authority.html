@@ -192,7 +192,7 @@ curl http://{{ session.authority.hostname }}/api/revoked/?wait=yes -L -H "Accept
 
 <div class="row">
   <div class="col-sm-6 col-lg-4 col-xl-3">
-    <h1>Signed certificates</h1>
+    <h3>Signed certificates</h3>
     <p>Authority administration
       {% if session.authority.certificate.organization %}of {{ session.authority.certificate.organization }}{% endif %}
         allowed for
@@ -213,7 +213,7 @@ curl http://{{ session.authority.hostname }}/api/revoked/?wait=yes -L -H "Accept
   <div class="col-sm-6 col-lg-4 col-xl-3">
   {% if session.authority %}
     {% if session.features.token %}
-      <h1>Tokens</h1>
+      <h3>Tokens</h3>
       <p>Tokens allow enrolling smartphones and third party devices.</p>
       <ul>
         <li>You can issue yourself a token to be used on a mobile device</li>
@@ -241,7 +241,8 @@ curl http://{{ session.authority.hostname }}/api/revoked/?wait=yes -L -H "Accept
     {% endif %}
 
     {% if session.authorization.request_subnets %}
-      <h1>Pending requests</h1>
+      <p>&nbsp;</p>
+      <h3>Pending requests</h3>
 
       <p>Use Certidude client to apply for a certificate.
 
@@ -291,7 +292,7 @@ curl http://{{ session.authority.hostname }}/api/revoked/?wait=yes -L -H "Accept
     {% endif %}
 
     {% if session.builder.profiles %}
-      <h2>LEDE imagebuilder</h2>
+      <h3>LEDE imagebuilder</h3>
       <p>Hit a link to generate machine specific image. Note that this might take couple minutes to finish.</p>
       <ul>
         {% for name, title, filename in session.builder.profiles %}
@@ -303,7 +304,7 @@ curl http://{{ session.authority.hostname }}/api/revoked/?wait=yes -L -H "Accept
   </div>
   <div class="col-sm-6 col-lg-4 col-xl-3">
 
-    <h1>Revoked certificates</h1>
+    <h3>Revoked certificates</h3>
     <p>Following certificates have been revoked{% if session.features.crl %}, for more information click
     <a href="#revocation_list_modal" data-toggle="modal">here</a>{% endif %}.</p>
 
@@ -317,7 +318,7 @@ curl http://{{ session.authority.hostname }}/api/revoked/?wait=yes -L -H "Accept
       <p>Loading logs, this might take a while...</p>
     </div>
     <div class="content" style="display:none;">
-      <h1>Log</h1>
+      <h3>Log</h3>
       <div class="btn-group" data-toggle="buttons">
         <label class="btn btn-primary active"><input id="log-level-critical" type="checkbox" autocomplete="off" checked>Critical</label>
         <label class="btn btn-primary active"><input id="log-level-error" type="checkbox" autocomplete="off" checked>Error</label>

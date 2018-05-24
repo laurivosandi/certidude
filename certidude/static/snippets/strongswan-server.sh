@@ -16,18 +16,22 @@ conn default-{{ session.authority.hostname }}
     leftupdown=/etc/certidude/authority/{{ session.authority.hostname }}/updown
     leftcert=/etc/certidude/authority/{{ session.authority.hostname }}/host_cert.pem
     leftsubnet=$(uci get network.lan.ipaddr | cut -d . -f 1-3).0/24 # Subnets pushed to roadwarriors
-    leftdns=$(uci get network.lan.ipaddr) # IP of DNS server advertised to roadwarriors
     leftca="{{ session.authority.certificate.distinguished_name }}"
     rightca="{{ session.authority.certificate.distinguished_name }}"
     rightsourceip=172.21.0.0/24 # Roadwarrior virtual IP pool
     dpddelay=0
     dpdaction=clear
+    fragmentation=yes
+    reauth=no
+    rekey=no
+    leftsendcert=always
 
-conn site-to-clients
+conn s2c-rw
     auto=add
     also=default-{{ session.authority.hostname }}
+    rightdns=$(uci get network.lan.ipaddr) # IP of DNS server advertised to roadwarriors
 
-conn site-to-client1
+conn s2c-client1
     auto=ignore
     also=default-{{ session.authority.hostname }}
     rightid="CN=*, OU=IP Camera, O=*, DC=*, DC=*, DC=*"
