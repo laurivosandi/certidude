@@ -1132,6 +1132,13 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         click.echo()
 
 
+    for interval in ("hourly", "daily"):
+        if not os.path.exists("/etc/cron.%s/certidude" % interval):
+            with open("/etc/cron.%s/certidude" % interval, "w") as fh:
+                fh.write("#!/bin/bash\nLANG=C.UTF-8 certidude cron %s\n" % interval)
+            os.chmod("/etc/cron.%s/certidude" % interval, 0o755)
+            click.echo("Created /etc/cron.%s/certidude" % interval)
+
     if os.path.exists("/etc/krb5.keytab") and os.path.exists("/etc/samba/smb.conf"):
         # Fetch Kerberos ticket for system account
         cp = ConfigParser()
@@ -1139,14 +1146,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         realm = cp.get("global", "realm")
         domain = realm.lower()
         name = cp.get("global", "netbios name")
-
         base = ",".join(["dc=" + j for j in domain.split(".")])
-        if not os.path.exists("/etc/cron.hourly/certidude"):
-            with open("/etc/cron.hourly/certidude", "w") as fh:
-                fh.write(env.get_template("server/cronjob").render(vars()))
-            os.chmod("/etc/cron.hourly/certidude", 0o755)
-            click.echo("Created /etc/cron.hourly/certidude for automatic LDAP service ticket renewal, inspect and adjust accordingly")
-        os.system("/etc/cron.hourly/certidude")
     else:
         click.echo("Warning: /etc/krb5.keytab or /etc/samba/smb.conf not found, Kerberos unconfigured")
 
@@ -1517,22 +1517,58 @@ def certidude_revoke(common_name, reason):
     authority.revoke(common_name, reason)
 
 
-@click.command("expire", help="Move expired certificates")
-def certidude_expire():
-    from certidude import authority, config
-    threshold = datetime.utcnow() - const.CLOCK_SKEW_TOLERANCE
+@click.command("hourly", help="Hourly housekeeping tasks")
+def certidude_cron_hourly():
+    from certidude import config
+
+    # Update LDAP service ticket if Certidude is joined to domain
+    if os.path.exists("/etc/krb5.keytab"):
+        if not os.path.exists("/run/certidude"):
+            os.makedirs("/run/certidude")
+        _, kdc = config.LDAP_ACCOUNTS_URI.rsplit("/", 1)
+        cmd = "KRB5CCNAME=/run/certidude/krb5cc.part kinit -k %s$ -S ldap/%s@%s -t /etc/krb5.keytab" % (
+            const.HOSTNAME.upper(), kdc, config.KERBEROS_REALM
+        )
+        click.echo("Executing: %s" % cmd)
+        os.system(cmd)
+        os.system("chown certidude:certidude /run/certidude/krb5cc.part")
+        os.rename("/run/certidude/krb5cc.part", "/run/certidude/krb5cc")
+
+
+@click.command("daily", help="Daily housekeeping tasks")
+def certidude_cron_daily():
+    from certidude import authority, config, mailer
+    threshold_move = datetime.utcnow() - const.CLOCK_SKEW_TOLERANCE
+    threshold_notify = datetime.utcnow() + timedelta(hours=48)
+    expired = []
+    about_to_expire = []
+
+    # Collect certificates which have expired and are about to expire
     for common_name, path, buf, cert, signed, expires in authority.list_signed():
-        if expires < threshold:
-            expired_path = os.path.join(config.EXPIRED_DIR, "%040x.pem" % cert.serial_number)
-            click.echo("Moving %s to %s" % (path, expired_path))
-            os.rename(path, expired_path)
-            os.remove(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%040x.pem" % cert.serial_number))
+        if expires < threshold_move:
+            expired.append((common_name, path, cert))
+        elif expires < threshold_notify:
+            about_to_expire.append((common_name, path, cert))
+
+    # Send e-mail notifications
+    if expired or about_to_expire:
+        mailer.send("expiration-notification.md", **locals())
+
+    # Move valid, but now expired certificates
+    for common_name, path, cert in expired:
+        expired_path = os.path.join(config.EXPIRED_DIR, "%040x.pem" % cert.serial_number)
+        click.echo("Moving %s to %s" % (path, expired_path))
+        os.rename(path, expired_path)
+        os.remove(os.path.join(config.SIGNED_BY_SERIAL_DIR, "%040x.pem" % cert.serial_number))
+
+    # Move revoked certificate which have expired
     for common_name, path, buf, cert, signed, expires, revoked, reason in authority.list_revoked():
-        if expires < threshold:
+        if expires < threshold_move:
             expired_path = os.path.join(config.EXPIRED_DIR, "%040x.pem" % cert.serial_number)
             click.echo("Moving %s to %s" % (path, expired_path))
             os.rename(path, expired_path)
-    # TODO: Send e-mail
+
+    # TODO: Send separate e-mails to subjects
 
 
 @click.command("serve", help="Run server")
@@ -1725,6 +1761,9 @@ def certidude_setup(): pass
 @click.group("token", help="Token management")
 def certidude_token(): pass
 
+@click.group("cron", help="Housekeeping tasks")
+def certidude_cron(): pass
+
 @click.group()
 def entry_point(): pass
 
@@ -1742,6 +1781,8 @@ certidude_setup.add_command(certidude_setup_yubikey)
 certidude_token.add_command(certidude_token_list)
 certidude_token.add_command(certidude_token_purge)
 certidude_token.add_command(certidude_token_issue)
+certidude_cron.add_command(certidude_cron_hourly)
+certidude_cron.add_command(certidude_cron_daily)
 entry_point.add_command(certidude_token)
 entry_point.add_command(certidude_setup)
 entry_point.add_command(certidude_serve)
@@ -1749,7 +1790,7 @@ entry_point.add_command(certidude_enroll)
 entry_point.add_command(certidude_sign)
 entry_point.add_command(certidude_revoke)
 entry_point.add_command(certidude_list)
-entry_point.add_command(certidude_expire)
+entry_point.add_command(certidude_cron)
 entry_point.add_command(certidude_users)
 entry_point.add_command(certidude_test)
 
