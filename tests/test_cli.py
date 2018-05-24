@@ -21,6 +21,56 @@ coverage.process_startup()
 UA_FEDORA_FIREFOX = "Mozilla/5.0 (X11; Fedora; Linux x86_64) " \
     "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.133 Safari/537.36"
 
+NM_OPENVPN = """
+type = vpn
+
+[vpn]
+service-type = org.freedesktop.NetworkManager.openvpn
+connection-type = tls
+comp-lzo = no
+cert-pass-flags = 0
+tap-dev = no
+remote-cert-tls = server
+remote = vpn.example.lan
+key = /etc/certidude/authority/ca.example.lan/client_key.pem
+cert = /etc/certidude/authority/ca.example.lan/client_cert.pem
+ca = /etc/certidude/authority/ca.example.lan/ca_cert.pem
+tls-cipher = TLS-ECDHE-ECDSA-WITH-AES-256-GCM-SHA384
+cipher = AES-128-GCM
+auth = SHA384
+port = 1194
+
+[ipv4]
+method = auto
+never-default = true
+
+[ipv6]
+method = auto
+
+"""
+
+NM_STRONGSWAN = """
+type = vpn
+
+[vpn]
+service-type = org.freedesktop.NetworkManager.strongswan
+encap = no
+virtual = yes
+method = key
+ipcomp = no
+address = ipsec.example.lan
+userkey = /etc/certidude/authority/ca.example.lan/client_key.pem
+usercert = /etc/certidude/authority/ca.example.lan/client_cert.pem
+certificate = /etc/certidude/authority/ca.example.lan/ca_cert.pem
+ike = aes256-sha384-prfsha384-ecp384
+esp = aes128gcm16-aes128gmac-ecp384
+proposal = yes
+
+[ipv4]
+method = auto
+
+"""
+
 smtp=None
 inbox=[]
 
@@ -824,7 +874,9 @@ def test_cli_setup_authority():
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "Writing certificate to:" in result.output, result.output
     assert os.path.exists("/etc/NetworkManager/system-connections/OpenVPN to vpn.example.lan")
-
+    with open("/etc/NetworkManager/system-connections/OpenVPN to vpn.example.lan") as fh:
+        buf = fh.read()
+        assert buf.endswith(NM_OPENVPN), buf
 
     # Issue token, needs legit router ^
     os.system("certidude token issue userbot")
@@ -857,6 +909,7 @@ def test_cli_setup_authority():
         fh.write("service = network-manager/strongswan\n")
 
     assert os.system("certidude enroll --skip-self") == 0
+
 
     ########################
     # Test image builder ###
@@ -1133,6 +1186,9 @@ def test_cli_setup_authority():
     assert not os.path.exists("/run/certidude/ca.example.lan.pid"), result.output
     assert "Writing certificate to:" in result.output, result.output
     assert os.path.exists("/etc/NetworkManager/system-connections/IPSec to ipsec.example.lan")
+    with open("/etc/NetworkManager/system-connections/IPSec to ipsec.example.lan") as fh:
+        buf = fh.read()
+        assert buf.endswith(NM_STRONGSWAN), buf
 
     ######################################
     ### Test revocation on client side ###
