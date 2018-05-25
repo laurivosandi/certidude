@@ -26,27 +26,27 @@ LDAP_BASE = cp.get("accounts", "ldap base")
 LDAP_MAIL_ATTRIBUTE = cp.get("accounts", "ldap mail attribute")
 
 USER_SUBNETS = set([ipaddress.ip_network(j) for j in
-    cp.get("authorization", "user subnets").split(" ") if j])
+    cp.get("authorization", "user subnets").replace(",", " ").split(" ") if j])
 ADMIN_SUBNETS = set([ipaddress.ip_network(j) for j in
-    cp.get("authorization", "admin subnets").split(" ") if j])
+    cp.get("authorization", "admin subnets").replace(",", " ").split(" ") if j])
 AUTOSIGN_SUBNETS = set([ipaddress.ip_network(j) for j in
-    cp.get("authorization", "autosign subnets").split(" ") if j])
+    cp.get("authorization", "autosign subnets").replace(",", " ").split(" ") if j])
 REQUEST_SUBNETS = set([ipaddress.ip_network(j) for j in
-    cp.get("authorization", "request subnets").split(" ") if j]).union(AUTOSIGN_SUBNETS)
+    cp.get("authorization", "request subnets").replace(",", " ").split(" ") if j]).union(AUTOSIGN_SUBNETS)
 SCEP_SUBNETS = set([ipaddress.ip_network(j) for j in
-    cp.get("authorization", "scep subnets").split(" ") if j])
+    cp.get("authorization", "scep subnets").replace(",", " ").split(" ") if j])
 OCSP_SUBNETS = set([ipaddress.ip_network(j) for j in
-    cp.get("authorization", "ocsp subnets").split(" ") if j])
+    cp.get("authorization", "ocsp subnets").replace(",", " ").split(" ") if j])
 CRL_SUBNETS = set([ipaddress.ip_network(j) for j in
-    cp.get("authorization", "crl subnets").split(" ") if j])
+    cp.get("authorization", "crl subnets").replace(",", " ").split(" ") if j])
 RENEWAL_SUBNETS = set([ipaddress.ip_network(j) for j in
-    cp.get("authorization", "renewal subnets").split(" ") if j])
+    cp.get("authorization", "renewal subnets").replace(",", " ").split(" ") if j])
 OVERWRITE_SUBNETS = set([ipaddress.ip_network(j) for j in
-    cp.get("authorization", "overwrite subnets").split(" ") if j])
+    cp.get("authorization", "overwrite subnets").replace(",", " ").split(" ") if j])
 MACHINE_ENROLLMENT_SUBNETS = set([ipaddress.ip_network(j) for j in
-    cp.get("authorization", "machine enrollment subnets").split(" ") if j])
+    cp.get("authorization", "machine enrollment subnets").replace(",", " ").split(" ") if j])
 KERBEROS_SUBNETS = set([ipaddress.ip_network(j) for j in
-    cp.get("authorization", "kerberos subnets").split(" ") if j])
+    cp.get("authorization", "kerberos subnets").replace(",", " ").split(" ") if j])
 
 AUTHORITY_DIR = "/var/lib/certidude"
 AUTHORITY_PRIVATE_KEY_PATH = cp.get("authority", "private key path")

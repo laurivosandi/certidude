@@ -18,7 +18,7 @@ class ImageBuilderResource(object):
     def on_get(self, req, resp, profile, suggested_filename):
         router = [j[0] for j in authority.list_signed(
             common_name=config.cp2.get(profile, "router"))][0]
-        subnets = set([ip_network(j) for j in config.cp2.get(profile, "subnets").split(" ")])
+        subnets = set([ip_network(j) for j in config.cp2.get(profile, "subnets").replace(",", " ").split(" ")])
         model = config.cp2.get(profile, "model")
         build_script_path = config.cp2.get(profile, "command")
         overlay_path = config.cp2.get(profile, "overlay")
