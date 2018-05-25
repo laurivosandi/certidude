@@ -163,6 +163,7 @@ def clean_server():
         "/etc/certidude/builder.conf",
         "/etc/certidude/profile.conf",
         "/var/log/certidude.log",
+        "/etc/cron.daily/certidude",
         "/etc/cron.hourly/certidude",
         "/etc/systemd/system/certidude.service",
         "/etc/nginx/sites-available/ca.conf",
@@ -277,7 +278,6 @@ def test_cli_setup_authority():
     assert_cleanliness()
 
     assert os.path.exists("/var/lib/certidude/signed/ca.example.lan.pem"), "provisioning failed"
-    assert not os.path.exists("/etc/cron.hourly/certidude")
 
     # Make sure nginx is running
     assert os.system("nginx -t") == 0, "invalid nginx configuration"
@@ -1328,6 +1328,7 @@ def test_cli_setup_authority():
     assert not os.path.exists("/var/lib/certidude/ca_key.pem")
     assert os.system("certidude setup authority --skip-packages -o 'Demola LLC'") == 0
     assert os.path.exists("/var/lib/certidude/ca_key.pem")
+    assert os.path.exists("/etc/cron.daily/certidude")
     assert os.path.exists("/etc/cron.hourly/certidude")
 
 
@@ -1344,10 +1345,6 @@ def test_cli_setup_authority():
     assert os.system("sed -e 's/kerberos subnets =.*/kerberos subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf") == 0
 
     # Update server credential cache
-    assert os.system("sed -e 's/dc1/ca/g' -i /etc/cron.hourly/certidude") == 0
-    with open("/etc/cron.hourly/certidude") as fh:
-        cronjob = fh.read()
-        assert "ldap/ca.example.lan" in cronjob, cronjob
     assert os.system("/etc/cron.hourly/certidude") == 0
     assert os.path.exists("/run/certidude/krb5cc")
     assert os.stat("/run/certidude/krb5cc").st_uid != 0, "Incorrect persmissions for /run/certidude/krb5cc"
@@ -1509,8 +1506,6 @@ def test_cli_setup_authority():
 
 
     result = runner.invoke(cli, ['list', '-srv'])
-    assert not result.exception, result.output
-    result = runner.invoke(cli, ['expire'])
     assert not result.exception, result.output
 
     pid_certidude = int(open("/run/certidude/server.pid").read())
