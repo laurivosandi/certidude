@@ -273,15 +273,16 @@ def test_cli_setup_authority():
     # - SCEP disabled
     # - CRL enabled
 
-    assert os.system("certidude setup authority --elliptic-curve") == 0
+    assert os.system("certidude provision authority --elliptic-curve") == 0
 
     assert_cleanliness()
 
     assert os.path.exists("/var/lib/certidude/signed/ca.example.lan.pem"), "provisioning failed"
 
     # Make sure nginx is running
+    os.system("systemctl restart certidude-backend")
+    os.system("systemctl start certidude-ocsp-cache.service")
     assert os.system("nginx -t") == 0, "invalid nginx configuration"
-    os.system("systemctl restart certidude")
     os.system("systemctl restart nginx")
     assert os.path.exists("/run/nginx.pid"), "nginx wasn't started up properly"
 
@@ -638,7 +639,7 @@ def test_cli_setup_authority():
     # Test tagging integration in scripting framework
     r = client().simulate_get("/api/signed/test/script/")
     assert r.status_code == 200, r.text # script render ok
-    assert "curl https://ca.example.lan:8443/api/signed/test/attr " in r.text, r.text
+    assert "curl --cert-status https://ca.example.lan:8443/api/signed/test/attr " in r.text, r.text
     assert "Tartu" in r.text, r.text
 
     r = client().simulate_post("/api/signed/test/tag/",
@@ -751,13 +752,13 @@ def test_cli_setup_authority():
 
     clean_client()
 
-    result = runner.invoke(cli, ["setup", "nginx", "-cn", "www", "ca.example.lan"])
+    result = runner.invoke(cli, ["provision", "nginx", "-cn", "www", "ca.example.lan"])
     assert result.exception
 
-    result = runner.invoke(cli, ["setup", "nginx", "-cn", "www.example.lan", "ca.example.lan"])
+    result = runner.invoke(cli, ["provision", "nginx", "-cn", "www.example.lan", "ca.example.lan"])
     assert not result.exception, result.output
 
-    result = runner.invoke(cli, ["setup", "nginx", "-cn", "www.example.lan", "ca.example.lan"])
+    result = runner.invoke(cli, ["provision", "nginx", "-cn", "www.example.lan", "ca.example.lan"])
     assert not result.exception, result.output # client conf already exists, remove to regenerate
 
     with open("/etc/certidude/client.conf", "a") as fh:
@@ -806,13 +807,13 @@ def test_cli_setup_authority():
     if not os.path.exists("/etc/openvpn/keys"):
         os.makedirs("/etc/openvpn/keys")
 
-    result = runner.invoke(cli, ['setup', 'openvpn', 'server', "-cn", "vpn", "ca.example.lan"])
+    result = runner.invoke(cli, ['provision', 'openvpn', 'server', "-cn", "vpn", "ca.example.lan"])
     assert result.exception, result.output
 
-    result = runner.invoke(cli, ['setup', 'openvpn', 'server', "-cn", "vpn.example.lan", "ca.example.lan"])
+    result = runner.invoke(cli, ['provision', 'openvpn', 'server', "-cn", "vpn.example.lan", "ca.example.lan"])
     assert not result.exception, result.output
 
-    result = runner.invoke(cli, ['setup', 'openvpn', 'server', "-cn", "vpn.example.lan", "ca.example.lan"])
+    result = runner.invoke(cli, ['provision', 'openvpn', 'server', "-cn", "vpn.example.lan", "ca.example.lan"])
     assert not result.exception, result.output # client conf already exists, remove to regenerate
 
     with open("/etc/certidude/client.conf", "a") as fh:
@@ -849,10 +850,10 @@ def test_cli_setup_authority():
     os.unlink("/etc/certidude/client.conf")
     os.unlink("/etc/certidude/services.conf")
 
-    result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "roadwarrior1", "ca.example.lan", "vpn.example.lan"])
+    result = runner.invoke(cli, ['provision', 'openvpn', 'client', "-cn", "roadwarrior1", "ca.example.lan", "vpn.example.lan"])
     assert not result.exception, result.output
 
-    result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "roadwarrior1", "ca.example.lan", "vpn.example.lan"])
+    result = runner.invoke(cli, ['provision', 'openvpn', 'client', "-cn", "roadwarrior1", "ca.example.lan", "vpn.example.lan"])
     assert not result.exception, result.output # client conf already exists, remove to regenerate
 
     result = runner.invoke(cli, ["enroll", "--skip-self", "--no-wait"])
@@ -866,7 +867,7 @@ def test_cli_setup_authority():
 
     clean_client()
 
-    result = runner.invoke(cli, ['setup', 'openvpn', 'networkmanager', "-cn", "roadwarrior3", "ca.example.lan", "vpn.example.lan"])
+    result = runner.invoke(cli, ['provision', 'openvpn', 'networkmanager', "-cn", "roadwarrior3", "ca.example.lan", "vpn.example.lan"])
     assert not result.exception, result.output
 
     result = runner.invoke(cli, ["enroll", "--skip-self", "--no-wait"])
@@ -1116,16 +1117,16 @@ def test_cli_setup_authority():
     clean_client()
     assert not os.path.exists("/var/lib/certidude/signed/ipsec.example.lan.pem")
 
-    result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec", "ca.example.lan"])
+    result = runner.invoke(cli, ['provision', 'strongswan', 'server', "-cn", "ipsec", "ca.example.lan"])
     assert result.exception, result.output # FQDN required
     assert not os.path.exists("/var/lib/certidude/signed/ipsec.example.lan.pem")
 
-    result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
+    result = runner.invoke(cli, ['provision', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
     assert not result.exception, result.output
     assert open("/etc/ipsec.secrets").read() == ": RSA /etc/certidude/authority/ca.example.lan/server_key.pem\n"
     assert not os.path.exists("/var/lib/certidude/signed/ipsec.example.lan.pem")
 
-    result = runner.invoke(cli, ['setup', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
+    result = runner.invoke(cli, ['provision', 'strongswan', 'server', "-cn", "ipsec.example.lan", "ca.example.lan"])
     assert not result.exception, result.output # client conf already exists, remove to regenerate
     assert not os.path.exists("/var/lib/certidude/signed/ipsec.example.lan.pem")
 
@@ -1162,10 +1163,10 @@ def test_cli_setup_authority():
     os.unlink("/etc/certidude/client.conf")
     os.unlink("/etc/certidude/services.conf")
 
-    result = runner.invoke(cli, ['setup', 'strongswan', 'client', "-cn", "roadwarrior2", "ca.example.lan", "ipsec.example.lan"])
+    result = runner.invoke(cli, ['provision', 'strongswan', 'client', "-cn", "roadwarrior2", "ca.example.lan", "ipsec.example.lan"])
     assert not result.exception, result.output
 
-    result = runner.invoke(cli, ['setup', 'strongswan', 'client', "-cn", "roadwarrior2", "ca.example.lan", "ipsec.example.lan"])
+    result = runner.invoke(cli, ['provision', 'strongswan', 'client', "-cn", "roadwarrior2", "ca.example.lan", "ipsec.example.lan"])
     assert not result.exception, result.output # client conf already exists, remove to regenerate
 
     result = runner.invoke(cli, ["enroll", "--skip-self", "--no-wait"])
@@ -1178,7 +1179,7 @@ def test_cli_setup_authority():
 
     clean_client()
 
-    result = runner.invoke(cli, ['setup', 'strongswan', 'networkmanager', "-cn", "roadwarrior4", "ca.example.lan", "ipsec.example.lan"])
+    result = runner.invoke(cli, ['provision', 'strongswan', 'networkmanager', "-cn", "roadwarrior4", "ca.example.lan", "ipsec.example.lan"])
     assert not result.exception, result.output
 
     result = runner.invoke(cli, ["enroll", "--skip-self", "--no-wait"])
@@ -1257,7 +1258,7 @@ def test_cli_setup_authority():
 
     assert os.path.exists("/run/certidude/server.pid")
     pid_certidude = int(open("/run/certidude/server.pid").read())
-    os.system("systemctl stop certidude")
+    os.system("systemctl stop certidude-backend")
     assert not os.path.exists("/run/certidude/server.pid")
 
     # Install packages
@@ -1321,16 +1322,13 @@ def test_cli_setup_authority():
     # Bootstrap authority again with:
     # - RSA certificates
     # - Kerberos auth
-    # - OCSP disabled
     # - SCEP enabled
     # - CRL disabled
 
     assert not os.path.exists("/var/lib/certidude/ca_key.pem")
-    assert os.system("certidude setup authority --skip-packages -o 'Demola LLC'") == 0
+    os.unlink("/etc/certidude/authority/ca.example.lan/ca_cert.pem")
+    assert os.system("certidude provision authority --skip-packages -o 'Demola LLC'") == 0
     assert os.path.exists("/var/lib/certidude/ca_key.pem")
-    assert os.path.exists("/etc/cron.daily/certidude")
-    assert os.path.exists("/etc/cron.hourly/certidude")
-
 
     # Make modifications to /etc/certidude/server.conf so
     # Certidude would auth against domain controller
@@ -1339,18 +1337,17 @@ def test_cli_setup_authority():
     assert os.system("sed -e 's/autosign subnets =.*/autosign subnets =/g' -i /etc/certidude/server.conf") == 0
     assert os.system("sed -e 's/machine enrollment subnets =.*/machine enrollment subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf") == 0
     assert os.system("sed -e 's/scep subnets =.*/scep subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf") == 0
-    assert os.system("sed -e 's/ocsp subnets =.*/ocsp subnets =/g' -i /etc/certidude/server.conf") == 0
     assert os.system("sed -e 's/crl subnets =.*/crl subnets =/g' -i /etc/certidude/server.conf") == 0
     assert os.system("sed -e 's/address = certificates@example.lan/address =/g' -i /etc/certidude/server.conf") == 0
     assert os.system("sed -e 's/kerberos subnets =.*/kerberos subnets = 0.0.0.0\\/0/g' -i /etc/certidude/server.conf") == 0
 
     # Update server credential cache
-    assert os.system("/etc/cron.hourly/certidude") == 0
+    assert os.system("systemctl start certidude-ldap-kinit") == 0
     assert os.path.exists("/run/certidude/krb5cc")
     assert os.stat("/run/certidude/krb5cc").st_uid != 0, "Incorrect persmissions for /run/certidude/krb5cc"
 
     # Start certidude backend
-    assert os.system("systemctl restart certidude") == 0
+    assert os.system("systemctl restart certidude-backend") == 0
 
     cov_finished = False
     for path in os.listdir("/tmp/"):
@@ -1392,14 +1389,6 @@ def test_cli_setup_authority():
     assert r.status_code == 400
     r = requests.post("http://ca.example.lan/api/scep/")
     assert r.status_code == 405
-
-    # OCSP should be disabled now
-    r = requests.get("http://ca.example.lan/api/ocsp/")
-    assert r.status_code == 404
-    r = requests.post("http://ca.example.lan/api/ocsp/")
-    assert r.status_code == 404
-
-
 
 
     #####################
@@ -1460,7 +1449,7 @@ def test_cli_setup_authority():
         clean_client()
 
         # Test non-matching CN
-        result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "somethingelse", "ca.example.lan", "vpn.example.lan"])
+        result = runner.invoke(cli, ['provision', 'openvpn', 'client', "-cn", "somethingelse", "ca.example.lan", "vpn.example.lan"])
         assert not result.exception, result.output
 
         result = runner.invoke(cli, ["enroll", "--skip-self", "--no-wait", "--kerberos"])
@@ -1469,7 +1458,7 @@ def test_cli_setup_authority():
         # With matching CN it should work
         clean_client()
 
-        result = runner.invoke(cli, ['setup', 'openvpn', 'client', "-cn", "ca", "ca.example.lan", "vpn.example.lan"])
+        result = runner.invoke(cli, ['provision', 'openvpn', 'client', "-cn", "ca", "ca.example.lan", "vpn.example.lan"])
         assert not result.exception, result.output
 
         result = runner.invoke(cli, ["enroll", "--skip-self", "--no-wait", "--kerberos"])
@@ -1509,7 +1498,7 @@ def test_cli_setup_authority():
     assert not result.exception, result.output
 
     pid_certidude = int(open("/run/certidude/server.pid").read())
-    assert os.system("systemctl stop certidude") == 0
+    assert os.system("systemctl stop certidude-backend") == 0
 
     cov_finished = False
     for path in os.listdir("/tmp/"):

@@ -32,7 +32,7 @@ else
 fi
 
 # Submit some stats to CA
-curl https://{{ authority_name }}:8443/api/signed/{{ common_name }}/attr \
+curl --cert-status https://{{ authority_name }}:8443/api/signed/{{ common_name }}/attr \
 --cacert /etc/certidude/authority/{{ authority_name }}/ca_cert.pem \
 --key /etc/certidude/authority/{{ authority_name }}/host_key.pem \
 --cert /etc/certidude/authority/{{ authority_name }}/host_cert.pem \

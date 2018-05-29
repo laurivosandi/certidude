@@ -1,0 +1,7 @@
+[Unit]
+Description=Cache OCSP responses for nginx OCSP stapling
+
+[Service]
+Type=oneshot
+Requires=nginx.service
+ExecStart=-/usr/bin/curl --cert-status https://{{ common_name }}:8443/ --cacert /etc/certidude/authority/{{ session.authority.hostname }}/ca_cert.pem

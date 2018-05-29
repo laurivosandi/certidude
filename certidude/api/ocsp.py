@@ -117,3 +117,6 @@ class OCSPResource(AuthorityHandler):
             }
         }).dump()
 
+        # Interestingly openssl's OCSP code doesn't care about content type
+        resp.append_header("Content-Type", "application/ocsp-response")
+

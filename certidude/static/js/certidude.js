@@ -546,7 +546,15 @@ function loadAuthority(query) {
              **/
             $("#view-dashboard").html(env.render('views/authority.html', {
                 session: session,
-                window: window
+                window: window,
+
+                // Parameters for unified snippets
+                dhparam_path: "/etc/ssl/dhparam.pem",
+                key_path: "/etc/certidude/authority/" + session.authority.hostname + "/host_key.pem",
+                certificate_path: "/etc/certidude/authority/" + session.authority.hostname + "/host_cert.pem",
+                authority_path: "/etc/certidude/authority/" + session.authority.hostname + "/ca_cert.pem",
+                revocations_path: "/etc/certidude/authority/" + session.authority.hostname + "/crl.pem",
+                common_name: "$NAME"
             }));
 
             $("time").timeago();

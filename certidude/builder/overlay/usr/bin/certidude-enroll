@@ -96,7 +96,7 @@ fi
 
 logger -t certidude -s "Request md5sum is $(md5sum -b $REQUEST_PATH)"
 
-curl -f -L \
+curl --cert-status -f -L \
     -H "Content-Type: application/pkcs10" \
     --cacert $AUTHORITY_PATH \
     --data-binary @$REQUEST_PATH \

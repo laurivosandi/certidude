@@ -1,0 +1,17 @@
+[Unit]
+Description=Certidude server
+After=network.target
+
+[Service]
+Type=forking
+EnvironmentFile=/etc/environment
+Environment=LANG=C.UTF-8
+Environment=PYTHON_EGG_CACHE=/tmp/.cache
+PIDFile=/run/certidude/server.pid
+KillSignal=SIGINT
+ExecStart={{ certidude_path }} serve --fork
+TimeoutSec=15
+
+[Install]
+WantedBy=multi-user.target
+

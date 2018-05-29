@@ -43,6 +43,7 @@ def self_enroll(skip_notify=False):
 
     from certidude import const, config
     common_name = const.FQDN
+    os.umask(0o0177)
 
     try:
         path, buf, cert, signed, expires = get_signed(common_name)

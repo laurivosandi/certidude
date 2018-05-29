@@ -75,7 +75,7 @@
 
       <div class="bd-example">
         <pre><code class="language-sh" data-lang="sh">wget <a href="/api/signed/{{ certificate.common_name }}/">http://{{ session.authority.hostname }}/api/signed/{{ certificate.common_name }}/</a>
-curl --cert-status http://{{ session.authority.hostname }}/api/signed/{{ certificate.common_name }}/ \
+curl http://{{ session.authority.hostname }}/api/signed/{{ certificate.common_name }}/ \
   | openssl x509 -text -noout</code></pre>
       </div>
 

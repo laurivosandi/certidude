@@ -1,0 +1,7 @@
+[Unit]
+Description=Initialize Kerberos credential cache for LDAP connections of Certidude
+
+[Service]
+Type=oneshot
+ExecStart={{ certidude_path }} housekeeping kinit
+Before=certidude-backend.service

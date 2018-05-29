@@ -10,7 +10,7 @@ KEY_PATH=$DIR/host_key.pem
 
 # TODO: fix Accepted 202 here
 
-curl -f -L \
+curl --cert-status -f -L \
     -H "Content-Type: application/pkcs10" \
     --data-binary @$REQUEST_PATH \
     --cacert $AUTHORITY_PATH \

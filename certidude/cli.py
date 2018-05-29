@@ -684,7 +684,7 @@ def certidude_enroll(fork, renew, no_wait, kerberos, skip_self):
     help="OpenVPN configuration file")
 @fqdn_required
 @setup_client(prefix="server_", dh=True)
-def certidude_setup_openvpn_server(authority, common_name, config, subnet, route, local, proto, port, **paths):
+def certidude_provision_openvpn_server(authority, common_name, config, subnet, route, local, proto, port, **paths):
     # Install dependencies
     apt("openvpn")
     rpm("openvpn")
@@ -745,7 +745,7 @@ def certidude_setup_openvpn_server(authority, common_name, config, subnet, route
 @click.option("--verify-client", "-vc", default="optional", type=click.Choice(['optional', 'on', 'off']))
 @fqdn_required
 @setup_client(prefix="server_", dh=True)
-def certidude_setup_nginx(authority, common_name, site_config, tls_config, verify_client, **paths):
+def certidude_provision_nginx(authority, common_name, site_config, tls_config, verify_client, **paths):
 
     apt("nginx")
     rpm("nginx")
@@ -759,15 +759,14 @@ def certidude_setup_nginx(authority, common_name, site_config, tls_config, verif
     if os.path.exists(site_config.name):
         click.echo("Configuration file %s already exists, not overwriting" % site_config.name)
     else:
-        site_config.write(env.get_template("nginx-https-site.conf").render(context))
+        site_config.write(env.get_template("snippets/nginx-https-site.conf").render(context))
         click.echo("Generated %s" % site_config.name)
 
     if os.path.exists(tls_config.name):
         click.echo("Configuration file %s already exists, not overwriting" % tls_config.name)
     else:
-        tls_config.write(env.get_template("nginx-tls.conf").render(context))
+        tls_config.write(env.get_template("snippets/nginx-tls.conf").render(context))
         click.echo("Generated %s" % tls_config.name)
-
 
     click.echo()
     click.echo("Inspect configuration files, enable it and start nginx service:")
@@ -789,7 +788,7 @@ def certidude_setup_nginx(authority, common_name, site_config, tls_config, verif
     type=click.File(mode="w", atomic=True, lazy=True),
     help="OpenVPN configuration file")
 @setup_client()
-def certidude_setup_openvpn_client(authority, remote, common_name, config, proto, **paths):
+def certidude_provision_openvpn_client(authority, remote, common_name, config, proto, **paths):
     # Install dependencies
     apt("openvpn")
     rpm("openvpn")
@@ -843,7 +842,7 @@ def certidude_setup_openvpn_client(authority, remote, common_name, config, proto
 @click.option("--route", "-r", type=ip_network, multiple=True, help="Subnets to advertise via this connection, multiple allowed")
 @fqdn_required
 @setup_client(prefix="server_")
-def certidude_setup_strongswan_server(authority, common_name, subnet, route, **paths):
+def certidude_provision_strongswan_server(authority, common_name, subnet, route, **paths):
     # Install dependencies
     apt("strongswan")
     rpm("strongswan")
@@ -892,7 +891,7 @@ def certidude_setup_strongswan_server(authority, common_name, subnet, route, **p
 @click.argument("remote")
 @click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
 @setup_client()
-def certidude_setup_strongswan_client(authority, remote, common_name, **paths):
+def certidude_provision_strongswan_client(authority, remote, common_name, **paths):
     # Install dependencies
     apt("strongswan") or rpm("strongswan")
 
@@ -948,7 +947,7 @@ def certidude_setup_strongswan_client(authority, remote, common_name, **paths):
 @click.argument("remote") # StrongSwan gateway
 @click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
 @setup_client()
-def certidude_setup_strongswan_networkmanager(authority, remote, common_name, **paths):
+def certidude_provision_strongswan_networkmanager(authority, remote, common_name, **paths):
     # Install dependencies
     apt("network-manager strongswan-nm")
     rpm("NetworkManager NetworkManager-tui NetworkManager-strongswan-gnome")
@@ -976,7 +975,7 @@ def certidude_setup_strongswan_networkmanager(authority, remote, common_name, **
 @click.argument("remote") # OpenVPN gateway
 @click.option("--common-name", "-cn", default=const.HOSTNAME, help="Common name, %s by default" % const.HOSTNAME)
 @setup_client()
-def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **paths):
+def certidude_provision_openvpn_networkmanager(authority, remote, common_name, **paths):
     apt("network-manager network-manager-openvpn-gnome")
     rpm("NetworkManager NetworkManager-tui NetworkManager-openvpn-gnome")
 
@@ -997,7 +996,7 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
         click.echo("Section %s added to /etc/certidude/client.conf" % endpoint)
 
 
-@click.command("authority", help="Set up Certificate Authority in a directory")
+@click.command("authority", help="Set up Certificate Authority")
 @click.option("--username", default="certidude", help="Service user account, created if necessary, 'certidude' by default")
 @click.option("--kerberos-keytab", default="/etc/certidude/server.keytab", help="Kerberos keytab for using 'kerberos' authentication backend, /etc/certidude/server.keytab by default")
 @click.option("--nginx-config", "-n",
@@ -1021,9 +1020,24 @@ def certidude_setup_openvpn_networkmanager(authority, remote, common_name, **pat
 @click.option("--packages-only", is_flag=True, help="Install only apt/pip/npm packages")
 @click.option("--elliptic-curve", "-e", is_flag=True, help="Generate EC instead of RSA keypair")
 @click.option("--subordinate", is_flag=True, help="Set up subordinate CA instead of root CA")
-def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_config, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, title, skip_assets, skip_packages, elliptic_curve, subordinate, packages_only):
+def certidude_provision_authority(username, kerberos_keytab, nginx_config, tls_config, organization, organizational_unit, common_name, directory, authority_lifetime, push_server, outbox, title, skip_assets, skip_packages, elliptic_curve, subordinate, packages_only):
     assert subprocess.check_output(["/usr/bin/lsb_release", "-cs"]) in (b"trusty\n", b"xenial\n", b"bionic\n"), "Only Ubuntu 16.04 supported at the moment"
     assert os.getuid() == 0 and os.getgid() == 0, "Authority can be set up only by root"
+
+    def verbose_symlink(name, target):
+        if not os.path.islink(name):
+            click.echo("Symlinking %s to %s" % (name, target))
+            os.symlink(target, name)
+        else:
+            click.echo("Symlink %s already exist, remove to relink" % name)
+
+    def verbose_makedirs(path):
+        if not os.path.exists(path):
+            click.echo("Creating directory %s" % path)
+            os.makedirs(path)
+        else:
+            click.echo("Directory %s already exists" % path)
+
 
     import pwd
     from jinja2 import Environment, PackageLoader
@@ -1070,8 +1084,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         if os.system(cmd):
             raise click.ClickException("Failed to install JavaScript packages")
 
-    if not os.path.exists("/usr/bin/node"):
-        os.symlink("/usr/bin/nodejs", "/usr/bin/node")
+    verbose_symlink("/usr/bin/node", "/usr/bin/nodejs")
 
     if packages_only:
         return
@@ -1100,7 +1113,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
     assets_dir = os.path.join(directory, "assets")
     ca_key = os.path.join(directory, "ca_key.pem")
     ca_req = os.path.join(directory, "ca_req.pem")
-    ca_cert = os.path.join(directory, "ca_cert.pem")
+    authority_path = os.path.join(directory, "ca_cert.pem")
     self_key = os.path.join(directory, "self_key.pem")
     sqlite_path = os.path.join(directory, "meta", "db.sqlite")
     distinguished_name = cn_to_dn(title, common_name, o=organization, ou=organizational_unit)
@@ -1120,7 +1133,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
     if os.path.exists(kerberos_keytab):
         click.echo("Service principal keytab found in '%s'" % kerberos_keytab)
     else:
-        click.echo("To use 'kerberos' authentication backend join the domain , create service principal and provision authority again:")
+        click.echo("To use 'kerberos' authentication backend join the domain, create service principal and provision authority again:")
         click.echo()
         click.echo("  kinit administrator@EXAMPLE.LAN")
         click.echo("  net ads join -k")
@@ -1128,16 +1141,8 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         click.echo("  kdestroy")
         click.echo("  chown %s %s" % (username, kerberos_keytab))
         click.echo("  mv /etc/certidude/server.conf /etc/certidude/server.backup")
-        click.echo("  certidude setup authority")
+        click.echo("  certidude provision authority")
         click.echo()
-
-
-    for interval in ("hourly", "daily"):
-        if not os.path.exists("/etc/cron.%s/certidude" % interval):
-            with open("/etc/cron.%s/certidude" % interval, "w") as fh:
-                fh.write("#!/bin/bash\nLANG=C.UTF-8 certidude cron %s\n" % interval)
-            os.chmod("/etc/cron.%s/certidude" % interval, 0o755)
-            click.echo("Created /etc/cron.%s/certidude" % interval)
 
     if os.path.exists("/etc/krb5.keytab") and os.path.exists("/etc/samba/smb.conf"):
         # Fetch Kerberos ticket for system account
@@ -1148,6 +1153,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         name = cp.get("global", "netbios name")
         base = ",".join(["dc=" + j for j in domain.split(".")])
     else:
+        realm = None
         click.echo("Warning: /etc/krb5.keytab or /etc/samba/smb.conf not found, Kerberos unconfigured")
 
     letsencrypt_fullchain = "/etc/letsencrypt/live/%s/fullchain.pem" % common_name
@@ -1157,25 +1163,35 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
     builder_path = os.path.join(os.path.realpath(os.path.dirname(__file__)), "builder")
     script_dir = os.path.join(os.path.realpath(os.path.dirname(__file__)), "templates", "script")
 
+    templates_dir = os.path.join(os.path.realpath(os.path.dirname(__file__)), "templates")
     static_path = os.path.join(os.path.realpath(os.path.dirname(__file__)), "static")
     certidude_path = sys.argv[0]
 
     click.echo("Generating: %s" % nginx_config.name)
     nginx_config.write(env.get_template("server/nginx.conf").render(vars()))
     nginx_config.close()
-    if not os.path.exists("/etc/nginx/sites-enabled/certidude.conf"):
-        os.symlink("../sites-available/certidude.conf", "/etc/nginx/sites-enabled/certidude.conf")
-        click.echo("Symlinked %s -> /etc/nginx/sites-enabled/" % nginx_config.name)
+
+    def verbose_render_systemd_service(template, target, context):
+        target_path = "/etc/systemd/system/%s" % target
+        if os.path.exists(target_path):
+            click.echo("File %s already exists, remove to regenerate" % target_path)
+        else:
+            buf = env.get_template(template).render(context)
+            with open(target_path, "w") as fh:
+                fh.write(buf)
+            click.echo("File %s created" % target_path)
+            os.system("systemctl daemon-reload")
+
+    verbose_symlink("/etc/nginx/sites-enabled/certidude.conf", "../sites-available/certidude.conf")
+
     if os.path.exists("/etc/nginx/sites-enabled/default"):
         os.unlink("/etc/nginx/sites-enabled/default")
     if os.path.exists("/etc/systemd"):
-        if os.path.exists("/etc/systemd/system/certidude.service"):
-            click.echo("File /etc/systemd/system/certidude.service already exists, remove to regenerate")
-        else:
-            with open("/etc/systemd/system/certidude.service", "w") as fh:
-                fh.write(env.get_template("server/systemd.service").render(vars()))
-            click.echo("File /etc/systemd/system/certidude.service created")
-            os.system("systemctl daemon-reload")
+        verbose_render_systemd_service("server/backend.service", "certidude-backend.service", vars())
+        verbose_render_systemd_service("server/ldap-kinit.service", "certidude-ldap-kinit.service", vars())
+        verbose_render_systemd_service("server/ldap-kinit.timer", "certidude-ldap-kinit.timer", vars())
+        verbose_render_systemd_service("snippets/nginx-ocsp-cache.service", "certidude-ocsp-cache.service", vars())
+        verbose_render_systemd_service("snippets/nginx-ocsp-cache.timer", "certidude-ocsp-cache.timer", vars())
     else:
         raise NotImplementedError("Not systemd based OS, don't know how to set up initscripts")
 
@@ -1209,7 +1225,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
                 raise click.ClickException("Failed to copy fonts")
 
             # Compile nunjucks templates
-            cmd = 'nunjucks-precompile --include "\.html$" --include "\.ps1$" --include "\.sh$" --include "\.svg$" --include "\.yml$" --include "\.conf$" --include "\.mobileconfig$" %s > %s.part' % (static_path, bundle_js)
+            cmd = 'nunjucks-precompile --include snippets --include views %s > %s.part' % (templates_dir, bundle_js)
             click.echo("Compiling templates: %s" % cmd)
             if os.system(cmd):
                 raise click.ClickException("Failed to compile nunjucks templates")
@@ -1256,7 +1272,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         if os.path.exists(tls_config.name):
             click.echo("Configuration file %s already exists, not overwriting" % tls_config.name)
         else:
-            tls_config.write(env.get_template("nginx-tls.conf").render(locals()))
+            tls_config.write(env.get_template("snippets/nginx-tls.conf").render(locals()))
             click.echo("Generated %s" % tls_config.name)
 
         if os.path.exists(const.SERVER_CONFIG_PATH):
@@ -1295,11 +1311,7 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         os.umask(0o007)
         for subdir in ("signed", "signed/by-serial", "requests", "revoked", "expired", "meta", "builder"):
             path = os.path.join(directory, subdir)
-            if not os.path.exists(path):
-                click.echo("Creating directory %s" % path)
-                os.mkdir(path)
-            else:
-                click.echo("Directory already exists %s" % path)
+            verbose_makedirs(path)
             assert os.stat(path).st_mode == 0o40770, path
 
         # Create SQLite database file with correct permissions
@@ -1307,6 +1319,21 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         if not os.path.exists(sqlite_path):
             with open(sqlite_path, "wb") as fh:
                 pass
+
+        # Create symlink for self certificate
+        verbose_symlink("/var/lib/certidude/self_cert.pem", "signed/" + common_name + ".pem")
+
+        # Symlink client paths
+        verbose_makedirs("/etc/certidude/authority/%s" % common_name)
+        verbose_symlink(
+            "/etc/certidude/authority/%s/host_cert.pem" % common_name,
+            "/var/lib/certidude/self_cert.pem")
+        verbose_symlink(
+            "/etc/certidude/authority/%s/host_key.pem" % common_name,
+            "/var/lib/certidude/self_key.pem")
+        verbose_symlink(
+            "/etc/certidude/authority/%s/ca_cert.pem" % common_name,
+            "/var/lib/certidude/ca_cert.pem")
 
         # Generate and sign CA key
         if not os.path.exists(ca_key) or subordinate and not os.path.exists(ca_req):
@@ -1329,22 +1356,22 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
                     f.write(pem_armor_csr(request))
                 os.rename(ca_req + ".part", ca_req)
 
-        if not os.path.exists(ca_cert):
+        if not os.path.exists(authority_path):
             if subordinate:
                 click.echo("Request has been written to %s" % ca_req)
                 click.echo()
                 click.echo(open(ca_req).read())
                 click.echo()
-                click.echo("Get it signed and insert signed certificate into %s" % ca_cert)
+                click.echo("Get it signed and insert signed certificate into %s" % authority_path)
                 click.echo()
-                click.echo("  cat > %s" % ca_cert)
+                click.echo("  cat > %s" % authority_path)
                 click.echo()
                 click.echo("Paste contents and press Ctrl-D, adjust permissions:")
                 click.echo()
-                click.echo("  chown root:root %s" % ca_cert)
-                click.echo("  chmod 0644 %s" % ca_cert)
+                click.echo("  chown root:root %s" % authority_path)
+                click.echo("  chmod 0644 %s" % authority_path)
                 click.echo()
-                click.echo("To finish setup procedure run 'certidude setup authority' again")
+                click.echo("To finish setup procedure run 'certidude provision authority' again")
                 sys.exit(1) # stop this fork here with error
 
             # https://technet.microsoft.com/en-us/library/aa998840(v=exchg.141).aspx
@@ -1360,9 +1387,9 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
 
             # Set permission bits to 640
             os.umask(0o137)
-            with open(ca_cert, 'wb') as f:
+            with open(authority_path, 'wb') as f:
                 f.write(pem_armor_certificate(certificate))
-            click.echo("Authority certificate written to: %s" % ca_cert)
+            click.echo("Authority certificate written to: %s" % authority_path)
 
         sys.exit(0) # stop this fork here
     else:
@@ -1376,18 +1403,27 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         assert os.path.exists(os.path.join(directory, "signed", common_name) + ".pem")
         assert os.getuid() == 0 and os.getgid() == 0, "Enroll contaminated environment"
         assert os.stat(sqlite_path).st_mode == 0o100660
-        assert os.stat(ca_cert).st_mode == 0o100640
+        assert os.stat(authority_path).st_mode == 0o100640
         assert os.stat(ca_key).st_mode == 0o100600
+        assert os.stat(self_key).st_mode == 0o100600
         assert os.stat("/etc/nginx/sites-available/certidude.conf").st_mode == 0o100600
         assert os.stat("/etc/certidude/server.conf").st_mode == 0o100600
+
+        # Disable legacy garbage
+        if os.path.exists("/etc/cron.hourly/certidude"):
+            os.unlink("/etc/cron.hourly/certidude")
+        if os.path.exists("/etc/cron.daily/certidude"):
+            os.unlink("/etc/cron.daily/certidude")
+        if os.path.exists("/etc/systemd/system/certidude.service"):
+            os.unlink("/etc/systemd/system/certidude.service")
 
         click.echo("To enable e-mail notifications install Postfix as sattelite system and set mailer address in %s" % const.SERVER_CONFIG_PATH)
         click.echo()
         click.echo("Use following commands to inspect the newly created files:")
         click.echo()
-        click.echo("  openssl x509 -text -noout -in %s | less" % ca_cert)
+        click.echo("  openssl x509 -text -noout -in %s | less" % authority_path)
         click.echo("  openssl rsa -check -in %s" % ca_key)
-        click.echo("  openssl verify -CAfile %s %s" % (ca_cert, ca_cert))
+        click.echo("  openssl verify -CAfile %s %s" % (authority_path, authority_path))
         click.echo()
         click.echo("To inspect logs and issued tokens:")
         click.echo()
@@ -1395,12 +1431,19 @@ def certidude_setup_authority(username, kerberos_keytab, nginx_config, tls_confi
         click.echo("  echo 'select * from token;' | sqlite3 /var/lib/certidude/meta/db.sqlite")
         click.echo()
         click.echo("Enabling Certidude backend and nginx...")
-        os.system("systemctl enable certidude")
+        os.system("systemctl enable certidude-backend.service")
         os.system("systemctl enable nginx")
+        os.system("systemctl enable certidude-ocsp-cache.timer")
+        os.system("systemctl start certidude-ocsp-cache.timer")
+        if realm:
+            os.system("systemctl enable certidude-ldap-kinit.timer")
+            os.system("systemctl start certidude-ldap-kinit.timer")
+            os.system("systemctl start certidude-ldap-kinit.service")
         click.echo("To (re)start services:")
         click.echo()
-        click.echo("  systemctl restart certidude")
+        click.echo("  systemctl restart certidude-backend")
         click.echo("  systemctl restart nginx")
+        click.echo("  systemctl start certidude-ocsp-cache.service")
         click.echo()
         return 0
 
@@ -1517,8 +1560,8 @@ def certidude_revoke(common_name, reason):
     authority.revoke(common_name, reason)
 
 
-@click.command("hourly", help="Hourly housekeeping tasks")
-def certidude_cron_hourly():
+@click.command("kinit", help="Initialize Kerberos credential cache for LDAP")
+def certidude_housekeeping_kinit():
     from certidude import config
 
     # Update LDAP service ticket if Certidude is joined to domain
@@ -1535,8 +1578,8 @@ def certidude_cron_hourly():
         os.rename("/run/certidude/krb5cc.part", "/run/certidude/krb5cc")
 
 
-@click.command("daily", help="Daily housekeeping tasks")
-def certidude_cron_daily():
+@click.command("daily", help="Send notifications about expired certificates")
+def certidude_housekeeping_expiration():
     from certidude import authority, config, mailer
     threshold_move = datetime.utcnow() - const.CLOCK_SKEW_TOLERANCE
     threshold_notify = datetime.utcnow() + timedelta(hours=48)
@@ -1633,11 +1676,6 @@ def certidude_serve(port, listen, fork):
     Drop privileges
     """
 
-
-    # Initialize LDAP service ticket
-    if os.path.exists("/etc/cron.hourly/certidude"):
-        os.system("/etc/cron.hourly/certidude")
-
     from certidude.push import EventSourceLogHandler
     log_handlers.append(EventSourceLogHandler())
 
@@ -1671,7 +1709,7 @@ def certidude_serve(port, listen, fork):
 @click.option("-p", "--pin", default="123456", help="Slot pincode, 123456 by default")
 @click.option("-s", "--slot", default="9a", help="Yubikey slot to use, 9a by default")
 @click.option("-u", "--username", default=os.getenv("USER"), help="Username to use, %s by default" % os.getenv("USER"))
-def certidude_setup_yubikey(authority, slot, username, pin):
+def certidude_provision_yubikey(authority, slot, username, pin):
     import requests
     cmd = "ykinfo", "-q", "-s"
     click.echo("Executing: %s" % " ".join(cmd))
@@ -1750,47 +1788,48 @@ def certidude_token_issue(subject, subject_mail):
 
 
 @click.group("strongswan", help="strongSwan helpers")
-def certidude_setup_strongswan(): pass
+def certidude_provision_strongswan(): pass
 
 @click.group("openvpn", help="OpenVPN helpers")
-def certidude_setup_openvpn(): pass
+def certidude_provision_openvpn(): pass
 
-@click.group("setup", help="Getting started section")
-def certidude_setup(): pass
+@click.group("provision", help="Getting started section")
+def certidude_provision(): pass
+
+@click.group("housekeeping", help="Housekeeping tasks")
+def certidude_housekeeping(): pass
 
 @click.group("token", help="Token management")
 def certidude_token(): pass
 
-@click.group("cron", help="Housekeeping tasks")
-def certidude_cron(): pass
-
 @click.group()
 def entry_point(): pass
 
-certidude_setup_strongswan.add_command(certidude_setup_strongswan_server)
-certidude_setup_strongswan.add_command(certidude_setup_strongswan_client)
-certidude_setup_strongswan.add_command(certidude_setup_strongswan_networkmanager)
-certidude_setup_openvpn.add_command(certidude_setup_openvpn_server)
-certidude_setup_openvpn.add_command(certidude_setup_openvpn_client)
-certidude_setup_openvpn.add_command(certidude_setup_openvpn_networkmanager)
-certidude_setup.add_command(certidude_setup_authority)
-certidude_setup.add_command(certidude_setup_openvpn)
-certidude_setup.add_command(certidude_setup_strongswan)
-certidude_setup.add_command(certidude_setup_nginx)
-certidude_setup.add_command(certidude_setup_yubikey)
+
+certidude_provision_strongswan.add_command(certidude_provision_strongswan_server)
+certidude_provision_strongswan.add_command(certidude_provision_strongswan_client)
+certidude_provision_strongswan.add_command(certidude_provision_strongswan_networkmanager)
+certidude_provision_openvpn.add_command(certidude_provision_openvpn_server)
+certidude_provision_openvpn.add_command(certidude_provision_openvpn_client)
+certidude_provision_openvpn.add_command(certidude_provision_openvpn_networkmanager)
+certidude_provision.add_command(certidude_provision_authority)
+certidude_provision.add_command(certidude_provision_openvpn)
+certidude_provision.add_command(certidude_provision_strongswan)
+certidude_provision.add_command(certidude_provision_nginx)
+certidude_provision.add_command(certidude_provision_yubikey)
 certidude_token.add_command(certidude_token_list)
 certidude_token.add_command(certidude_token_purge)
 certidude_token.add_command(certidude_token_issue)
-certidude_cron.add_command(certidude_cron_hourly)
-certidude_cron.add_command(certidude_cron_daily)
+certidude_housekeeping.add_command(certidude_housekeeping_kinit)
+certidude_housekeeping.add_command(certidude_housekeeping_expiration)
 entry_point.add_command(certidude_token)
-entry_point.add_command(certidude_setup)
+entry_point.add_command(certidude_provision)
 entry_point.add_command(certidude_serve)
 entry_point.add_command(certidude_enroll)
 entry_point.add_command(certidude_sign)
 entry_point.add_command(certidude_revoke)
 entry_point.add_command(certidude_list)
-entry_point.add_command(certidude_cron)
+entry_point.add_command(certidude_housekeeping)
 entry_point.add_command(certidude_users)
 entry_point.add_command(certidude_test)
 

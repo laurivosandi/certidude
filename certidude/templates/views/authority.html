@@ -19,6 +19,10 @@
             <a class="nav-link" id="contact-tab" data-toggle="tab" href="#snippet-unix" role="tab" aria-controls="unix" aria-selected="false">UNIX</a>
           </li>
 
+          <li class="nav-item">
+            <a class="nav-link" id="contact-tab" data-toggle="tab" href="#snippet-nginx" role="tab" aria-controls="nginx" aria-selected="false">nginx</a>
+          </li>
+
           {% if "openvpn" in session.service.protocols %}
             <li class="nav-item">
               <a class="nav-link" id="contact-tab" data-toggle="tab" href="#snippet-openvpn" role="tab" aria-controls="openvpn" aria-selected="false">OpenVPN</a>
@@ -69,21 +73,45 @@
 
           <!-- UNIX-like -->
           <div class="tab-pane fade" id="snippet-unix" role="tabpanel" aria-labelledby="unix">
-
             <p>For client certificates generate key pair and submit the signing request with common name set to short hostname:</p>
             <div class="highlight">
-
               <pre class="code"><code>{% include "snippets/request-client.sh" %}</code></pre>
             </div>
-
-            <p>For server certificates use fully qualified hostname as common name and sign request accordingly:</p>
-            <div class="highlight">
-              <pre class="code"><code>{% include "snippets/request-server.sh" %}</code></pre>
-            </div>
-
             <p>To renew:</p>
             <div class="highlight">
             <pre class="code"><code>{% include "snippets/renew.sh" %}</code></pre>
+            </div>
+          </div>
+
+          <!-- nginx -->
+          <div class="tab-pane fade" id="snippet-nginx" role="tabpanel" aria-labelledby="nginx">
+            <p>For server certificates use fully qualified hostname as common name and sign request accordingly:</p>
+            <div class="highlight">
+              <pre class="code"><code>apt install -y nginx curl
+NAME=$(hostname -f)
+{% include "snippets/request-common.sh" %}
+{% include "snippets/submit-request-wait.sh" %}
+{% include "snippets/setup-ocsp-caching.sh" %}
+
+cat << \EOF > /etc/nginx/conf.d/tls.conf
+{% include "snippets/nginx-tls.conf" %}EOF
+
+cat << EOF > /etc/nginx/sites-available/https.conf
+{% include "snippets/nginx-https-site.conf" %}EOF
+
+test -h /etc/nginx/sites-enabled/https.conf \
+ || ln -s ../sites-available/https.conf /etc/nginx/sites-enabled/https.conf
+rm -fv /etc/nginx/sites-enabled/default
+test -e {{ dhparam_path }} \
+ || openssl dhparam -out {{ dhparam_path }} 2048
+
+systemctl reload nginx
+</code></pre>
+            </div>
+
+            <p>To renew create cron weekly job:</p>
+            <div class="highlight">
+              <pre class="code"><code>{% include "snippets/renew.sh" %}</code></pre>
             </div>
           </div>
 

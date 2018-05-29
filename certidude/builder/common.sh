@@ -59,7 +59,7 @@ esac
 cat << EOF > $OVERLAY/etc/certidude/authority/$AUTHORITY/updown
 #!/bin/sh
 
-CURL="curl -m 3 -f --key /etc/certidude/authority/$AUTHORITY/host_key.pem --cert /etc/certidude/authority/$AUTHORITY/host_cert.pem --cacert /etc/certidude/authority/$AUTHORITY/ca_cert.pem"
+CURL="curl -m 3 -f --key /etc/certidude/authority/$AUTHORITY/host_key.pem --cert /etc/certidude/authority/$AUTHORITY/host_cert.pem --cacert /etc/certidude/authority/$AUTHORITY/ca_cert.pem --cert-status"
 URL="https://$AUTHORITY:8443/api/signed/\$(uci get system.@system[0].hostname)/script/"
 
 case \$PLUTO_VERB in
