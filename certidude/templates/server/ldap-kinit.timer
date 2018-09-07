@@ -1,3 +1,7 @@
 [Timer]
-OnCalendar=00/8:30
 Persistent=true
+OnBootSec=3sec
+OnUnitActiveSec=8h
+
+[Install]
+WantedBy=multi-user.target
