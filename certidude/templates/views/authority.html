@@ -221,6 +221,7 @@ curl http://{{ session.authority.hostname }}/api/revoked/?wait=yes -L -H "Accept
 <div class="row">
   <div class="col-sm-6 col-lg-4 col-xl-3">
     <h3>Signed certificates</h3>
+
     <p>Authority administration
       {% if session.authority.certificate.organization %}of {{ session.authority.certificate.organization }}{% endif %}
         allowed for
@@ -231,12 +232,22 @@ curl http://{{ session.authority.hostname }}/api/revoked/?wait=yes -L -H "Accept
         until
         <time class="timeago" datetime="{{ session.authority.certificate.expires }}">{{ session.authority.certificate.expires }}</time>.
         Authority certificate can be downloaded from <a href="/api/certificate/">here</a>.
-        Following certificates have been signed:</p>
+		Following certificates have been signed:</p>
+
+    <div id="signed-filter" class="btn-group-toggle" data-toggle="buttons">
+      <label class="btn btn-primary"><input id="signed-filter-new" type="checkbox" autocomplete="off">New</label>
+      <label class="btn btn-primary active"><input id="signed-filter-online" type="checkbox" autocomplete="off" checked>Online</label>
+      <label class="btn btn-primary"><input id="signed-filter-offline" type="checkbox" autocomplete="off">Lately seen</label>
+      <label class="btn btn-primary"><input id="signed-filter-dead" type="checkbox" autocomplete="off">Gone</label>
+    </div>
+
     <div id="signed_certificates">
     {% for certificate in session.authority.signed | sort(attribute="signed", reverse=true) %}
       {% include "views/signed.html" %}
     {% endfor %}
     </div>
+
+    <p>Showing <span id="signed-filter-counter">-</span> of total <span id="signed-total">-</span> certificates</p>
   </div>
   <div class="col-sm-6 col-lg-4 col-xl-3">
   {% if session.authority %}
@@ -347,7 +358,7 @@ curl http://{{ session.authority.hostname }}/api/revoked/?wait=yes -L -H "Accept
     </div>
     <div class="content" style="display:none;">
       <h3>Log</h3>
-      <div class="btn-group" data-toggle="buttons">
+      <div class="btn-group-toggle" data-toggle="buttons">
         <label class="btn btn-primary active"><input id="log-level-critical" type="checkbox" autocomplete="off" checked>Critical</label>
         <label class="btn btn-primary active"><input id="log-level-error" type="checkbox" autocomplete="off" checked>Error</label>
         <label class="btn btn-primary active"><input id="log-level-warning" type="checkbox" autocomplete="off" checked>Warn</label>

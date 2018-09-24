@@ -388,7 +388,7 @@ function onLeaseUpdate(e) {
                 certificate: {
                     lease: lease }}));
             $("time", $lease).timeago();
-
+            filterSigned();
         },
         error: function(response) {
             console.info("Failed to retrieve certificate:", response);
@@ -413,6 +413,7 @@ function onRequestSigned(e) {
             $("#signed_certificates").prepend(
                 env.render('views/signed.html', { certificate: certificate, session: session }));
             $("#signed_certificates time").timeago(); // TODO: optimize?
+            filterSigned();
         },
         error: function(response) {
             console.info("Failed to retrieve certificate:", response);
@@ -520,6 +521,32 @@ function onIssueToken() {
     });
 }
 
+function filterSigned() {
+    if ($("#search").val() != "") {
+        console.info("Not filtering by state since keyword filter is active");
+        return;
+    }
+
+    $("#signed_certificates .filterable").each(function(i,j) {
+        var last_seen = j.getAttribute("data-last-seen");
+        var state = "new";
+        if (last_seen) {
+            var age = (new Date() - new Date(last_seen)) / 1000;
+            if (age > 172800) {
+                state = "dead";
+            } else if (age > 10800) {
+                state = "offline";
+            } else {
+                state = "online";
+            }
+        }
+        j.setAttribute("data-state", state);
+        j.style.display = $("#signed-filter-" + state).prop("checked") ? "block" : "none";
+        $("#signed-total").html($("#signed_certificates .filterable").length);
+        $("#signed-filter-counter").html($("#signed_certificates .filterable:visible").length);
+    });
+}
+
 function loadAuthority(query) {
     console.info("Loading CA, to debug: curl " + window.location.href + " --negotiate -u : -H 'Accept: application/json'");
     $.ajax({
@@ -557,7 +584,13 @@ function loadAuthority(query) {
                 common_name: "$NAME"
             }));
 
+            // Initial filtering
+            $("#signed-filter .btn").on('change', filterSigned);
+            filterSigned();
+
+            // Attach timeago events
             $("time").timeago();
+
             if (session.authority) {
                 $("#log input").each(function(i, e) {
                     console.info("e.checked:", e.checked , "and", e.id, "@localstorage is", localStorage[e.id], "setting to:", localStorage[e.id] || e.checked, "bool:", localStorage[e.id] || e.checked == "true");
@@ -630,6 +663,12 @@ function loadAuthority(query) {
                         $(e).hide();
                     }
                 });
+                if (q.length == 0) {
+                    filterSigned();
+                    $("#signed-filter .btn").removeClass("disabled").prop("disabled", false);
+                } else {
+                    $("#signed-filter .btn").addClass("disabled").prop("disabled", true);
+                }
             });
 
 

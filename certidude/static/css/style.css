@@ -97,3 +97,8 @@ svg {
     cursor: not-allowed;
 }
 
+#signed_certificates .filterable .fa-circle { color: #888888; }
+#signed_certificates .filterable[data-state='online'] .fa-circle { color: #5cb85c; }
+#signed_certificates .filterable[data-state='offline'] .fa-circle { color: #0275d8; }
+#signed_certificates .filterable[data-state='dead'] .fa-circle { color: #d9534f; }
+

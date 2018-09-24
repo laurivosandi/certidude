@@ -1,4 +1,5 @@
 <div id="certificate-{{ certificate.common_name | replace('@', '--') | replace('.', '-') }}" class="card filterable mt-3"
+  {% if certificate.lease %}data-last-seen={{ certificate.lease.last_seen }}{% endif %}
   data-keywords="{{ certificate.common_name }}|{% if session.authority.tagging %}{% for tag in certificate.tags %}{{ tag.id }}|{% endfor %}{% endif %}{% for key, value in certificate.attributes %}{{ key }}={{ value }}|{% endfor %}">
   <div class="card-header">
     {% if certificate.organizational_unit %}
@@ -14,6 +15,7 @@
   </div>
   <div class="card-block">
     <p>
+      <i class="fa fa-circle"/>
       <span class="lease">
         {% if certificate.lease %}
           {% include "views/lease.html" %}
