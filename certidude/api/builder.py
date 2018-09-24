@@ -55,8 +55,9 @@ class ImageBuilderResource(object):
             raise falcon.HTTPInternalServerError("Build script finished with non-zero exitcode")
 
         for dname in os.listdir(build):
-            if dname.startswith("lede-imagebuilder-"):
-                for root, dirs, files in os.walk(os.path.join(build, dname, "bin", "targets")):
+            if dname.startswith("openwrt-imagebuilder-") and ".tar." not in dname:
+                subdir = os.path.join(build, dname, "bin", "targets")
+                for root, dirs, files in os.walk(subdir):
                     for filename in files:
                         if filename.endswith(suffix):
                             path = os.path.join(root, filename)
@@ -64,5 +65,6 @@ class ImageBuilderResource(object):
                             resp.body = open(path, "rb").read()
                             resp.set_header("Content-Disposition", ("attachment; filename=%s" % suggested_filename))
                             return
-        raise falcon.HTTPNotFound()
+                raise falcon.HTTPNotFound(description="Couldn't find file ending with '%s' in directory %s" % (suffix, subdir))
+        raise falcon.HTTPNotFound(description="Failed to find image builder directory in %s" % build)
 

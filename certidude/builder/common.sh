@@ -4,16 +4,17 @@ set -e
 set -x
 umask 022
 
-VERSION=17.01.4
-BASENAME=lede-imagebuilder-$VERSION-ar71xx-generic.Linux-x86_64
+VERSION=18.06.1
+BASENAME=openwrt-imagebuilder-$VERSION-ar71xx-generic.Linux-x86_64
 FILENAME=$BASENAME.tar.xz
-URL=http://downloads.lede-project.org/releases/$VERSION/targets/ar71xx/generic/$FILENAME
+URL=http://downloads.openwrt.org/releases/$VERSION/targets/ar71xx/generic/$FILENAME
 
-# curl of vanilla LEDE doesn't support ECDSA at the moment
-BASENAME=lede-imagebuilder-ar71xx-generic.Linux-x86_64
+# curl of vanilla OpenWrt a the moment
+# - doesn't support ECDSA
+# - is compiled against embedded TLS library which doesn't support OCSP
+BASENAME=openwrt-imagebuilder-ar71xx-generic.Linux-x86_64
 FILENAME=$BASENAME.tar.xz
 URL=https://www.koodur.com/$FILENAME
-
 
 if [ ! -e $BUILD/$FILENAME ]; then
     wget -q $URL -O $BUILD/$FILENAME
