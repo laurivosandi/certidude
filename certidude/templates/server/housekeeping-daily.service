@@ -1,0 +1,7 @@
+[Unit]
+Description=Run daily housekeeping jobs, eg certificate expiration notifications
+
+[Service]
+Type=oneshot
+ExecStart={{ certidude_path }} housekeeping daily
+

@@ -2,6 +2,7 @@
 import os
 import click
 import subprocess
+from setproctitle import getproctitle
 from random import SystemRandom
 
 random = SystemRandom()
@@ -98,8 +99,8 @@ def drop_privileges():
     os.setgroups(restricted_groups)
     os.setgid(gid)
     os.setuid(uid)
-    click.echo("Switched to user %s (uid=%d, gid=%d); member of groups %s" %
-        ("certidude", os.getuid(), os.getgid(), ", ".join([str(j) for j in os.getgroups()])))
+    click.echo("Switched %s (pid=%d) to user %s (uid=%d, gid=%d); member of groups %s" %
+        (getproctitle(), os.getpid(), "certidude", os.getuid(), os.getgid(), ", ".join([str(j) for j in os.getgroups()])))
     os.umask(0o007)
 
 def apt(packages):

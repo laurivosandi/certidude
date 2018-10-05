@@ -30,3 +30,18 @@ class RevocationListResource(AuthorityHandler):
             logger.debug("Client %s asked revocation list in unsupported format" % req.context.get("remote_addr"))
             raise falcon.HTTPUnsupportedMediaType(
                 "Client did not accept application/x-pkcs7-crl or application/x-pem-file")
+
+
+class RevokedCertificateDetailResource(AuthorityHandler):
+    def on_get(self, req, resp, serial_number):
+        try:
+            path, buf, cert, signed, expires, revoked, reason = self.authority.get_revoked(serial_number)
+        except EnvironmentError:
+            logger.warning("Failed to serve non-existant revoked certificate with serial %s to %s",
+                serial_number, req.context.get("remote_addr"))
+            raise falcon.HTTPNotFound()
+        resp.set_header("Content-Type", "application/x-pem-file")
+        resp.set_header("Content-Disposition", ("attachment; filename=%x.pem" % cert.serial_number))
+        resp.body = buf
+        logger.debug("Served revoked certificate with serial %s to %s",
+            serial_number, req.context.get("remote_addr"))

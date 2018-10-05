@@ -85,12 +85,10 @@ class SessionResource(AuthorityHandler):
 
                 # Extract lease information from filesystem
                 try:
-                    last_seen = datetime.strptime(getxattr(path, "user.lease.last_seen").decode("ascii"), "%Y-%m-%dT%H:%M:%S.%fZ")
                     lease = dict(
                         inner_address = getxattr(path, "user.lease.inner_address").decode("ascii"),
                         outer_address = getxattr(path, "user.lease.outer_address").decode("ascii"),
-                        last_seen = last_seen,
-                        age = datetime.utcnow() - last_seen
+                        last_seen = datetime.strptime(getxattr(path, "user.lease.last_seen").decode("ascii"), "%Y-%m-%dT%H:%M:%S.%fZ")
                     )
                 except IOError: # No such attribute(s)
                     lease = None
@@ -166,10 +164,6 @@ class SessionResource(AuthorityHandler):
                 hostname = const.FQDN,
                 tokens = self.token_manager.list() if self.token_manager else None,
                 tagging = [dict(name=t[0], type=t[1], title=t[2]) for t in config.TAG_TYPES],
-                lease = dict(
-                    offline = 600, # Seconds from last seen activity to consider lease offline, OpenVPN reneg-sec option
-                    dead = 604800 # Seconds from last activity to consider lease dead, X509 chain broken or machine discarded
-                ),
                 certificate = dict(
                     algorithm = self.authority.public_key.algorithm,
                     common_name = self.authority.certificate.subject.native["common_name"],

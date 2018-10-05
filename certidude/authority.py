@@ -13,7 +13,7 @@ from asn1crypto.csr import CertificationRequest
 from certbuilder import CertificateBuilder
 from certidude import config, push, mailer, const
 from certidude import errors
-from certidude.common import cn_to_dn, generate_serial, random
+from certidude.common import cn_to_dn, generate_serial
 from crlbuilder import CertificateListBuilder, pem_armor_crl
 from csrbuilder import CSRBuilder, pem_armor_csr
 from datetime import datetime, timedelta

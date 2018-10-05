@@ -7,6 +7,7 @@ import re
 import shutil
 import sys
 from asn1crypto import pem, x509
+from glob import glob
 from oscrypto import asymmetric
 from csrbuilder import CSRBuilder, pem_armor_csr
 from asn1crypto.util import OrderedDict
@@ -159,13 +160,11 @@ def clean_server():
     files = [
         "/etc/krb5.keytab",
         "/etc/samba/smb.conf",
-        "/etc/certidude/server.conf",
-        "/etc/certidude/builder.conf",
-        "/etc/certidude/profile.conf",
+        "/etc/certidude/*.conf",
         "/var/log/certidude.log",
         "/etc/cron.daily/certidude",
         "/etc/cron.hourly/certidude",
-        "/etc/systemd/system/certidude.service",
+        "/etc/systemd/system/certidude*",
         "/etc/nginx/sites-available/ca.conf",
         "/etc/nginx/sites-enabled/ca.conf",
         "/etc/nginx/sites-available/certidude.conf",
@@ -179,11 +178,12 @@ def clean_server():
         "/usr/bin/node",
     ]
 
-    for filename in files:
-        try:
-            os.unlink(filename)
-        except:
-            pass
+    for pattern in files:
+        for filename in glob(pattern):
+            try:
+                os.unlink(filename)
+            except:
+                pass
 
     # Remove OpenVPN stuff
     if os.path.exists("/etc/openvpn"):

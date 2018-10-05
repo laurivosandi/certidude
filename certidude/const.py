@@ -22,7 +22,6 @@ PROFILE_CONFIG_PATH = os.path.join(CONFIG_DIR, "profile.conf")
 CLIENT_CONFIG_PATH = os.path.join(CONFIG_DIR, "client.conf")
 SERVICES_CONFIG_PATH = os.path.join(CONFIG_DIR, "services.conf")
 SERVER_PID_PATH = os.path.join(RUN_DIR, "server.pid")
-SERVER_LOG_PATH = "/var/log/certidude-server.log"
 STORAGE_PATH = "/var/lib/certidude/"
 
 try:

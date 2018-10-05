@@ -12,4 +12,4 @@ class LogResource(RelationalMixin):
     def on_get(self, req, resp):
         # TODO: Add last id parameter
         return self.iterfetch("select * from log order by created desc limit ?",
-            req.get_param_as_int("limit"))
+            req.get_param_as_int("limit", required=True))

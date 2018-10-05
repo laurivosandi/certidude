@@ -23,6 +23,7 @@ from datetime import datetime, timedelta
 from glob import glob
 from ipaddress import ip_network
 from oscrypto import asymmetric
+from setproctitle import setproctitle
 
 try:
     import coverage
@@ -42,6 +43,18 @@ logger = logging.getLogger(__name__)
 # strongSwan key paths - https://wiki.strongswan.org/projects/1/wiki/SimpleCA
 
 NOW = datetime.utcnow()
+
+def make_runtime_dirs(func):
+    def wrapped(**args):
+        # systemd doesn't support RuntimeDirectoryPreserve=yes on Xenial
+        # otherwise this should be part of service files
+        # with RuntimeDirectory=certidude
+        if not os.path.exists(const.RUN_DIR):
+            click.echo("Creating: %s" % const.RUN_DIR)
+            os.makedirs(const.RUN_DIR)
+            os.chmod(const.RUN_DIR, 0o755)
+        return func(**args)
+    return wrapped
 
 def fqdn_required(func):
     def wrapped(**args):
@@ -1024,6 +1037,12 @@ def certidude_provision_authority(username, kerberos_keytab, nginx_config, tls_c
     assert subprocess.check_output(["/usr/bin/lsb_release", "-cs"]) in (b"trusty\n", b"xenial\n", b"bionic\n"), "Only Ubuntu 16.04 supported at the moment"
     assert os.getuid() == 0 and os.getgid() == 0, "Authority can be set up only by root"
 
+    session = dict(
+        authority = dict(
+            hostname = common_name
+        )
+    )
+
     def verbose_symlink(name, target):
         if not os.path.islink(name):
             click.echo("Symlinking %s to %s" % (name, target))
@@ -1173,14 +1192,9 @@ def certidude_provision_authority(username, kerberos_keytab, nginx_config, tls_c
 
     def verbose_render_systemd_service(template, target, context):
         target_path = "/etc/systemd/system/%s" % target
-        if os.path.exists(target_path):
-            click.echo("File %s already exists, remove to regenerate" % target_path)
-        else:
-            buf = env.get_template(template).render(context)
-            with open(target_path, "w") as fh:
-                fh.write(buf)
-            click.echo("File %s created" % target_path)
-            os.system("systemctl daemon-reload")
+        buf = env.get_template(template).render(context)
+        with open(target_path, "w") as fh:
+            fh.write(buf)
 
     verbose_symlink("/etc/nginx/sites-enabled/certidude.conf", "../sites-available/certidude.conf")
 
@@ -1192,6 +1206,9 @@ def certidude_provision_authority(username, kerberos_keytab, nginx_config, tls_c
         verbose_render_systemd_service("server/ldap-kinit.timer", "certidude-ldap-kinit.timer", vars())
         verbose_render_systemd_service("snippets/nginx-ocsp-cache.service", "certidude-ocsp-cache.service", vars())
         verbose_render_systemd_service("snippets/nginx-ocsp-cache.timer", "certidude-ocsp-cache.timer", vars())
+        verbose_render_systemd_service("server/housekeeping-daily.service", "certidude-housekeeping-daily.service", vars())
+        verbose_render_systemd_service("server/housekeeping-daily.timer", "certidude-housekeeping-daily.timer", vars())
+        os.system("systemctl daemon-reload")
     else:
         raise NotImplementedError("Not systemd based OS, don't know how to set up initscripts")
 
@@ -1409,14 +1426,6 @@ def certidude_provision_authority(username, kerberos_keytab, nginx_config, tls_c
         assert os.stat("/etc/nginx/sites-available/certidude.conf").st_mode == 0o100600
         assert os.stat("/etc/certidude/server.conf").st_mode == 0o100600
 
-        # Disable legacy garbage
-        if os.path.exists("/etc/cron.hourly/certidude"):
-            os.unlink("/etc/cron.hourly/certidude")
-        if os.path.exists("/etc/cron.daily/certidude"):
-            os.unlink("/etc/cron.daily/certidude")
-        if os.path.exists("/etc/systemd/system/certidude.service"):
-            os.unlink("/etc/systemd/system/certidude.service")
-
         click.echo("To enable e-mail notifications install Postfix as sattelite system and set mailer address in %s" % const.SERVER_CONFIG_PATH)
         click.echo()
         click.echo("Use following commands to inspect the newly created files:")
@@ -1434,6 +1443,8 @@ def certidude_provision_authority(username, kerberos_keytab, nginx_config, tls_c
         os.system("systemctl enable certidude-backend.service")
         os.system("systemctl enable nginx")
         os.system("systemctl enable certidude-ocsp-cache.timer")
+        os.system("systemctl enable certidude-housekeeping-daily.timer")
+        os.system("systemctl start certidude-housekeeping-daily.timer")
         os.system("systemctl start certidude-ocsp-cache.timer")
         if realm:
             os.system("systemctl enable certidude-ldap-kinit.timer")
@@ -1561,21 +1572,24 @@ def certidude_revoke(common_name, reason):
 
 
 @click.command("kinit", help="Initialize Kerberos credential cache for LDAP")
+@make_runtime_dirs
 def certidude_housekeeping_kinit():
     from certidude import config
 
     # Update LDAP service ticket if Certidude is joined to domain
-    if os.path.exists("/etc/krb5.keytab"):
-        if not os.path.exists("/run/certidude"):
-            os.makedirs("/run/certidude")
-        _, kdc = config.LDAP_ACCOUNTS_URI.rsplit("/", 1)
-        cmd = "KRB5CCNAME=/run/certidude/krb5cc.part kinit -k %s$ -S ldap/%s@%s -t /etc/krb5.keytab" % (
-            const.HOSTNAME.upper(), kdc, config.KERBEROS_REALM
-        )
-        click.echo("Executing: %s" % cmd)
-        os.system(cmd)
-        os.system("chown certidude:certidude /run/certidude/krb5cc.part")
-        os.rename("/run/certidude/krb5cc.part", "/run/certidude/krb5cc")
+    if not os.path.exists("/etc/krb5.keytab"):
+        raise click.ClickException("No Kerberos keytab configured")
+
+    _, kdc = config.LDAP_ACCOUNTS_URI.rsplit("/", 1)
+    cmd = "KRB5CCNAME=%s.part kinit -k %s$ -S ldap/%s@%s -t /etc/krb5.keytab" % (
+        config.LDAP_GSSAPI_CRED_CACHE,
+        const.HOSTNAME.upper(), kdc, config.KERBEROS_REALM
+    )
+    click.echo("Executing: %s" % cmd)
+    if os.system(cmd):
+        raise click.ClickException("Failed to initialize Kerberos credential cache!")
+    os.system("chown certidude:certidude %s.part" % config.LDAP_GSSAPI_CRED_CACHE)
+    os.rename("%s.part" % config.LDAP_GSSAPI_CRED_CACHE, config.LDAP_GSSAPI_CRED_CACHE)
 
 
 @click.command("daily", help="Send notifications about expired certificates")
@@ -1614,43 +1628,17 @@ def certidude_housekeeping_expiration():
     # TODO: Send separate e-mails to subjects
 
 
-@click.command("serve", help="Run server")
-@click.option("-p", "--port", default=8080, help="Listen port")
-@click.option("-l", "--listen", default="127.0.1.1", help="Listen address")
+@click.command("serve", help="Run API backend server")
 @click.option("-f", "--fork", default=False, is_flag=True, help="Fork to background")
-def certidude_serve(port, listen, fork):
-    from certidude import authority, const, push
-
-    if port == 80:
-        click.echo("WARNING: Please run Certidude behind nginx, remote address is assumed to be forwarded by nginx!")
-
+@make_runtime_dirs
+def certidude_serve(fork):
+    from certidude import const, push, config
     click.echo("Using configuration from: %s" % const.SERVER_CONFIG_PATH)
-
-    log_handlers = []
-
-    from certidude import config
-
-    click.echo("OCSP responder subnets: %s" % config.OCSP_SUBNETS)
-    click.echo("CRL subnets: %s" % config.CRL_SUBNETS)
     click.echo("SCEP subnets: %s" % config.SCEP_SUBNETS)
-
     click.echo("Loading signature profiles:")
     for profile in config.PROFILES.values():
          click.echo("- %s" % profile)
     click.echo()
-
-    # Rebuild reverse mapping
-    for cn, path, buf, cert, signed, expires in authority.list_signed():
-        by_serial = os.path.join(config.SIGNED_BY_SERIAL_DIR, "%040x.pem" % cert.serial_number)
-        if not os.path.exists(by_serial):
-            click.echo("Linking %s to ../%s.pem" % (by_serial, cn))
-            os.symlink("../%s.pem" % cn, by_serial)
-
-    # Process directories
-    if not os.path.exists(const.RUN_DIR):
-        click.echo("Creating: %s" % const.RUN_DIR)
-        os.makedirs(const.RUN_DIR)
-        os.chmod(const.RUN_DIR, 0o755)
 
     click.echo("Users subnets: %s" %
         ", ".join([str(j) for j in config.USER_SUBNETS]))
@@ -1661,47 +1649,43 @@ def certidude_serve(port, listen, fork):
     click.echo("Request submissions allowed from following subnets: %s" %
         ", ".join([str(j) for j in config.REQUEST_SUBNETS]))
 
-    click.echo("Serving API at %s:%d" % (listen, port))
-    from wsgiref.simple_server import make_server, WSGIServer
-    from certidude.api import certidude_app
-
-
-    click.echo("Listening on %s:%d" % (listen, port))
-
-    app = certidude_app(log_handlers)
-    httpd = make_server(listen, port, app, WSGIServer)
-
-
-    """
-    Drop privileges
-    """
-
-    from certidude.push import EventSourceLogHandler
-    log_handlers.append(EventSourceLogHandler())
-
-    for j in logging.Logger.manager.loggerDict.values():
-        if isinstance(j, logging.Logger): # PlaceHolder is what?
-            if j.name.startswith("certidude."):
-                j.setLevel(logging.DEBUG)
-                for handler in log_handlers:
-                    j.addHandler(handler)
+    from certidude.api import ReadWriteApp, BuilderApp, ResponderApp, RevocationListApp, LogApp
 
     if not fork or not os.fork():
         pid = os.getpid()
         with open(const.SERVER_PID_PATH, "w") as pidfile:
             pidfile.write("%d\n" % pid)
 
+        # Rebuild reverse mapping
+        from certidude import authority
+        for cn, path, buf, cert, signed, expires in authority.list_signed():
+            by_serial = os.path.join(config.SIGNED_BY_SERIAL_DIR, "%040x.pem" % cert.serial_number)
+            if not os.path.exists(by_serial):
+                click.echo("Linking %s to ../%s.pem" % (by_serial, cn))
+                os.symlink("../%s.pem" % cn, by_serial)
+
         push.publish("server-started")
         logger.debug("Started Certidude at %s", const.FQDN)
 
-        drop_privileges()
-        try:
-            httpd.serve_forever()
-        except KeyboardInterrupt:
-            click.echo("Caught Ctrl-C, exiting...")
-            push.publish("server-stopped")
-            logger.debug("Shutting down Certidude")
-            return
+        if fork and config.OCSP_SUBNETS:
+            click.echo("OCSP responder subnets: %s" % config.OCSP_SUBNETS)
+            if ResponderApp().fork():
+                return
+        if fork and config.CRL_SUBNETS:
+            click.echo("CRL subnets: %s" % config.CRL_SUBNETS)
+            if RevocationListApp().fork():
+                return
+        if fork:
+            if BuilderApp().fork():
+                return
+        if fork and config.LOGGING_BACKEND == "sql":
+            if LogApp().fork():
+                return
+
+        ReadWriteApp().run()
+        push.publish("server-stopped")
+        logger.debug("Shutting down Certidude API backend")
+        return
 
 
 @click.command("yubikey", help="Set up Yubikey as client authentication token")

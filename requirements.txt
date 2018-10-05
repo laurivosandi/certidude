@@ -7,3 +7,4 @@ oscrypto
 requests
 jinja2
 ipsecparse
+setproctitle
